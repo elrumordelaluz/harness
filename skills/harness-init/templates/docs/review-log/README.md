@@ -1,0 +1,1 @@
+`verdicts.jsonl`: one line per judge verdict, schema in `.github/judge/verdict.schema.json`. Every line carries `head_sha`, the commit the judge saw, and `cost`, read from the action's log. CI writes it when the PR closes (`close.yml`), `/audit` reads it. It is not edited by hand. Without this log the tier thresholds stay numbers picked at random.

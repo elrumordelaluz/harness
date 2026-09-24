@@ -1,0 +1,1 @@
+../skills/harness-init/templates/scripts/intent.sh

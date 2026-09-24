@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Runs on every commit, for humans and agents alike. Refuses commits on main:
+# a private repo on GitHub Free has no ruleset, so this hook and pre-push are
+# what protect the branch. HARNESS_ALLOW_MAIN=1 overrides, for a human who
+# knows why. Then, under 30 seconds: format check on the staged files, the
+# prose gate on the staged lines, typecheck. The full suite runs in CI.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+branch="$(git symbolic-ref --short -q HEAD || true)"
+if [ "${HARNESS_ALLOW_MAIN:-}" != 1 ] && { [ "$branch" = main ] || [ "$branch" = master ]; }; then
+  refused="harness: no commits on $branch. Switch to slice/S<NN>-<slug> or harness/<stage>; intent/<slug> and spec/<slug> where the policy block of AGENTS.md says docs_mode pr."
+  # The one exception: with `"docs_mode": "main"` in the policy block a commit
+  # made only of documents goes through, every staged file, deletions
+  # included, under a path of human_gate_paths or of docs_extra_paths. The
+  # rules are the ones at HEAD, which is the base of a commit on main: the
+  # commit could rewrite AGENTS.md, and then the rules it is held to would be
+  # its own. A commit that touches AGENTS.md is not a document anyway, so the
+  # copy at HEAD is the one that counts.
+  if [ ! -f scripts/policy-lines.sh ]; then echo "$refused" >&2; exit 1; fi
+  . scripts/policy-lines.sh
+  agents="$(git show HEAD:AGENTS.md 2>/dev/null || true)"
+  # No fence, a fence jq refuses, a key missing, a version this harness has
+  # never read: four faults, and main stays closed on all four instead of
+  # falling back to pr, which refused for a reason that was not the true one.
+  why="$(policy_why "$agents")"
+  if [ -n "$why" ]; then echo "$refused AGENTS.md at HEAD: $why" >&2; exit 1; fi
+  if [ "$(docs_mode "$agents")" != main ]; then echo "$refused" >&2; exit 1; fi
+  files="$(git -c core.quotePath=false diff --cached --no-renames --name-only)"
+  if [ -z "$files" ]; then
+    echo "$refused Nothing is staged, and an empty commit is not a document." >&2
+    exit 1
+  fi
+  outside="$(docs_outside "$agents" "$files")"
+  if [ -n "$outside" ]; then
+    echo "$refused Only documents go on $branch (AGENTS.md, docs_mode), and $outside is not one." >&2
+    exit 1
+  fi
+fi
+# Symlinks are skipped: Prettier refuses a symlink named explicitly, and the
+# target is checked on its own path when it changes.
+staged="$(git diff --cached --name-only --diff-filter=ACMR | while IFS= read -r f; do [ -L "$f" ] || printf '%s\n' "$f"; done)"
+[ -z "$staged" ] && exit 0
+printf '%s\n' "$staged" | tr '\n' '\0' | xargs -0 pnpm exec prettier --check --ignore-unknown
+scripts/prose.sh --staged
+pnpm typecheck

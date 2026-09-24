@@ -1,0 +1,115 @@
+# On merge into the default branch: the slice goes to done and the verdicts land
+# in the review log. Merged into anything else, nothing is written: a PR stacked
+# on another slice is legitimate, but the slice is closed when the work reaches
+# the default branch, and a `done` the default branch has not received makes the
+# board offer work that stands on nothing.
+#
+# This commits to main. Once the main ruleset exists, the App must be listed as
+# a bypass actor or the push is rejected. Until then the default token can push
+# to an unprotected main, so the App step is optional and the workflow falls
+# back: that keeps the review log working today without blocking on the App,
+# and it starts using the App the moment the secrets are set.
+#
+# The verdicts come out of the PR comments through scripts/review-log.sh,
+# which keeps only the comments the chain wrote (the App, or github-actions
+# without it) or an owner or member of the repo wrote: the marker says where
+# the JSON is, not who produced it.
+name: close
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  # The base, not the head: `merged == true` alone is the same event for a PR
+  # merged into the default branch and for one merged into another slice branch.
+  # The branch name comes from the event, so the template works in a repo whose
+  # default branch is not called main.
+  #
+  # Where the three contexts come from, checked 2026-09-15, because a context
+  # written from memory is empty at run time and fails no test: `github.event`
+  # is the webhook payload of the triggering event (contexts reference); a
+  # pull_request payload carries `repository` and `pull_request` as required
+  # objects (webhook events and payloads); `base` is a required object of a pull
+  # request and its `ref` a required string (REST, get a pull request), and
+  # `default_branch` a required string of a repository (REST, get a repository).
+  # The webhook page names the two objects without enumerating their properties,
+  # so the fields themselves come from the REST schemas the payloads embed.
+  # Re-check at every edit, these move.
+  # Empty, the comparison below is false and the one in `stacked` is true: the
+  # run closes nothing and says so, which is the loud half of failing closed.
+  close:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      # The App id is a variable, not a secret: it identifies the app and is
+      # not confidential, and the `secrets` context is not available in a
+      # step-level `if`, so gating on a secret here would silently never run.
+      # Verified against actions/create-github-app-token v3 action.yml on
+      # 2026-09-08: the outputs are `token`, `installation-id` and `app-slug`.
+      # `app-slug` is the login review-log.sh matches the verdicts against, so
+      # a wrong name here empties JUDGE_LOGINS and the log loses them without
+      # failing anything. Re-check before editing.
+      - uses: actions/create-github-app-token@v3
+        id: app
+        if: vars.HARNESS_APP_ID != ''
+        with:
+          # HARNESS_APP_ID holds the App's Client ID (Iv23...): the numeric id is deprecated here.
+          client-id: ${{ vars.HARNESS_APP_ID }}
+          private-key: ${{ secrets.HARNESS_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          token: ${{ steps.app.outputs.token || github.token }}
+
+      - name: slice to done, verdicts to the log
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          MERGED_BY: ${{ github.event.pull_request.merged_by.login }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          JUDGE_LOGINS: github-actions,${{ steps.app.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          sid="$(printf '%s' "$HEAD_REF" | sed -n 's#^slice/\(S[0-9][0-9]*\)-.*#\1#p')"
+          if [ -n "$sid" ]; then
+            for s in docs/backlog/"$sid"-*.md; do
+              [ -f "$s" ] && sed -i 's/^status: .*/status: done/' "$s"
+            done
+          fi
+          scripts/review-log.sh "$PR" docs/review-log/verdicts.jsonl
+          git config user.name "harness[bot]"
+          git config user.email "harness[bot]@users.noreply.github.com"
+          git add -A docs
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(harness): close pr #$PR${sid:+ and slice $sid} [skip ci]"
+          git push origin HEAD
+
+  # The same guard from the other side, and the reason it is a job and not an
+  # early exit inside the one above: a job GitHub skips writes no summary, and a
+  # run that did nothing and said nothing is indistinguishable from one that
+  # never started. Whoever merged the PR sees why its slice is still open.
+  stacked:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref != github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: say what was not closed
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            "PR #$PR was merged into \`$BASE\`, not the default branch \`$DEFAULT_BRANCH\`." \
+            "Nothing was closed and nothing was written to the review log: a slice is done when its work reaches \`$DEFAULT_BRANCH\`." \
+            >> "$GITHUB_STEP_SUMMARY"

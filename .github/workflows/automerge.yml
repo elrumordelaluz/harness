@@ -1,0 +1,79 @@
+# Tier 0 (the prose nobody executes) merges on green ci without a judge, when
+# automerge is on, unless the PR carries `human-gate`: the tier says how much
+# scrutiny the diff needs, the label says the merge is a human's anyway.
+# Triggered by the ci run, not by the tier label: the label lands before the
+# `ci` aggregate job finishes, and on a repo without a ruleset nothing else
+# would stop a merge on a red check. The merge uses the App token so that the
+# resulting pull_request event starts close.yml (GITHUB_TOKEN events do not).
+#
+# Only into the default branch. A PR stacked on another slice branch is
+# legitimate, but merging it unattended writes into a branch somebody else has
+# claimed, and it raises the very merge event close.yml has to guard against.
+# Stacked, the merge is a human's.
+name: automerge
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  tier0:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      vars.HARNESS_AUTOMERGE == 'on'
+    runs-on: ubuntu-latest
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app
+        if: vars.HARNESS_APP_ID != ''
+        with:
+          # HARNESS_APP_ID holds the App's Client ID (Iv23...): the numeric id is deprecated here.
+          client-id: ${{ vars.HARNESS_APP_ID }}
+          private-key: ${{ secrets.HARNESS_APP_PRIVATE_KEY }}
+
+      - env:
+          GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
+        run: |
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --search "$SHA" --state open \
+                  --json number,baseRefName,labels,isCrossRepository -q '.[0]')"
+          if [ -z "$pr" ] || [ "$pr" = "null" ]; then echo "no open PR for $SHA"; exit 0; fi
+          n="$(jq -r .number <<<"$pr")"
+          [ "$(jq -r .isCrossRepository <<<"$pr")" = "false" ] || { echo "PR #$n is from a fork"; exit 0; }
+          jq -e '.labels[] | select(.name == "tier:0")' <<<"$pr" >/dev/null || { echo "PR #$n is not tier 0"; exit 0; }
+          if jq -e '.labels[] | select(.name == "human-gate")' <<<"$pr" >/dev/null; then
+            echo "PR #$n carries human-gate: tier 0 or not, the merge is a human's"; exit 0
+          fi
+          # workflow_run has no pull_request context, so the base comes from the
+          # same read as the number and the labels. `gh pr list --json` with no
+          # value prints the fields the installed CLI accepts and baseRefName is
+          # among them, checked 2026-09-15 on gh 2.100.0; DEFAULT_BRANCH above
+          # is the repository object of the workflow_run payload, required and
+          # the repository where the event occurred, which under this trigger is
+          # the repo that hosts the workflow and never a fork. That page names
+          # the object without listing its fields, for any event: `default_branch`
+          # is a required string of the repository schema the payload embeds
+          # (REST, get a repository), not a row in the workflow_run section.
+          # Re-check at every edit, these move. Empty, the comparison below is
+          # true for every PR: nothing merges and every run says so, which is
+          # the safe direction to fail in. Last of the four checks, so
+          # the line below means the base is what stopped the merge and not one
+          # of the other three, and in the summary and not only in the log: a
+          # merge that did not happen has to be findable.
+          base="$(jq -r .baseRefName <<<"$pr")"
+          if [ "$base" != "$DEFAULT_BRANCH" ]; then
+            echo "PR #$n would land in \`$base\`, not the default branch \`$DEFAULT_BRANCH\`: the merge of a stacked PR is a human's." \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # --auto needs auto-merge enabled on the repo (GitHub Pro, or a public repo); otherwise merge now.
+          gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --squash --auto 2>/dev/null \
+            || gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --squash

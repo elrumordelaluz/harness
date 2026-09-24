@@ -1,0 +1,11 @@
+## Problem
+
+`scripts/board.sh` prints the board in forty lines of a terminal and `--json` prints the same data as one object, which SPEC-board decision 1 names the model the HTML roadmap reads afterwards. Nobody reads it yet. On 22 September, to know where the harness stood across this repo and Tipoff, the board was run in one checkout and then in the other, and mockuping keeps a page of its own, `docs/visual/production-path.html`, built by a script that parses two markdown files with regexes to derive what the board here already computes. The screen exists per repo and per terminal, never for all the repos at once, and never as a page one can open, scroll and send.
+
+## What success looks like
+
+Every repo with the `local` stage carries `docs/visual/roadmap.html`, a page like mockuping's, with the plan as a rail of stations, the slices as cards by spec, status and tier, the inbox, the open PRs and the next action as the headline, in light and dark; the markup, the styles and the script that draws it are one fixed file from the templates and the only part that changes is the JSON of `board.sh --json` embedded in it, redrawn by the pre-commit hook when a document of `docs_mode` lands on main and by `close.yml` after a merge, so the page and the board never disagree and a test in the template proves it byte for byte; in this repo a second page reads the committed JSON of every repo of a hand-written list through `gh api` and shows one row per repo with the harness stage and sha it runs, the open slices, what waits on a human and the next action of its board, so that from one page one sees which repo is behind and what its next step is.
+
+## Out of scope
+
+A script that prints markup: the page draws itself in the browser from the JSON, and the script only swaps that block. GitHub Pages and any hosting. Open PRs read live from the page: the section is as of the sha that redrew it. Checkboxes and ticks saved in the browser as in the mockuping page: the board already knows what is done. Filters by status and tier stay in, they cost nothing. Mockuping itself, until it adopts the harness or prints the same JSON. New keys in `board.sh --json`: what the page needs and the board does not print is a line in the inbox first.

@@ -1,0 +1,7 @@
+{
+  'semi': false,
+  'singleQuote': true,
+  'proseWrap': 'preserve',
+  'embeddedLanguageFormatting': 'off',
+  'plugins': ['prettier-plugin-organize-imports'],
+}

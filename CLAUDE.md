@@ -1,0 +1,5 @@
+@AGENTS.md
+
+For Claude Code only: hooks and permissions live in `.claude/settings.json`, tracked. Personal exceptions go in `.claude/settings.local.json`, ignored. Before every `git commit` a hook makes sure the repo's git hooks are installed: the checks are theirs. The hook that refuses the PR of a head with no verdict lives in the template and not here: in the project repos the gate is needed, in this one `/judge` runs when Lionel asks for it (ADR-0003, decision 4).
+
+Every directory of `skills/` is a symlink in `~/.claude/skills/`, `board`, `harness-init`, `judge`, `next`, `slice` and `spec`: what is in the working tree, branch and uncommitted changes included, is what `/board`, `/harness-init`, `/judge`, `/next`, `/slice` and `/spec` run in every other repo. The link is made once per new skill, `ln -s "$PWD/skills/<name>" ~/.claude/skills/<name>`, otherwise the hook asks for a verdict and the command that produces it does not exist; the name is written here and in the "Map" of `AGENTS.md` too, and while it is missing `tests/architecture.test.ts` is red.

@@ -1,0 +1,43 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/ensure-hooks.sh"
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/ensure-verdict.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash({{pm}} typecheck*)",
+      "Bash({{pm}} test*)",
+      "Bash({{pm}} format:check*)",
+      "Bash({{pm}} build*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git switch*)",
+      "Bash(git push*)",
+      "Bash(gh pr *)",
+      "Bash(gh label *)",
+      "Bash(gh run *)",
+      "Bash(scripts/tier.sh*)",
+      "Bash(scripts/test-weakening.sh*)",
+      "Bash(scripts/commitlint.sh*)",
+      "Bash(scripts/prose.sh*)",
+      "Bash(scripts/judge.sh*)",
+      "Bash(scripts/board.sh*)"
+    ]
+  }
+}

@@ -1,0 +1,146 @@
+# Deterministic gates. No LLM here. One job, `ci`: the single required status
+# check in the main ruleset, and the name policy.sh reads. One job and not
+# six: GitHub bills every job rounded up to the whole minute, and six jobs of
+# a few seconds each cost seven minutes a run for two of work, on every PR of
+# every repo that has the harness. The gates are steps, each one goes on
+# after a failure so a PR shows every red gate at once, the tier is written
+# whatever the gates said, and the last step is red if any gate is.
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body }}
+      BASE_REF: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: commit lint on the range
+        id: commitlint
+        continue-on-error: true
+        run: scripts/commitlint.sh --range "origin/$BASE_REF..HEAD"
+      # Both merge paths squash, so the subject that lands on the default
+      # branch is the title of the PR and never one of the commits linted
+      # above, and with more than one commit GitHub builds that title from the
+      # name of the branch. The title arrives through the env and never inside
+      # this script: it is written by whoever opens the PR. The squash suffix
+      # is counted, which can only make the check stricter than the landing.
+      - name: commit lint on the title of the PR
+        id: title
+        continue-on-error: true
+        run: |
+          scripts/commitlint.sh --subject "$PR_TITLE (#$PR)" || {
+            echo "the title of the PR is the subject that lands: both merges squash" >&2
+            echo "  title: $PR_TITLE" >&2
+            echo "  the \" (#$PR)\" suffix of the squash is counted in the 72 characters" >&2
+            exit 1
+          }
+      # Style is a gate, not a judgement: the judge never reads for it.
+      - run: scripts/prose.sh "origin/$BASE_REF"
+        id: prose
+        continue-on-error: true
+      - name: test-weakening detector
+        id: weakening
+        continue-on-error: true
+        run: |
+          scripts/test-weakening.sh "origin/$BASE_REF" | tee weakening.txt
+          if [ -s weakening.txt ]; then
+            { echo "## tests weakened"; echo; sed 's/^/- /' weakening.txt; } >> "$GITHUB_STEP_SUMMARY"
+            gh pr edit "$PR" --add-label tests-weakened
+          else
+            gh pr edit "$PR" --remove-label tests-weakened 2>/dev/null || true
+          fi
+
+      - uses: pnpm/action-setup@v6
+        with:
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+      - run: pnpm install --frozen-lockfile
+      # --ignore-registry-errors: a registry hiccup is not a failed build.
+      - name: dependency audit
+        id: audit
+        continue-on-error: true
+        run: pnpm audit --prod --audit-level=high --ignore-registry-errors
+      - id: format
+        continue-on-error: true
+        run: pnpm format:check
+      - id: typecheck
+        continue-on-error: true
+        run: pnpm typecheck
+      - id: test
+        continue-on-error: true
+        run: pnpm test
+      - id: build
+        continue-on-error: true
+        run: pnpm build
+
+      # After the checks and not before: the scan leaves results.sarif in the
+      # checkout and `prettier --check .` would read it. Personal account: no
+      # GITLEAKS_LICENSE needed. Moving this repo under an organization means
+      # adding one, free, or this step starts failing. The action reads a
+      # BASE_REF of the env as an override of the range it scans, and the one
+      # of this job is a branch name the checkout does not have: empty here,
+      # so the range comes from the commits of the PR, as the action wants.
+      - name: secret scan
+        id: secret-scan
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_REF: ''
+
+      - name: compute and label the tier
+        if: always()
+        run: |
+          labels="$(gh pr view "$PR" --json labels -q '.labels[].name' | tr '\n' ',')"
+          tier="$(PR_LABELS="$labels" scripts/tier.sh "origin/$BASE_REF" 2>why.txt)"
+          cat why.txt >&2
+          echo "tier=$tier" >> "$GITHUB_STEP_SUMMARY"
+          for t in 0 1 2 3; do gh pr edit "$PR" --remove-label "tier:$t" 2>/dev/null || true; done
+          gh pr edit "$PR" --add-label "tier:$tier"
+          # How much scrutiny is the tier; who may merge is this label. A path
+          # named in the "Human gates" line of AGENTS.md never merges on its own,
+          # tier 0 included. The label is only ever added here: tier.sh keeps
+          # one it finds on the PR, so a brake comes off by a human hand only.
+          if grep -q '^human-gate:' why.txt; then
+            { echo "human-gate"; grep '^human-gate:' why.txt | sed 's/^/- /'; } >> "$GITHUB_STEP_SUMMARY"
+            gh pr edit "$PR" --add-label human-gate
+          fi
+
+      # The gates above go on after a failure. This is where the job turns
+      # red: one line per gate that is not green, and a gate the job never
+      # reached, because the install before it failed, counts as red too.
+      - name: every gate green
+        if: always()
+        env:
+          STEPS: ${{ toJSON(steps) }}
+        run: |
+          red="$(jq -r '
+            . as $s
+            | ["secret-scan", "commitlint", "title", "prose", "weakening", "audit", "format", "typecheck", "test", "build"][]
+            | select(($s[.].outcome // "missing") != "success")' <<<"$STEPS")"
+          if [ -n "$red" ]; then
+            { echo "red gates:"; echo "$red" | sed 's/^/  /'; } >&2
+            exit 1
+          fi

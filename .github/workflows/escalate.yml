@@ -1,0 +1,42 @@
+# A human put a label on by hand: tell them it took. The chain's own
+# escalations and crashes notify from policy.sh, with the verdict in hand,
+# and never through this file: a label already on the PR raises no event,
+# and the first day of judgements showed the crash notifying while the real
+# verdict stayed silent. Bots are filtered out here so nothing goes out twice.
+name: escalate
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  notify:
+    if: >-
+      !endsWith(github.actor, '[bot]') &&
+      (github.event.label.name == 'needs-human' || endsWith(github.event.label.name, ':crashed'))
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      URL: ${{ github.event.pull_request.html_url }}
+      LABEL: ${{ github.event.label.name }}
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+    steps:
+      - name: ntfy
+        if: env.NTFY_TOPIC != ''
+        run: |
+          # Header values are newline-terminated, so a PR title containing one
+          # would inject a second header. Strip them.
+          title="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title -q .title | tr -d '\r\n')"
+          last="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json comments \
+                    -q '[.comments[] | select(.body | contains("<!-- verdict:"))] | last | .body' \
+                  | sed '/^<!-- verdict/,$d' | head -c 1500)"
+          body="label $LABEL put on by hand."$'\n'"${last:-No verdict on the PR yet.}"
+          curl -fsS \
+            -H "Title: PR #$PR needs you: $title" \
+            -H "Click: $URL" \
+            -d "$body" \
+            "https://ntfy.sh/$NTFY_TOPIC"

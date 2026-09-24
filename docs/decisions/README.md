@@ -1,0 +1,1 @@
+`ADR-<NNNN>-<slug>.md`: a decision that weighs, with the context, the decision, the alternatives dropped and why, the consequences. Implemented specs become `superseded`; an ADR stays valid until a later ADR supersedes it.

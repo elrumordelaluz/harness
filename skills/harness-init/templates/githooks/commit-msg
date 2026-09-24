@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Same regex as CI: scripts/commitlint.sh. Locally `wip` is allowed.
+set -euo pipefail
+exec "$(git rev-parse --show-toplevel)/scripts/commitlint.sh" --file "$1"

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# curl for the tests: the notification is a call, recorded and never sent.
+# One line per call: a newline inside an argument becomes ' | ', so a test
+# can grep a whole call.
+printf 'curl %s\n' "${*//$'\n'/ | }" >> "$GH_LOG"

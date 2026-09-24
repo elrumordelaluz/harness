@@ -1,0 +1,24 @@
+{
+  "name": "harness",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": "24"
+  },
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
+    "typecheck": "tsc --noEmit && scripts/check-shell.sh",
+    "test": "vitest run",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "build": "echo 'harness: nothing to build, the repo ships templates and scripts as they are'"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "prettier": "^3.9.6",
+    "prettier-plugin-organize-imports": "^4.3.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}

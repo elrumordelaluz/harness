@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# gh for the tests: records every call in GH_LOG, keeps every comment body in
+# GH_COMMENTS, and answers the reads the scripts make from the STUB_* env:
+# the PR head, its base, its labels, its comments, who merged it and its
+# checks, plus the default branch of the repo (a -q filter runs through jq, as
+# gh would). A `pr list` answers the open PRs of a head, STUB_PRS, empty by
+# default.
+# STUB_BASE and STUB_DEFAULT_BRANCH default to main and not to empty, so that
+# every case written before the base existed keeps meaning what it meant: a PR
+# that lands where it should. Set either to the empty string to play a read
+# that came back with nothing. Everything else is a write, logged and accepted.
+# One line per call: a newline inside an argument becomes ' | ', so a test
+# can grep a whole call.
+printf '%s\n' "${*//$'\n'/ | }" >> "$GH_LOG"
+# STUB_FAIL is a fragment of a call that must fail, the way a transient API
+# error does: the call is logged first, so the test sees what was attempted.
+if [ -n "${STUB_FAIL:-}" ]; then
+  case "$*" in *"$STUB_FAIL"*) echo "gh: stub failure" >&2; exit 1 ;; esac
+fi
+q=""; prev=""
+for a in "$@"; do
+  case "$prev" in
+    -q) q="$a" ;;
+    --body-file) { cat "$a"; echo; echo "----"; } >> "$GH_COMMENTS" ;;
+    --body) { printf '%s\n' "$a"; echo "----"; } >> "$GH_COMMENTS" ;;
+  esac
+  prev="$a"
+done
+# A read gh answers as JSON, run through jq when the call carried a -q filter,
+# so a script that asks for a field gets the field and one that asks for the
+# object gets the object, as gh does.
+answer() {
+  if [ -n "$q" ]; then jq -r "$q" <<<"$1"; else printf '%s' "$1"; fi
+}
+case "$*" in
+  *"pr list"*) printf '%s' "${STUB_PRS:-}" ;;
+  *headRefOid*) printf '%s\n' "$STUB_HEAD" ;;
+  *"--json baseRefName"*)
+    answer "{\"baseRefName\": \"${STUB_BASE-main}\"}" ;;
+  *"--json defaultBranchRef"*)
+    answer "{\"defaultBranchRef\": {\"name\": \"${STUB_DEFAULT_BRANCH-main}\"}}" ;;
+  *"--json title"*) printf '%s\n' "${STUB_TITLE:-a title}" ;;
+  *"--json url"*) printf '%s\n' "${STUB_URL:-https://github.test/o/r/pull/7}" ;;
+  *"--json mergedBy"*)
+    if [ -n "${STUB_MERGED_BY:-}" ]; then
+      answer "{\"mergedBy\": {\"login\": \"$STUB_MERGED_BY\"}}"
+    else
+      answer '{"mergedBy": null}'
+    fi ;;
+  *"--json labels"*) printf '%s\n' "$STUB_LABELS" | tr ',' '\n' | grep . || true ;;
+  *"--json comments"*)
+    if [ -n "$q" ]; then jq -r "$q" <<<"$STUB_COMMENTS"; else printf '%s' "$STUB_COMMENTS"; fi ;;
+  *"--json statusCheckRollup"*)
+    checks="${STUB_CHECKS:-}"
+    [ -n "$checks" ] || checks='{"statusCheckRollup": []}'
+    if [ -n "$q" ]; then jq -r "$q" <<<"$checks"; else printf '%s' "$checks"; fi ;;
+esac

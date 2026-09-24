@@ -1,0 +1,17 @@
+{
+  "pr": 7,
+  "slice": null,
+  "tier": 1,
+  "judge": {
+    "role": "correctness",
+    "model": "claude-opus-5",
+    "ts": "2026-09-08T09:00:00Z"
+  },
+  "verdict": "approve",
+  "confidence": 0.9,
+  "criteria": [],
+  "findings": [],
+  "scope_ok": true,
+  "needs_human": false,
+  "reason": "The diff matches the PR body and every path it names exists."
+}
