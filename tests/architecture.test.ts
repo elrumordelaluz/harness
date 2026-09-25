@@ -1863,6 +1863,58 @@ describe('/board and /next read the claim of a slice from the remote', () => {
   })
 })
 
+// S45 translated the screen of board.sh and left the prose that quotes it
+// behind. The header of the spec is left out: its line for 0.26 records what
+// that version said.
+describe('the skills and the spec quote the board as it prints today', () => {
+  const quoting = [
+    'skills/next/SKILL.md',
+    'skills/board/SKILL.md',
+    'docs/spec.md',
+  ]
+  const rows = (path: string): { at: number; row: string }[] =>
+    readFileSync(join(root, path), 'utf8')
+      .split('\n')
+      .map((row, at) => ({ at: at + 1, row }))
+      .filter(({ row }) => !row.startsWith('> A draft written'))
+  const body = (path: string): string =>
+    rows(path)
+      .map(({ row }) => row)
+      .join('\n')
+
+  it.each(quoting)('%s quotes no Italian string of the screen', (path) => {
+    const gone = /in corso|gh non disponibile|\boltre\b/
+    expect(
+      rows(path)
+        .filter(({ row }) => gone.test(row))
+        .map(({ at, row }) => `${at}: ${row.match(gone)?.[0]}`),
+      `${path} quotes strings board.sh no longer prints`,
+    ).toEqual([])
+  })
+
+  it('skills/next/SKILL.md and docs/spec.md quote the English strings', () => {
+    expect(body('skills/next/SKILL.md')).toContain('`in progress`')
+    const spec = body('docs/spec.md')
+    for (const quote of ['`in progress`', '`gh not available`', '`beyond`']) {
+      expect(spec, `docs/spec.md does not quote ${quote}`).toContain(quote)
+    }
+  })
+
+  it('board.sh prints the strings the docs quote', () => {
+    const script = readFileSync(join(templates, 'scripts/board.sh'), 'utf8')
+    for (const printed of [
+      '"in progress"',
+      '"  gh not available"',
+      '"  beyond: "',
+    ]) {
+      expect(
+        script,
+        `board.sh no longer prints ${printed}: the quotes in the docs point at nothing`,
+      ).toContain(printed)
+    }
+  })
+})
+
 // The Definition of done says «suite verde», and a green suite is worth a
 // gate only if the red talks about the repo and not about the machine. The
 // tests that bring up a real git repo cost seconds: `git init`, the commits,
