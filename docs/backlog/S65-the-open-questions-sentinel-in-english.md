@@ -1,7 +1,7 @@
 ---
 id: S65
 title: /spec writes None. under Open questions, and /slice still reads Nessuna.
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
