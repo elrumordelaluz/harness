@@ -1,7 +1,7 @@
 ---
 id: S63
 title: The skills and the spec quote the board as it prints today
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
