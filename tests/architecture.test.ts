@@ -427,6 +427,21 @@ describe('the workflows that act on a merge look at the default branch', () => {
     }
   })
 
+  // Without the App the close step runs on the default token, and the repair
+  // notice of review-log.sh is a comment on the PR: with `pull-requests: read`
+  // GitHub refuses it and the hole is said only in a summary nobody opens.
+  it('close.yml: the default token may comment on the PR', () => {
+    const yaml = source('github/close.yml')
+    const top = yaml.slice(
+      yaml.search(/^permissions:$/m),
+      yaml.indexOf('\njobs:\n'),
+    )
+    expect(
+      top,
+      'close.yml does not give pull-requests: write: without the App the repair notice of review-log.sh is refused on the PR',
+    ).toMatch(/^ {2}pull-requests: write$/m)
+  })
+
   // `automerge.yml` is not the only one that merges, and the base is in the
   // context of neither path: `automerge.yml` starts from `workflow_run` and
   // looks the PR up by itself, `scripts/policy.sh` runs from a terminal and

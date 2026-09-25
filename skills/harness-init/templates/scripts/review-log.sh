@@ -144,9 +144,10 @@ done
 # the repair is not announced twice.
 #
 # The notice is the only write this script makes to GitHub, and the token has to
-# be allowed to make it: close.yml gives the step `pull-requests: read` and
-# falls back to that token when the App is not configured, so the comment goes
-# through with the App and is refused without it. Refused, the notice goes to
+# be allowed to make it: close.yml gives the default token `pull-requests:
+# write` and falls back to it when the App is not configured, so the comment
+# goes through on either token. A token that is refused anyway, a repo that
+# caps the default permissions or an App without the right, sends the notice to
 # the step summary, the run's own screen, which outlives the branch the merge
 # deleted: the hole is never left on a stderr nobody reads, which is the whole
 # point of saying it. Either way the run ends well, because close.yml pushes
