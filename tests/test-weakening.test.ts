@@ -95,3 +95,46 @@ describe('test-weakening.sh, what it says', () => {
     expect(run.stderr).toBe('')
   })
 })
+
+describe('test-weakening.sh, a widened matcher', () => {
+  const file = (body: string): string =>
+    `import { it, expect } from 'vitest'\nit('a', () => {\n${body}})\n`
+
+  it('reports an exact matcher turned loose on the same subject', () => {
+    const run = weakening(
+      { 'src/a.test.ts': file('  expect(x).toBe(1)\n') },
+      { 'src/a.test.ts': file('  expect(x).toBeDefined()\n') },
+    )
+    expect(run.stdout).toBe(
+      'src/a.test.ts: matcher widened (exact matcher removed, loose matcher added)\n',
+    )
+  })
+
+  it('does not pair an exact matcher removed with a loose one added on another subject', () => {
+    const run = weakening(
+      { 'src/a.test.ts': file('  expect(a).toBe(1)\n  expect(a).toBe(1)\n') },
+      {
+        'src/a.test.ts': file(
+          '  expect(a).toBe(1)\n  expect(b).toBeDefined()\n',
+        ),
+      },
+    )
+    expect(run.stdout).toBe('')
+  })
+
+  it('does not report a rewritten message or a reflowed expect', () => {
+    const run = weakening(
+      {
+        'src/a.test.ts': file(
+          "  expect(x, 'old message').toBe(1)\n  expect(y).toBeTruthy()\n",
+        ),
+      },
+      {
+        'src/a.test.ts': file(
+          "  expect(\n    x,\n    'new message',\n  ).toBe(1)\n  expect(y, 'y is set').toBeTruthy()\n",
+        ),
+      },
+    )
+    expect(run.stdout).toBe('')
+  })
+})
