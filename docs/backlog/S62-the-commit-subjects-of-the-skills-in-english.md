@@ -1,7 +1,7 @@
 ---
 id: S62
 title: The commit subjects the skills prescribe are in English
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
