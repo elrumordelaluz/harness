@@ -152,8 +152,9 @@ origin/<default branch>:docs/specs/SPEC-<slug>.md` fails: `backlog/<slug>`
   have. The spec lands first, with the human's merge of its `/spec` PR.
 - its `status:` there is not `approved`: a `draft` goes back to `/spec`, and
   a `superseded` spec has already been built.
-- its "Open questions" is anything but `Nessuna.`: a spec with open questions
-  is not sliced. Quote them.
+- its "Open questions" is anything but `None.` or `Nessuna.`, the Italian
+  sentinel that the specs approved before S65 carry: a spec with open
+  questions is not sliced. Quote them.
 - the default branch already has slices of this spec: name them.
 - with `pr`, the working tree has changes outside the slice files of this
   spec: the skill is about to switch branch, and they would travel along.

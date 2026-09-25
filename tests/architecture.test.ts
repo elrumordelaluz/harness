@@ -2343,3 +2343,19 @@ describe('the last entry of section 0 starts from the version before the header'
     expect(last(text)).not.toBe(previous(text))
   })
 })
+
+// /spec writes the sentinel under "Open questions" in English since S65, and
+// /slice reads both, because the specs approved before S65 carry Nessuna.
+describe('the open-questions sentinel is None.', () => {
+  it('skills/spec/SKILL.md writes None. and never Nessuna.', () => {
+    const skill = readFileSync(join(root, 'skills/spec/SKILL.md'), 'utf8')
+    expect(skill).toContain('`None.`')
+    expect(skill).not.toContain('Nessuna.')
+  })
+
+  it('skills/slice/SKILL.md accepts None. and Nessuna.', () => {
+    const skill = readFileSync(join(root, 'skills/slice/SKILL.md'), 'utf8')
+    expect(skill).toContain('`None.`')
+    expect(skill).toContain('`Nessuna.`')
+  })
+})
