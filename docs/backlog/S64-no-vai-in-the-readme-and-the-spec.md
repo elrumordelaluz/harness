@@ -1,7 +1,7 @@
 ---
 id: S64
 title: The README and the spec say how /next starts today, with no "vai"
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
