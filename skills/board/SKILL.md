@@ -204,14 +204,14 @@ moved is `git pull --rebase` and the push again.
 ```
 git add docs/inbox.md
 git commit -F - -- docs/inbox.md <<'INBOX_MSG'
-docs(inbox): <perché>
+docs(inbox): <why>
 
 <the line, whole>
 INBOX_MSG
 git push
 ```
 
-`<perché>` is why the line goes, lowercase, for example
+`<why>` is why the line goes, lowercase, for example
 `docs(inbox): closed by S19, the claim is the branch`.
 
 ### slice
@@ -254,7 +254,7 @@ id lowercase, `s<NN>`, because `commitlint.sh` wants a lowercase letter after
 ```
 git add docs/backlog/S<NN>-<slug>.md docs/inbox.md
 git commit -F - -- docs/backlog/S<NN>-<slug>.md docs/inbox.md <<'INBOX_MSG'
-docs(backlog): s<NN> dall'inbox
+docs(backlog): s<NN> from the inbox
 
 <the title of the slice>
 
@@ -284,14 +284,14 @@ commit of its own, the skeleton left untracked where the script wrote it:
 ```
 git add docs/inbox.md
 git commit -F - -- docs/inbox.md <<'INBOX_MSG'
-docs(inbox): <perché>
+docs(inbox): <why>
 
 <the line, whole>
 INBOX_MSG
 git push
 ```
 
-`<perché>` here is `becomes the intent <slug>`. Then the run stops, the only
+`<why>` here is `becomes the intent <slug>`. Then the run stops, the only
 answer that does not close on its own: the ten lines of an intent are written
 by a human and by no agent. Say, in two lines, that the human writes
 `docs/intent/<slug>.md`, and that `scripts/intent.sh open <slug>` checks it,
@@ -334,7 +334,7 @@ of the entry on the command line:
 ```
 git add docs/backlog/S<NN>-<slug>.md
 git commit -F - -- docs/backlog/S<NN>-<slug>.md <<'BLOCKED_MSG'
-docs(backlog): togli ADR-<nnnn> da blocked_by
+docs(backlog): take ADR-<nnnn> out of blocked_by
 
 <the title of the ADR>
 

@@ -348,7 +348,7 @@ confirm them or say which one changes. Say that the repo is now on
 `spec/<slug>`, and that `git switch -` goes back.
 
 A session that resumes a draft with its PR already open closes the same way,
-with one commit of its own, `docs(spec): chiude le domande di <slug>`, pushed
+with one commit of its own, `docs(spec): close the questions of <slug>`, pushed
 to the same PR.
 
 ## 8. Confirm and approve
