@@ -87,7 +87,7 @@ local` and stop.
   is not `todo`; a `blocked_by` is not `done`, and which; `human: true`, so a
   human takes it and it is out of reach here; a branch `slice/S<NN>-<slug>`
   is on the remote, so another session has taken it and the board prints it
-  `in corso`.
+  `in progress`.
 
 ## 2. The board and the waves
 
@@ -98,7 +98,7 @@ the prune a branch deleted on the remote would hold its slice for good. A
 slice is **eligible** when all four hold: `status: todo`, every id in
 `blocked_by` is a slice with `status: done`, `human: false`, and no branch
 `slice/S<NN>-<slug>` on the remote, which is the claim of a slice (4.4) and
-what the board prints `in corso`.
+what the board prints `in progress`.
 
 The fourth point does not take from this run the slices it is about to claim:
 the waves are computed here, once, before any branch of this run exists. A
