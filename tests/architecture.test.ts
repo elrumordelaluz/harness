@@ -2310,3 +2310,36 @@ describe('no reader is told that "vai" starts /next', () => {
     ).toBe('')
   })
 })
+
+// Section 0 of docs/spec.md heads each entry with the version it starts
+// from: "From 0.35" holds what 0.36 changed. The last heading is therefore
+// one minor behind the version of the header, and a heading named after the
+// new version breaks the trail the other way.
+describe('the last entry of section 0 starts from the version before the header', () => {
+  const spec = readFileSync(join(root, 'docs/spec.md'), 'utf8')
+
+  const previous = (text: string): string | undefined => {
+    const minor = /^> .*, version 0\.(\d+) of /m.exec(text)?.[1]
+    return minor === undefined ? undefined : `0.${Number(minor) - 1}`
+  }
+
+  const last = (text: string): string | undefined =>
+    [...text.matchAll(/^From (0\.\d+),/gm)].at(-1)?.[1]
+
+  it('docs/spec.md', () => {
+    expect(
+      previous(spec),
+      'the header of docs/spec.md has no version',
+    ).toBeDefined()
+    expect(
+      last(spec),
+      `the last "From" heading of section 0 should be ${previous(spec)}, the version the change starts from`,
+    ).toBe(previous(spec))
+  })
+
+  it('the check bites on a heading named after the new version', () => {
+    const text =
+      '> A draft, version 0.37 of 2026-09-25.\n\nFrom 0.37, from x:\n'
+    expect(last(text)).not.toBe(previous(text))
+  })
+})
