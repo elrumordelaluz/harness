@@ -2246,3 +2246,53 @@ describe('no template names an Italian section of AGENTS.md', () => {
     ])
   })
 })
+
+// S64. `/next` used to start the whole board on "vai", and S46 took the
+// Italian triggers out of the descriptions: today it starts on `/next` and on
+// the English phrases of its description. A README or a spec that still quotes
+// "vai" tells the reader to type a word that starts nothing. The version line
+// of the header of docs/spec.md is skipped, because it records what 0.14 said.
+describe('no reader is told that "vai" starts /next', () => {
+  const skills = readdirSync(join(root, 'skills')).filter((name) =>
+    statSync(join(root, 'skills', name)).isDirectory(),
+  )
+
+  const withoutHeader = (text: string): string =>
+    text
+      .split('\n')
+      .map((line) => (/^> .*, version \d+\.\d+ of /.test(line) ? '' : line))
+      .join('\n')
+
+  const sources: [string, (text: string) => string][] = [
+    ['README.md', (text) => text],
+    ['docs/spec.md', withoutHeader],
+    ...skills.map((skill): [string, (text: string) => string] => [
+      `skills/${skill}/SKILL.md`,
+      (text) => text,
+    ]),
+  ]
+
+  const lines = (text: string): number[] =>
+    text
+      .split('\n')
+      .flatMap((line, i) => (line.includes('"vai"') ? [i + 1] : []))
+
+  it.each(sources)('%s', (path, read) => {
+    const text = read(readFileSync(join(root, path), 'utf8'))
+    expect(
+      lines(text),
+      `${path} quotes "vai" as a trigger: /next starts on /next and on the English phrases of its description`,
+    ).toEqual([])
+  })
+
+  it('the check bites on a quote of "vai" and skips the header of the spec', () => {
+    expect(lines('the session that says "vai" is the orchestrator')).toEqual([
+      1,
+    ])
+    expect(
+      withoutHeader(
+        '> A draft, version 0.36 of 2026-09-25. 0.14 says "vai" closes a board.',
+      ),
+    ).toBe('')
+  })
+})
