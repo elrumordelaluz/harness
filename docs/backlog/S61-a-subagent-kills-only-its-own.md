@@ -1,7 +1,7 @@
 ---
 id: S61
 title: A subagent of /next kills only the processes it started
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
