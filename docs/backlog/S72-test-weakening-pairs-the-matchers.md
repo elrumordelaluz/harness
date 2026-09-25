@@ -1,7 +1,7 @@
 ---
 id: S72
 title: test-weakening.sh calls a matcher widened only on the same expect
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
