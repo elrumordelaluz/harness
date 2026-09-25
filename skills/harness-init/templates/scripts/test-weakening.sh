@@ -20,6 +20,29 @@ is_test() {
   esac
 }
 
+# The subject of every expect( on the lines read from stdin, one per line,
+# sorted and unique: the text up to the first "," or ")" at its own depth,
+# compared as written. A widened matcher is an exact one removed and a loose
+# one added on the same subject; a subject on the next line is not seen.
+subjects() {
+  awk '{
+    s = $0
+    while ((i = index(s, "expect(")) > 0) {
+      s = substr(s, i + 7); n = length(s); d = 0; out = ""
+      for (j = 1; j <= n; j++) {
+        c = substr(s, j, 1)
+        if (d == 0 && (c == "," || c == ")")) break
+        if (c == "(" || c == "[" || c == "{") d++
+        else if (c == ")" || c == "]" || c == "}") d--
+        out = out c
+      }
+      gsub(/^[ \t]+|[ \t]+$/, "", out)
+      if (out != "") print out
+      s = substr(s, j)
+    }
+  }' | sort -u
+}
+
 tests=""
 count=0
 src_deleted=0
@@ -44,8 +67,10 @@ found="$(for f in $tests; do
   removed="$(printf '%s\n' "$d" | grep -cE '^-.*(expect\(|\bassert\b|assert_|\.should\b)' || true)"
   added="$(printf '%s\n' "$d" | grep -cE '^\+.*(expect\(|\bassert\b|assert_|\.should\b)' || true)"
   [ "$removed" -gt "$added" ] && echo "$f: assertions removed ($removed removed, $added added)"
-  if printf '%s\n' "$d" | grep -Eq '^-.*(toBe\(|toEqual\(|toStrictEqual\(|toHaveLength\(|toMatchObject\()' \
-     && printf '%s\n' "$d" | grep -Eq '^\+.*(toBeTruthy\(|toBeDefined\(|toBeFalsy\(|not\.toBeNull\(|toBeInstanceOf\()'; then
+  exact="$(printf '%s\n' "$d" | grep -E '^-.*(toBe\(|toEqual\(|toStrictEqual\(|toHaveLength\(|toMatchObject\()' | subjects || true)"
+  loose="$(printf '%s\n' "$d" | grep -E '^\+.*(toBeTruthy\(|toBeDefined\(|toBeFalsy\(|not\.toBeNull\(|toBeInstanceOf\()' | subjects || true)"
+  if [ -n "$exact" ] && [ -n "$loose" ] \
+     && [ -n "$(comm -12 <(printf '%s\n' "$exact") <(printf '%s\n' "$loose"))" ]; then
     echo "$f: matcher widened (exact matcher removed, loose matcher added)"
   fi
   printf '%s\n' "$d" | grep -E '^\+.*(@ts-(ignore|expect-error)|eslint-disable|# *noqa|# *type: *ignore)' \
