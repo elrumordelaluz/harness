@@ -2285,6 +2285,20 @@ describe('no reader is told that "vai" starts /next', () => {
     ).toEqual([])
   })
 
+  // The row of the commands table was already right when the slice was cut:
+  // this case says so, and keeps it saying what starts /next today.
+  it('the /next row of the README says /next S12 runs one and no argument runs all', () => {
+    const row = readFileSync(join(root, 'README.md'), 'utf8')
+      .split('\n')
+      .find((line) => line.startsWith('| `/next`'))
+    expect(
+      row,
+      'the commands table of README.md has no /next row',
+    ).toBeDefined()
+    expect(row).toContain('`/next S12` runs one')
+    expect(row).toContain('no argument runs all')
+  })
+
   it('the check bites on a quote of "vai" and skips the header of the spec', () => {
     expect(lines('the session that says "vai" is the orchestrator')).toEqual([
       1,
