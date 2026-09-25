@@ -22,7 +22,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   # The base, not the head: `merged == true` alone is the same event for a PR
