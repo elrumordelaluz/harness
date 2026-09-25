@@ -1996,6 +1996,41 @@ describe('the slice branch of /next is born without an upstream', () => {
   })
 })
 
+// S61: the slices of a wave run on the same machine, one worktree each, and a
+// subagent whose suite hung ran `pkill -f vitest`, which also ended the suite
+// of another slice: that one saw two runs at exit 143 with no output and no
+// red case to read. The brief is the only place the subagent learns the rule,
+// so the rule is pinned inside the fenced block it receives and not anywhere
+// else in the skill.
+describe('a subagent of /next kills only the processes it started', () => {
+  const file = 'skills/next/SKILL.md'
+  const skill = readFileSync(join(root, file), 'utf8')
+  const start = skill.indexOf('```\nRead AGENTS.md, docs/codebase-map.md')
+  const end = start === -1 ? -1 : skill.indexOf('\n```', start + 3)
+  const block =
+    start === -1 || end === -1
+      ? ''
+      : skill.slice(start, end).replace(/\s+/g, ' ')
+
+  it('has the rule in the fenced subagent block', () => {
+    expect(
+      block,
+      `${file} has no fenced block that opens with "Read AGENTS.md, docs/codebase-map.md": the brief of the subagent has moved somewhere this test does not read`,
+    ).not.toBe('')
+    for (const words of [
+      'never pkill -f vitest',
+      'by the PID you started',
+      'a pattern that names <the worktree path>',
+      'the other slices of the wave run on the same machine',
+    ]) {
+      expect(
+        block,
+        `the subagent block of ${file} does not say "${words}": a subagent whose suite hangs may kill by a pattern that reaches the other worktrees, and the suite of another slice ends at exit 143 with no output`,
+      ).toContain(words)
+    }
+  })
+})
+
 // S41. The policy block arrives in the repos of the projects with
 // `/harness-init local`, and on the second rerun those repos have it already:
 // a flat rewrite would take away the paths somebody widened on purpose, which

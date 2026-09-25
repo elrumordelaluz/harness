@@ -199,7 +199,11 @@ worktree path>. Work only on that slice.
    checked out from the updated default branch. Every command you run
    starts with cd <the worktree path> &&, because your working directory
    resets between calls to the shared checkout, and nothing of yours runs
-   there. Push the empty branch at once, naming the ref:
+   there. Stop a process only by the PID you started, or by a pattern
+   that names <the worktree path>: never pkill -f vitest, nor any pattern
+   that reaches the other checkouts, because the other slices of the wave
+   run on the same machine and their suite would end at exit 143 with no
+   output. Push the empty branch at once, naming the ref:
    git push -u origin slice/S<NN>-<slug>. The branch was created with
    --no-track and has no upstream, so a bare push has no target, and that
    push is still the claim. If it fails because the branch already
