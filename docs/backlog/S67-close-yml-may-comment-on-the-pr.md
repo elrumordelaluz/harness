@@ -1,7 +1,7 @@
 ---
 id: S67
 title: close.yml lets the repair notice reach the PR without the App
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
