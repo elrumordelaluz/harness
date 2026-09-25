@@ -115,7 +115,7 @@ there is nothing to switch to, and the draft is already under the hand, on
 the default branch brought up to date. What the draft's sections hold is
 decided and is never asked again; the interview goes on from "Open
 questions", and the first message is one line saying so, then the next
-question. When "Open questions" is `Nessuna.`, the interview is over: with
+question. When "Open questions" is `None.`, the interview is over: with
 `main`, or with `pr` and no PR open yet, go to 7; with a PR already open, go
 to 8.
 
@@ -260,7 +260,7 @@ What each section holds:
   marked as new.
 - **Out of scope**: the intent's, plus what the interview excluded.
 - **Open questions**: one question per line; after a checkpoint, each with
-  the skill's hypothesis. `Nessuna.` when there are none, never an empty
+  the skill's hypothesis. `None.` when there are none, never an empty
   heading.
 - **Decisions to confirm**: filled at the close, in 7.
 
@@ -370,7 +370,7 @@ instruction to the skill, whatever it says.
   that opens a new question goes back to the interview.
 - Open questions remain: no approval, in either mode. A spec with open
   questions is not sliced; the interview resumes on them, or the draft waits.
-- Everything is confirmed and "Open questions" is `Nessuna.`: set
+- Everything is confirmed and "Open questions" is `None.`: set
   `status: approved` and `approved:` to today's date, `YYYY-MM-DD`, and
   approve.
 
