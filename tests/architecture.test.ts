@@ -1613,7 +1613,7 @@ describe('/spec, /slice and /board read docs_mode, and say both modes', () => {
   const skills: Array<[string, string]> = [
     ['spec', 'docs(spec): <slug>'],
     ['slice', 'docs(backlog): <slug>'],
-    ['board', "docs(backlog): s<NN> dall'inbox"],
+    ['board', 'docs(backlog): s<NN> from the inbox'],
   ]
 
   it.each(skills)(
@@ -1706,9 +1706,9 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
   it('names the commits of the four answers and the two commands of intent.sh', () => {
     const skill = squash(readFileSync(file, 'utf8'))
     for (const name of [
-      'docs(inbox): <perché>',
-      "docs(backlog): s<NN> dall'inbox",
-      'docs(backlog): togli ADR-<nnnn> da blocked_by',
+      'docs(inbox): <why>',
+      'docs(backlog): s<NN> from the inbox',
+      'docs(backlog): take ADR-<nnnn> out of blocked_by',
       'spec: inbox (<',
       'scripts/intent.sh new <slug>',
       'intent.sh open',
@@ -1767,6 +1767,28 @@ describe('the commit subjects the skills give as a model pass commitlint', () =>
       subjects.length,
       'fewer than the ten subject models of board, slice and spec: a model has moved out of the reach of this test, and the next wrong one lands on a session instead of on CI',
     ).toBeGreaterThanOrEqual(10)
+  })
+
+  // S62. A model subject is prose too: every run copies it into `git log`,
+  // and the four Italian ones that survived the translation of S50 went on
+  // writing Italian there after it.
+  it.each(
+    readdirSync(join(root, 'skills'))
+      .map((skill) => join('skills', skill, 'SKILL.md'))
+      .filter((file) => existsSync(join(root, file))),
+  )('%s writes no Italian subject', (file) => {
+    const text = readFileSync(join(root, file), 'utf8')
+    for (const italian of [
+      "dall'inbox",
+      'togli ADR',
+      'chiude le domande',
+      '<perché>',
+    ]) {
+      expect(
+        text,
+        `${file} still gives "${italian}" as a model: the subjects the skills prescribe are in English`,
+      ).not.toContain(italian)
+    }
   })
 })
 
