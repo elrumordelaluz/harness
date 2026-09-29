@@ -1,7 +1,7 @@
 ---
 id: S68
 title: The subagent of /next runs the two scripts against origin, not the local main
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
