@@ -1,7 +1,7 @@
 ---
 id: S36
 title: La 7.1 della spec dice che lo schema lo guarda judge.sh check e che un JSON non valido è un crash
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
