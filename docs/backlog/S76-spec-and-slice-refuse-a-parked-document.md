@@ -1,7 +1,7 @@
 ---
 id: S76
 title: /spec and /slice refuse a parked document and name park.sh resume
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
