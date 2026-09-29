@@ -195,10 +195,11 @@ Documents and rules that work without a server.
 4. **`docs/`**: `codebase-map.md` written by reading the code, one screen
    (template in `templates/docs/codebase-map.md`), then `intent/`, `specs/`,
    `backlog/`, `decisions/`, `review-log/`, each with its README from
-   `templates/docs/`, and `inbox.md` from `templates/docs/inbox.md`, written
-   only if it is not there: its entries belong to the repo, and a rerun that
-   overwrote them would throw away the one place the other skills are allowed
-   to write. Existing docs stay where they are; offer to reclassify
+   `templates/docs/`, and `inbox.md` from `templates/docs/inbox.md` and
+   `parked.md` from `templates/docs/parked.md`, each written only if it is
+   not there: their entries belong to the repo, and a rerun that overwrote
+   them would throw away the one place the other skills are allowed to write
+   and the list of what waits on purpose. Existing docs stay where they are; offer to reclassify
    (a design brief becomes `decisions/ADR-0001-<slug>.md`) and do it only on yes.
 5. **Git hooks** from `templates/githooks/` and `templates/scripts/`:
    `.githooks/pre-commit` (refuses commits on main, except a commit made

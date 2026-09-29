@@ -22,19 +22,25 @@
 #              the open PRs labelled human-gate, needs-human or tier:3, the
 #              draft specs of docs/specs/, and the ADRs that hold an open
 #              slice still, one row each with the ids of the slices and the
-#              title of the ADR.
+#              title of the ADR. A parked draft spec is not one of them.
+#   Parked     one row per line of docs/parked.md: kind (`intent`,
+#              `spec <status>`, or `missing` for a path not in the tree),
+#              slug, date and why. A parked document waits on purpose: it is
+#              never a row of the human section and never the next action.
 #   Plan       the steps of `## Ordine di lavoro` of the latest ADR that has
 #              one, each done, current, manual or todo, and `beyond` when the
-#              backlog went past the highest id the plan names.
+#              backlog went past the highest id the plan names. The done steps
+#              are one row, `<first>-<last>  done`: their text is in --json.
 # The last line is `next action: <action>, because <rule>: <fact>`.
-# A section with nothing in it is a row that says so, never a section that
+# A section with nothing in it says so on its head line, never a section that
 # disappears: a cold reader must be able to tell that there was nothing from
-# a board that skipped the section. No `gh`, or a `gh` that cannot answer, is
-# the row `gh not available` and an exit 0: the board is not the place
-# where a logged out terminal becomes an error.
+# a board that skipped the section, and a row under the head that carries
+# nothing is a line of the forty the screen has. No `gh`, or a `gh` that
+# cannot answer, is the row `gh not available` and an exit 0: the board is
+# not the place where a logged out terminal becomes an error.
 # `--json` prints the same data as one object with the keys `harness`,
-# `slices`, `prs`, `inbox`, `blocked`, `plan` and `next`, the sections of the
-# screen: it is the model the roadmap view will read. `plan` is null when no
+# `slices`, `prs`, `inbox`, `blocked`, `parked`, `plan` and `next`, the
+# sections of the screen: it is the model the roadmap view will read. `plan` is null when no
 # ADR has a work order, and `next` is never null: the last rule always fires.
 # What waits for a human is one key and two reads: `blocked` is the key, and
 # the rest is `prs` read through the three labels plus the draft specs.
@@ -43,6 +49,11 @@
 # not there. What the `## Blocked` section of a slice says is never read: the
 # condition that would free it is a human's to weigh, and the board only says
 # that the decision is due.
+# `parked` is one entry per line of docs/parked.md with `path`, `kind`
+# (`intent`, `spec`, `document` or `missing`), `status` (the status of a
+# spec, null otherwise), `date` and `why` whole, [] when nothing is parked.
+# The board does not check that a parked document is one that can be parked:
+# scripts/park.sh does, and here any line is shown with its kind.
 # `harness` is never null and says which of four states the stamp is in:
 # `stamped`, with the `origin` the stage copied from and one entry of `stages`
 # per stage, null for a stage never installed; `self`, with the sha and the
@@ -241,6 +252,41 @@ inbox="$(printf '%s' "$inbox_tsv" | jq -R -s '
   split("\n") | map(select(length > 0)) | map(split("\t"))
   | map({ date: .[0], text: (.[1] // "") })')"
 
+# One entry per line of docs/parked.md, `- <YYYY-MM-DD>: <path>: <why>`, in
+# the form of the inbox: the path is the text up to the first `: `, the why is
+# the rest. A document parked there is waiting on purpose, and the board lists
+# it and never picks it. Whether the path is in the working tree is read here,
+# because a line that outlived its file is a row marked `missing` and not an
+# error, as a `gh` that cannot answer is a row.
+parked_tsv=""
+if [ -f docs/parked.md ]; then
+  parked_raw="$(awk '
+    /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]:/ {
+      text = substr($0, 14)
+      sub(/^[ \t]+/, "", text)
+      sub(/[ \t]+$/, "", text)
+      gsub(/\t/, " ", text)
+      printf "%s\t%s\n", substr($0, 3, 10), text
+    }
+  ' docs/parked.md)"
+  while IFS="$(printf '\t')" read -r date rest; do
+    [ -n "$date" ] || continue
+    path="${rest%%: *}"
+    why=""
+    [ "$path" = "$rest" ] || why="${rest#*: }"
+    there=0
+    if [ -n "$path" ] && [ -e "$path" ]; then there=1; fi
+    parked_tsv="$parked_tsv$(printf '%s\t%s\t%s\t%s' "$date" "$path" "$why" "$there")
+"
+  done <<EOF
+$parked_raw
+EOF
+fi
+parked_lines="$(printf '%s' "$parked_tsv" | jq -R -s '
+  split("\n") | map(select(length > 0)) | map(split("\t"))
+  | map({ date: .[0], path: (.[1] // ""), why: (.[2] // ""),
+          there: (.[3] == "1") })')"
+
 # Every spec of docs/specs/, README apart, with the two fields the board reads:
 # its status, for the drafts that wait for a human and the approved ones not
 # cut yet, and its intent, for the intents nobody has specced.
@@ -411,8 +457,9 @@ fi
 # every id the plan names.
 # The next action is the first rule that fires, in a fixed order, so that two
 # sessions give the same answer: a PR that waits for a human; an eligible
-# slice, `/next`; an approved spec that no slice names, `/slice <path>`; an
-# intent that no spec names, `/spec <path>`; the current step of the plan, if
+# slice, `/next`; an approved spec that no slice names and is not parked,
+# `/slice <path>`; an intent that no spec names and is not parked,
+# `/spec <path>`; the current step of the plan, if
 # the backlog has not gone beyond it; else the inbox. Eligible is the
 # definition of section 2 of skills/next/SKILL.md: `status: todo`, every id in
 # blocked_by a slice that is done, `human: false`, and no branch of its own on
@@ -431,8 +478,23 @@ board="$(jq -n \
   --argjson slice_specs "$slice_specs" \
   --argjson intents "$intents" \
   --argjson decisions "$decisions" \
+  --argjson parked_lines "$parked_lines" \
   "$human_labels"'
   def num: ltrimstr("S") | tonumber? // 0;
+  ([$parked_lines[] | . as $line
+    | ([$specs[] | select(.path == $line.path)] | first) as $spec
+    | (if $line.there | not then "missing"
+       elif $line.path | startswith("docs/specs/") then "spec"
+       elif $line.path | startswith("docs/intent/") then "intent"
+       else "document" end) as $kind
+    | { path: $line.path,
+        kind: $kind,
+        status: (if $kind == "spec" and $spec != null and $spec.status != ""
+                 then $spec.status else null end),
+        date: $line.date,
+        why: $line.why }]) as $parked
+  | ([$parked[].path]) as $parked_paths
+  | def parked: . as $path | any($parked_paths[]; . == $path);
   (reduce $slices[] as $s ({}; .[$s.id] = $s.status)) as $status
   | (if $adr == "" then null else
       ($steps | map(. + { ids: ([.text
@@ -472,9 +534,10 @@ board="$(jq -n \
         $status[.] == "done");
   ([($prs // [])[] | select(.labels | any(human))] | sort_by(.number) | first) as $waiting
   | ([$slices[] | select(eligible) | .id] | sort_by(num)) as $eligible
-  | [$specs[] | select(.status == "approved")
+  | [$specs[] | select(.status == "approved") | select(.path | parked | not)
       | select(.path as $path | any($slice_specs[]; . == $path) | not)] as $unsliced
-  | [$intents[] | select(. as $intent | any($specs[]; .intent == $intent) | not)] as $unspecced
+  | [$intents[] | select(parked | not)
+      | select(. as $intent | any($specs[]; .intent == $intent) | not)] as $unspecced
   | (if $plan == null then null
      else [$plan.steps[] | select(.status == "current")] | first end) as $step
   | (if $waiting != null then {
@@ -506,7 +569,7 @@ board="$(jq -n \
       }
     end) as $next
   | { harness: $harness, slices: $slices, prs: $prs, inbox: $inbox,
-      blocked: $blocked, plan: $plan, next: $next }')"
+      blocked: $blocked, parked: $parked, plan: $plan, next: $next }')"
 
 if [ "$json" = 1 ]; then
   printf '%s\n' "$board"
@@ -561,39 +624,41 @@ printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels"'
     | if ($adrs | length) == 0 then .blocked_by
       else [$ids[] | select(test("^ADR-[0-9]{4}$") or . == "none" | not)]
         + ["held by " + ($adrs | join(", "))] | join(", ") end;
-  (.slices | map(select(.status != "done"))) as $open
+  (.parked | map(.path)) as $parked_paths
+  | [$specs[] | select(.status == "draft")
+      | select(.path as $path | any($parked_paths[]; . == $path) | not)] as $drafts
+  | (.slices | map(select(.status != "done"))) as $open
   | (.slices | map(select(.status == "done")) | length) as $done
   | ["Harness  " + (.harness | stamp)]
   + [""]
-  + ["Slices  \($done) done, \($open | length) open"]
-  + (if ($open | length) == 0 then ["  no open slices"] else
-      ([12, ($open | map(blocked | length) | max) + 2] | max) as $wide
+  + (if ($open | length) == 0 then
+      ["Slices  \($done) done, 0 open  no open slices"] else
+      ["Slices  \($done) done, \($open | length) open"]
+      + (([12, ($open | map(blocked | length) | max) + 2] | max) as $wide
       | ["  " + ("id" | pad(6)) + ("status" | pad(12)) + ("blocked_by" | pad($wide))
             + ("tier" | pad(6)) + ("human" | pad(7)) + "title"]
       + ($open | map("  " + (.id | pad(6)) + (state | pad(12))
             + (blocked | pad($wide)) + (.tier | pad(6)) + (.human | pad(7))
-            + (.title | cut([69 - $wide, 20] | max))))
+            + (.title | cut([69 - $wide, 20] | max)))))
     end)
   + [""]
-  + ["Inbox  \(.inbox | length) lines"]
-  + (if (.inbox | length) == 0 then ["  inbox empty"] else
-      (.inbox | map("  " + (.date | pad(12)) + (.text | cut(86))))
+  + (if (.inbox | length) == 0 then ["Inbox  0 lines  inbox empty"] else
+      ["Inbox  \(.inbox | length) lines"]
+      + (.inbox | map("  " + (.date | pad(12)) + (.text | cut(86))))
     end)
   + [""]
-  + ["Open PRs"]
-  + (if .prs == null then ["  gh not available"]
-     elif (.prs | length) == 0 then ["  no open PRs"] else
-      ([25, ((.prs | map(.labels | tag("judge:") | length) | max) + 2)] | max) as $wide
+  + (if .prs == null then ["Open PRs", "  gh not available"]
+     elif (.prs | length) == 0 then ["Open PRs  no open PRs"] else
+      ["Open PRs"] + (([25, ((.prs | map(.labels | tag("judge:") | length) | max) + 2)] | max) as $wide
       | (.prs | map("  " + ("#" + (.number | tostring) | pad(7))
             + (.labels | tag("tier:") | pad(8))
             + (.labels | tag("judge:") | pad($wide))
-            + (.title | cut([83 - $wide, 20] | max))))
+            + (.title | cut([83 - $wide, 20] | max)))))
     end)
   + [""]
-  + ["Waiting on a human"]
   + (([25, ((([(.prs // [])[] | select(.labels | any(human))
         | .labels | map(select(human)) | join(" ") | length]
-      + [$specs[] | select(.status == "draft") | ("draft" | length)]
+      + [$drafts[] | ("draft" | length)]
       + [.blocked[] | (.adr + " " + (.slices | join(", "))) | length])
       | max // 0) + 2)] | max) as $wide
     | (if .prs == null then ["  gh not available"] else
@@ -602,24 +667,52 @@ printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels"'
             + (.labels | map(select(human)) | join(" ") | pad($wide))
             + (.title | cut([91 - $wide, 20] | max))))
     end)
-    + ($specs | map(select(.status == "draft"))
+    + ($drafts
         | map("  " + ("spec" | pad(7)) + ("draft" | pad($wide))
             + (.path | cut([91 - $wide, 20] | max))))
     + (.blocked | map("  " + ("adr" | pad(7))
         + ((.adr + " " + (.slices | join(", "))) | pad($wide))
         + ((.title // "") | cut([91 - $wide, 20] | max))
         | sub(" +$"; "")))
-    | if length == 0 then ["  nothing waits for a human"] else . end)
+    | if length == 0 then ["Waiting on a human  nothing waits for a human"]
+      else ["Waiting on a human"] + . end)
   + [""]
-  + ["Plan" + (if .plan == null then "" else "  " + .plan.adr end)]
-  + (if .plan == null then ["  no plan in force"] else
-      (.plan.beyond | if length == 0 then []
+  + (if (.parked | length) == 0 then ["Parked  nothing parked"] else
+      (.parked | map(.path | sub(".*/"; "") | sub("\\.md$"; "")
+        | sub("^SPEC-"; ""))) as $slugs
+      | ([20, ($slugs | map(length) | max) + 2] | max) as $wide
+      | ["Parked"]
+      + [range(0; .parked | length) as $i | .parked[$i]
+          | "  " + ((if .kind == "spec" and .status != null
+                     then "spec " + .status else .kind end) | pad(15))
+            + ($slugs[$i] | pad($wide)) + (.date | pad(12))
+            + (.why | cut([71 - $wide, 20] | max))
+          | sub(" +$"; "")]
+    end)
+  + [""]
+  + (if .plan == null then ["Plan  no plan in force"]
+    elif (.plan.steps | length) == 0 then
+      ["Plan  " + .plan.adr + "  no steps"]
+      + (.plan.beyond | if length == 0 then []
         elif length == 1 then ["  beyond: " + .[0]]
         else ["  beyond: " + .[0] + "-" + .[-1]] end)
-      + (if (.plan.steps | length) == 0 then ["  no steps"] else
-          (.plan.steps | map("  " + (.number | pad(4)) + (mark | pad(18))
-            + (.text | cut(76))))
-        end)
+    else
+      ["Plan  " + .plan.adr]
+      + (.plan.beyond | if length == 0 then []
+        elif length == 1 then ["  beyond: " + .[0]]
+        else ["  beyond: " + .[0] + "-" + .[-1]] end)
+      + (.plan.steps
+        | reduce .[] as $step ([];
+            if $step.status == "done" and length > 0 and .[-1].first != null
+            then .[-1].last = $step.number
+            elif $step.status == "done"
+            then . + [{ first: $step.number, last: $step.number }]
+            else . + [$step] end)
+        | map(if .first != null then
+              "  " + (if .first == .last then "\(.first)"
+                      else "\(.first)-\(.last)" end) + "  done"
+            else "  " + (.number | pad(4)) + (mark | pad(18))
+              + (.text | cut(76)) end))
     end)
   + [""]
   + [.next | "next action: \(.action), because \(.rule): " as $head

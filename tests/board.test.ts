@@ -98,6 +98,9 @@ type Options = {
   harnessRepo?: boolean
   // one empty commit, for the cases that read HEAD: S56
   commit?: boolean
+  // the lines of docs/parked.md, written under its header; no file when
+  // undefined: S74
+  parked?: string[]
 }
 
 function board(opts: Options = {}): {
@@ -151,6 +154,14 @@ function board(opts: Options = {}): {
       .map((line) => `${line}\n`)
       .join('')}`,
   )
+  if (opts.parked !== undefined) {
+    writeFileSync(
+      join(dir, 'docs/parked.md'),
+      `# Parked\n\nThe prose at the top, which is not an entry.\n\n${opts.parked
+        .map((line) => `${line}\n`)
+        .join('')}`,
+    )
+  }
 
   // The remote branches the fixture wants, as the refs a fetch would leave:
   // one empty commit to point them at, and the identity on the command line so
@@ -684,13 +695,16 @@ describe('the PR section reads the open PRs from gh', () => {
 // "Never a section that disappears": whoever reads at cold context has to be
 // able to say that there was nothing, not wonder whether the board skipped
 // the section.
+// S74: the empty text sits on the head line of its section, and no row goes
+// under it, so the rows that carry nothing give the screen back the room the
+// Parked section takes.
 describe('an empty section is a line that says so', () => {
   it('says it for all three at once', () => {
     const { lines, status } = board({ slices: [], inbox: [], prs: '[]' })
     expect(status).toBe(0)
-    expect(lines).toContain('  no open slices')
-    expect(lines).toContain('  inbox empty')
-    expect(lines).toContain('  no open PRs')
+    expect(lines).toContain('Slices  0 done, 0 open  no open slices')
+    expect(lines).toContain('Inbox  0 lines  inbox empty')
+    expect(lines).toContain('Open PRs  no open PRs')
   })
 
   it('keeps the Slice head with the done count when nothing is open', () => {
@@ -698,7 +712,32 @@ describe('an empty section is a line that says so', () => {
       slices: [{ id: 'S01', title: 'A closed slice', status: 'done' }],
     })
     expect(lines[2]).toContain('1 done')
-    expect(lines).toContain('  no open slices')
+    expect(lines[2]).toBe('Slices  1 done, 0 open  no open slices')
+  })
+
+  it('prints the empty text on the head line and no row under it', () => {
+    const { lines, status } = board({ slices: [], inbox: [], prs: '[]' })
+    expect(status).toBe(0)
+    for (const head of [
+      'Slices  0 done, 0 open  no open slices',
+      'Inbox  0 lines  inbox empty',
+      'Open PRs  no open PRs',
+      'Waiting on a human  nothing waits for a human',
+      'Parked  nothing parked',
+      'Plan  no plan in force',
+    ]) {
+      expect(lines).toContain(head)
+      expect(section(lines, head), `${head} has a row under it`).toEqual([])
+    }
+    expect(lines.filter((line) => /^ {2}\S/.test(line))).toEqual([])
+  })
+
+  it('says no steps on the head of a plan whose work order is empty', () => {
+    const { lines } = board({
+      decisions: { 'ADR-0003-the-plan.md': adr('ADR-0003', []) },
+    })
+    expect(lines).toContain('Plan  ADR-0003  no steps')
+    expect(section(lines, 'Plan')).toEqual([])
   })
 })
 
@@ -708,6 +747,8 @@ describe('gh missing or logged out is a line, not a failure', () => {
     expect(status).toBe(0)
     expect(lines).toContain('  gh not available')
     expect(lines).not.toContain('  no open PRs')
+    expect(lines).toContain('Open PRs')
+    expect(lines.join('\n')).not.toContain('no open PRs')
   })
 
   it('says so and exits 0 when the pr list call fails', () => {
@@ -771,9 +812,12 @@ describe('the screen fits in forty lines', () => {
     expect(
       lines.filter((line) => /^\s+S(1[6-9]|20)\s/.test(line)),
     ).toHaveLength(5)
+    // S74: the five steps done are one row, the two left keep theirs.
     expect(
       section(lines, 'Plan').filter((line) => /^\s+\d\s/.test(line)),
-    ).toHaveLength(7)
+    ).toHaveLength(2)
+    expect(section(lines, 'Plan')).toContain('  1-5  done')
+    expect(section(lines, 'Plan')).toHaveLength(4)
     expect(section(lines, 'Plan')).toContain('  beyond: S07-S20')
     expect(lines[lines.length - 1]).toBe(
       'next action: /next, because eligible slice: S16, S17, S18, S19',
@@ -801,6 +845,35 @@ describe('the screen fits in forty lines', () => {
         /ADR-000[567]/.test(line),
       ),
     ).toHaveLength(3)
+  })
+
+  // S74: the case of the plan of seven steps with four parked lines. The
+  // room comes from the rows that carry nothing, the done steps of the plan
+  // in one row and the empty sections on their head, and the ceiling stays
+  // forty.
+  it('stays under forty with the plan of seven steps and four parked lines', () => {
+    const { lines, status } = board({
+      slices,
+      inbox,
+      prs,
+      decisions: {
+        'ADR-0003-the-plan.md': adr('ADR-0003', sevenSteps),
+        'ADR-0004-no-work-order.md': '# ADR-0004\n\n## Decisione\n\nOne.\n',
+      },
+      intents: ['audit-sample', 'roadmap-view', 'inbox-across-repos'],
+      parked: [
+        '- 2026-09-24: docs/intent/audit-sample.md: stopped at Q8 of the interview, the audit waits for real verdicts',
+        '- 2026-09-24: docs/intent/roadmap-view.md: the board comes first',
+        '- 2026-09-24: docs/intent/inbox-across-repos.md: not before two repos use the harness',
+        '- 2026-09-25: docs/intent/gone.md: a line that outlived its file',
+      ],
+    })
+    expect(status).toBe(0)
+    expect(section(lines, 'Parked')).toHaveLength(4)
+    expect(
+      lines.filter((line) => /^\s+S(1[6-9]|20)\s/.test(line)),
+    ).toHaveLength(5)
+    expect(lines.length).toBeLessThanOrEqual(40)
   })
 })
 
@@ -877,7 +950,37 @@ describe('the human section lists what waits for a human, and nothing else', () 
       prs: JSON.stringify([pr(37, 'A PR', ['tier:2'])]),
       specs: [{ slug: 'done', status: 'approved', intent: 'x' }],
     })
-    expect(section(lines, head)).toEqual(['  nothing waits for a human'])
+    expect(lines).toContain('Waiting on a human  nothing waits for a human')
+    expect(section(lines, head)).toEqual([])
+  })
+
+  // S74: a parked draft waits on purpose, and its row is under Parked.
+  it('does not list a parked draft spec', () => {
+    const { lines } = board({
+      prs: '[]',
+      specs: [
+        { slug: 'interview', status: 'draft', intent: 'docs/intent/a.md' },
+        { slug: 'other', status: 'draft', intent: 'docs/intent/b.md' },
+      ],
+      parked: ['- 2026-09-24: docs/specs/SPEC-interview.md: stopped at Q8'],
+    })
+    const rows = section(lines, head)
+    expect(rows).toEqual([
+      '  ' + 'spec'.padEnd(7) + 'draft'.padEnd(25) + 'docs/specs/SPEC-other.md',
+    ])
+    expect(section(lines, 'Parked')).toHaveLength(1)
+    expect(section(lines, 'Parked')[0]).toContain('interview')
+  })
+
+  it('says nothing waits when the only draft is parked', () => {
+    const { lines } = board({
+      prs: '[]',
+      specs: [
+        { slug: 'interview', status: 'draft', intent: 'docs/intent/a.md' },
+      ],
+      parked: ['- 2026-09-24: docs/specs/SPEC-interview.md: stopped at Q8'],
+    })
+    expect(lines).toContain('Waiting on a human  nothing waits for a human')
   })
 
   it('does not say nothing waits when gh could not answer', () => {
@@ -890,6 +993,8 @@ describe('the human section lists what waits for a human, and nothing else', () 
     expect(rows).toContain('  gh not available')
     expect(rows.join('\n')).toContain('SPEC-interview')
     expect(rows).not.toContain('  nothing waits for a human')
+    expect(lines).toContain(head)
+    expect(lines.join('\n')).not.toContain('nothing waits for a human')
   })
 })
 
@@ -993,7 +1098,8 @@ describe('the human section lists the ADRs that hold a slice still', () => {
         },
       ],
     })
-    expect(section(lines, head)).toEqual(['  nothing waits for a human'])
+    expect(lines).toContain('Waiting on a human  nothing waits for a human')
+    expect(section(lines, head)).toEqual([])
   })
 
   it('prints the id alone when the ADR has no file, and exits 0', () => {
@@ -1068,9 +1174,110 @@ describe('the human section lists the ADRs that hold a slice still', () => {
     })
     const rows = section(lines, head)
     expect(rows).not.toContain('  nothing waits for a human')
+    expect(lines).toContain(head)
+    expect(lines.join('\n')).not.toContain('nothing waits for a human')
     expect(rows).toHaveLength(2)
     expect(rows[0]).toContain('ADR-0002 S08')
     expect(rows[1]).toContain('ADR-0004 S05')
+  })
+})
+
+// S74. A document written and not wanted yet is parked by a line of
+// docs/parked.md, `- <YYYY-MM-DD>: <path>: <why>`: the board lists it, after
+// what waits for a human, with its kind, slug, date and why, and never picks
+// it as the next action.
+describe('the Parked section lists what waits and why', () => {
+  const head = 'Parked'
+  const parkedBoard = (parked: string[]): string[] =>
+    board({
+      intents: ['audit-sample', 'roadmap-view'],
+      specs: [
+        {
+          slug: 'audit-sample',
+          status: 'draft',
+          intent: 'docs/intent/audit-sample.md',
+        },
+        {
+          slug: 'board',
+          status: 'approved',
+          intent: 'docs/intent/board.md',
+        },
+      ],
+      parked,
+    }).lines
+
+  it('prints one row per line with its kind, slug, date and why', () => {
+    const lines = parkedBoard([
+      '- 2026-09-24: docs/intent/roadmap-view.md: not wanted before the audit',
+      '- 2026-09-24: docs/specs/SPEC-audit-sample.md: stopped at Q8',
+      '- 2026-09-25: docs/specs/SPEC-board.md: the slices wait for Tipoff',
+    ])
+    expect(lines).toContain(head)
+    expect(section(lines, head)).toEqual([
+      '  ' +
+        'intent'.padEnd(15) +
+        'roadmap-view'.padEnd(20) +
+        '2026-09-24'.padEnd(12) +
+        'not wanted before the audit',
+      '  ' +
+        'spec draft'.padEnd(15) +
+        'audit-sample'.padEnd(20) +
+        '2026-09-24'.padEnd(12) +
+        'stopped at Q8',
+      '  ' +
+        'spec approved'.padEnd(15) +
+        'board'.padEnd(20) +
+        '2026-09-25'.padEnd(12) +
+        'the slices wait for Tipoff',
+    ])
+  })
+
+  it('comes after the human section and before the plan', () => {
+    const lines = parkedBoard([
+      '- 2026-09-24: docs/intent/roadmap-view.md: later',
+    ])
+    const at = (text: string): number =>
+      lines.findIndex((line) => line.startsWith(text))
+    expect(at('Waiting on a human')).toBeGreaterThan(0)
+    expect(at(head)).toBeGreaterThan(at('Waiting on a human'))
+    expect(at('Plan')).toBeGreaterThan(at(head))
+  })
+
+  it('cuts the why at the column and never the row', () => {
+    const lines = parkedBoard([
+      `- 2026-09-24: docs/intent/roadmap-view.md: ${'a why that runs on '.repeat(8)}end`,
+    ])
+    const rows = section(lines, head)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.length).toBe(100)
+    expect(rows[0]?.endsWith('...')).toBe(true)
+  })
+
+  it('says nothing parked on its head when the file has no line', () => {
+    const lines = parkedBoard([])
+    expect(lines).toContain('Parked  nothing parked')
+    expect(section(lines, head)).toEqual([])
+  })
+
+  it('says nothing parked on its head when there is no docs/parked.md', () => {
+    const { lines, status } = board({})
+    expect(status).toBe(0)
+    expect(lines).toContain('Parked  nothing parked')
+    expect(section(lines, head)).toEqual([])
+  })
+
+  it('prints a line whose path is not in the tree as missing, and exits 0', () => {
+    const { lines, status } = board({
+      parked: ['- 2026-09-24: docs/intent/gone.md: moved away by hand'],
+    })
+    expect(status).toBe(0)
+    expect(section(lines, head)).toEqual([
+      '  ' +
+        'missing'.padEnd(15) +
+        'gone'.padEnd(20) +
+        '2026-09-24'.padEnd(12) +
+        'moved away by hand',
+    ])
   })
 })
 
@@ -1119,13 +1326,15 @@ describe('the plan in force is the latest ADR with a work order', () => {
       },
     })
     expect(status).toBe(0)
-    expect(section(lines, 'Plan')).toEqual(['  no plan in force'])
+    expect(lines).toContain('Plan  no plan in force')
+    expect(section(lines, 'Plan')).toEqual([])
   })
 
   it('says there is no plan when docs/decisions/ does not exist', () => {
     const { lines, status } = board({})
     expect(status).toBe(0)
-    expect(section(lines, 'Plan')).toEqual(['  no plan in force'])
+    expect(lines).toContain('Plan  no plan in force')
+    expect(section(lines, 'Plan')).toEqual([])
   })
 })
 
@@ -1134,10 +1343,13 @@ describe('every step of the plan carries its mark', () => {
   const step = (lines: string[], text: string): string =>
     section(lines, 'Plan').find((line) => line.includes(text)) ?? ''
 
+  // S74: the done steps are one row, `<first>-<last>  done`, and their
+  // text is in --json only.
   it('marks done a step whose slices are all done', () => {
     const { lines } = board({ decisions, slices: planSlices(4) })
-    expect(step(lines, 'S01, the documents')).toMatch(/\bdone\b/)
-    expect(step(lines, 'S03, the judge')).toMatch(/\bdone\b/)
+    expect(section(lines, 'Plan')[0]).toBe('  1-3  done')
+    expect(step(lines, 'S01, the documents')).toBe('')
+    expect(step(lines, 'S03, the judge')).toBe('')
   })
 
   it('marks current the first step not done, even with one slice done', () => {
@@ -1160,7 +1372,8 @@ describe('every step of the plan carries its mark', () => {
 
   it('makes a manual step current when every step before it is done', () => {
     const { lines } = board({ decisions, slices: planSlices(6) })
-    expect(step(lines, 'S06, the skills')).toMatch(/\bdone\b/)
+    expect(section(lines, 'Plan')[0]).toBe('  1-5  done')
+    expect(step(lines, 'S06, the skills')).toBe('')
     expect(step(lines, 'Tipoff ready')).toMatch(/\bcurrent\b/)
     expect(step(lines, 'Tipoff ready')).toMatch(/\bmanual\b/)
     expect(step(lines, 'Fable, with Lionel')).not.toMatch(/\bcurrent\b/)
@@ -1169,6 +1382,51 @@ describe('every step of the plan carries its mark', () => {
   it('takes a slice that is not on the backlog for a step not done', () => {
     const { lines } = board({ decisions, slices: [] })
     expect(step(lines, 'S01, the documents')).toMatch(/\bcurrent\b/)
+  })
+
+  it('folds six steps done and keeps the two left, three rows', () => {
+    const eight = [
+      '1. S01, one.',
+      '2. S02, two.',
+      '3. S03, three.',
+      '4. S04, four.',
+      '5. S05, five.',
+      '6. S06, six.',
+      '7. S07, seven.',
+      '8. Tipoff ready.',
+    ]
+    const slices: Slice[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `S0${i + 1}`,
+      title: `Slice ${i + 1}`,
+      status: i < 6 ? 'done' : 'todo',
+      human: true,
+    }))
+    const { lines } = board({
+      decisions: { 'ADR-0003-the-plan.md': adr('ADR-0003', eight) },
+      slices,
+    })
+    const rows = section(lines, 'Plan')
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toBe('  1-6  done')
+    expect(rows[1]).toMatch(/^ {2}7 +current +S07, seven\.$/)
+    expect(rows[2]).toMatch(/^ {2}8 +manual +Tipoff ready\.$/)
+  })
+
+  it('prints a single step done as its number alone', () => {
+    const { lines } = board({ decisions, slices: planSlices(1) })
+    expect(section(lines, 'Plan')[0]).toBe('  1  done')
+    expect(section(lines, 'Plan')).toHaveLength(7)
+  })
+
+  it('keeps every step whole in --json', () => {
+    const { stdout } = board({ decisions, slices: planSlices(6), json: true })
+    const steps = JSON.parse(stdout).plan.steps
+    expect(steps).toHaveLength(7)
+    expect(steps[0]).toMatchObject({
+      number: 1,
+      text: 'S01, the documents on main.',
+      status: 'done',
+    })
   })
 })
 
@@ -1202,7 +1460,8 @@ describe('the plan says when the backlog went beyond it', () => {
       decisions,
       slices: ['S09', 'S12', 'S13'].map(done),
     })
-    expect(section(lines, 'Plan')).toHaveLength(3)
+    expect(section(lines, 'Plan')).toHaveLength(2)
+    expect(section(lines, 'Plan')[0]).toBe('  1-2  done')
     expect(section(lines, 'Plan').some((line) => line.includes('beyond'))).toBe(
       false,
     )
@@ -1304,6 +1563,28 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
       ],
     })
     expect(last(lines)).toMatch(/because step of the plan: /)
+  })
+
+  // S74: a parked document feeds neither rule 3 nor rule 4, and the next
+  // rule fires in its place.
+  it('3. does not fire for a parked approved spec, and 4 fires instead', () => {
+    const { lines } = board({
+      ...notEligible(everything()),
+      parked: ['- 2026-09-24: docs/specs/SPEC-b.md: later'],
+    })
+    expect(last(lines)).toBe(
+      'next action: /spec docs/intent/c.md, because intent with no spec: c.md',
+    )
+  })
+
+  it('4. does not fire for a parked intent, and 5 fires instead', () => {
+    const { lines } = board({
+      ...sliced(everything()),
+      parked: ['- 2026-09-24: docs/intent/c.md: not wanted yet'],
+    })
+    expect(last(lines)).toBe(
+      'next action: step 1 of ADR-0003, because step of the plan: S18, the board.',
+    )
   })
 
   it('4. an intent that no spec names, /spec', () => {
@@ -1609,7 +1890,8 @@ describe('--json is the data model behind the screen', () => {
   // S20 held plan and next at null; S21 fills them, and the keys stay; S38
   // adds `blocked`, the ADRs the human section prints; S56 `harness`, the
   // stamp the first line of the screen is derived from.
-  it('has exactly the seven keys, plan null without a plan and next filled', () => {
+  // S74 adds `parked`, the lines of docs/parked.md with their kind.
+  it('has exactly the eight keys, plan null without a plan and next filled', () => {
     const { stdout, status } = board({
       json: true,
       slices: [{ id: 'S01', title: 'A slice', status: 'todo' }],
@@ -1623,6 +1905,7 @@ describe('--json is the data model behind the screen', () => {
       'harness',
       'inbox',
       'next',
+      'parked',
       'plan',
       'prs',
       'slices',
@@ -1653,7 +1936,7 @@ describe('--json is the data model behind the screen', () => {
     })
     expect(status).toBe(0)
     const data = JSON.parse(stdout)
-    expect(Object.keys(data)).toHaveLength(7)
+    expect(Object.keys(data)).toHaveLength(8)
     expect(data.plan).toEqual({
       adr: 'ADR-0003',
       steps: [
@@ -1897,6 +2180,64 @@ describe('--json is the data model behind the screen', () => {
       { number: 34, title: 'A PR', labels: ['tier:2', 'human-gate'] },
     ])
     expect(data.inbox).toEqual([{ date: '2026-09-16', text: 'an inbox line' }])
+  })
+})
+
+describe('--json carries the parked documents whole', () => {
+  it('has path, kind, status, date and why for every line', () => {
+    const why = `${'a why longer than any column of the screen, '.repeat(4)}end`
+    const { stdout, status } = board({
+      json: true,
+      intents: ['roadmap-view'],
+      specs: [
+        { slug: 'audit', status: 'draft', intent: 'docs/intent/audit.md' },
+        { slug: 'board', status: 'approved', intent: 'docs/intent/b.md' },
+      ],
+      parked: [
+        `- 2026-09-24: docs/intent/roadmap-view.md: ${why}`,
+        '- 2026-09-24: docs/specs/SPEC-audit.md: stopped at Q8',
+        '- 2026-09-25: docs/specs/SPEC-board.md: later',
+        '- 2026-09-26: docs/intent/gone.md: moved by hand',
+      ],
+    })
+    expect(status).toBe(0)
+    expect(JSON.parse(stdout).parked).toEqual([
+      {
+        path: 'docs/intent/roadmap-view.md',
+        kind: 'intent',
+        status: null,
+        date: '2026-09-24',
+        why,
+      },
+      {
+        path: 'docs/specs/SPEC-audit.md',
+        kind: 'spec',
+        status: 'draft',
+        date: '2026-09-24',
+        why: 'stopped at Q8',
+      },
+      {
+        path: 'docs/specs/SPEC-board.md',
+        kind: 'spec',
+        status: 'approved',
+        date: '2026-09-25',
+        why: 'later',
+      },
+      {
+        path: 'docs/intent/gone.md',
+        kind: 'missing',
+        status: null,
+        date: '2026-09-26',
+        why: 'moved by hand',
+      },
+    ])
+  })
+
+  it('is [] when the file has no line, and when there is no file', () => {
+    expect(JSON.parse(board({ json: true, parked: [] }).stdout).parked).toEqual(
+      [],
+    )
+    expect(JSON.parse(board({ json: true }).stdout).parked).toEqual([])
   })
 })
 

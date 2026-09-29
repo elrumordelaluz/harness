@@ -97,6 +97,13 @@ Print the output whole, in a code block so the columns hold, with nothing
 before it. Under the block, one line that repeats the last one of the
 screen, the next action and its reason as the script wrote them.
 
+The `Parked` section, after "Waiting on a human", lists the lines of
+`docs/parked.md`: an intent or a spec written and set aside on purpose, with
+its kind, its slug, the date and the why, and `missing` for a line whose file
+is gone. It is data the skill shows and never asks about: a parked document is
+never the next action, and it comes back with `scripts/park.sh resume <path>`,
+by the human's hand, not by a question of this skill.
+
 The rule that chose it, in the order `scripts/board.sh` applies it, where the
 first that fires wins. It is written here so that the reason on the screen
 can be read, not so that the skill applies it:

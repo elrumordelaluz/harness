@@ -1602,6 +1602,46 @@ describe('docs/inbox.md is a template plus the entries of this repo', () => {
   })
 })
 
+// S74: docs/parked.md is the inbox of what waits on purpose, and it travels
+// the same way: the header is the template, the lines belong to the repo.
+describe('docs/parked.md is a template plus the entries of this repo', () => {
+  const read = (path: string): string =>
+    existsSync(path) ? readFileSync(path, 'utf8') : ''
+  const entry = /^- \d{4}-\d{2}-\d{2}: /m
+
+  it('the template carries no entry: a new repo starts empty', () => {
+    const template = read(join(templates, 'docs/parked.md'))
+    expect(
+      template,
+      'skills/harness-init/templates/docs/parked.md is missing or empty',
+    ).not.toBe('')
+    expect(
+      entry.test(template),
+      'skills/harness-init/templates/docs/parked.md has an entry in it: the entries belong to the repo, the template is the header',
+    ).toBe(false)
+  })
+
+  it('docs/parked.md opens with the template', () => {
+    const template = read(join(templates, 'docs/parked.md'))
+    const mine = read(join(root, 'docs/parked.md'))
+    expect(mine, 'docs/parked.md is missing or empty').not.toBe('')
+    expect(
+      mine.startsWith(template),
+      'docs/parked.md drifted from skills/harness-init/templates/docs/parked.md: change the template, the header is what /harness-init local installs elsewhere',
+    ).toBe(true)
+  })
+
+  it('templates/README.md creates it in stage local, only if missing', () => {
+    expect(stageOf('docs/parked.md')).toBe('local')
+    const row = readFileSync(join(templates, 'README.md'), 'utf8')
+      .split('\n')
+      .find((line) => line.startsWith('| `docs/parked.md`'))
+    expect(row, 'templates/README.md has no row of docs/parked.md').toContain(
+      'created if missing',
+    )
+  })
+})
+
 // S09 lets through on main a commit made only of the paths of the human gate.
 // A line of inbox is written by a skill in the middle of a run: if the path
 // is not among those, the hook stops it and the skill jams exactly where it
@@ -1615,6 +1655,28 @@ describe('AGENTS.md lets a line of inbox land', () => {
       policyBlock(readFileSync(path, 'utf8')).human_gate_paths,
       'a skill cannot commit the line it was told to write',
     ).toContain('docs/inbox.md')
+  })
+})
+
+// S74: the line of docs/parked.md lands on main the way a line of inbox does,
+// or the pre-commit hook refuses the commit of park.sh.
+describe('AGENTS.md lets a line of parked land', () => {
+  it.each([
+    ['AGENTS.md', join(root, 'AGENTS.md')],
+    ['skills/harness-init/templates/AGENTS.md', join(templates, 'AGENTS.md')],
+  ])('%s names docs/parked.md in human_gate_paths', (_name, path) => {
+    const text = readFileSync(path, 'utf8')
+    expect(
+      policyBlock(text).human_gate_paths,
+      'a commit of docs/parked.md alone is refused on main',
+    ).toContain('docs/parked.md')
+    const prose = text
+      .split('\n')
+      .find((line) => line.startsWith('- Human merge by path:'))
+    expect(
+      prose,
+      `${_name} does not say docs/parked.md in Human gates`,
+    ).toContain('`docs/parked.md`')
   })
 })
 
@@ -1772,6 +1834,18 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
       ).toBeGreaterThanOrEqual(0)
       from = at + rule.length
     }
+  })
+
+  // S74: the Parked section is data the skill shows, and its name is the one
+  // board.sh prints.
+  it('names the Parked section with the name board.sh prints', () => {
+    const script = readFileSync(join(templates, 'scripts/board.sh'), 'utf8')
+    const name = /\["(Parked)["\s]/.exec(script)?.[1]
+    expect(name, 'board.sh prints no Parked section').toBe('Parked')
+    expect(
+      readFileSync(file, 'utf8'),
+      `the skill does not name the \`${name}\` section of the screen`,
+    ).toContain(`\`${name}\``)
   })
 
   // S38: the fourth answer does not close a line of inbox, it closes an ADR
