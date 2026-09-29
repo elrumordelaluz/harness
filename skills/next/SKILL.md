@@ -119,10 +119,13 @@ The waves come out of `blocked_by` and the touchpoints:
   stays. The moved slice waits for the one that kept the path to be `done`,
   as it would for a `blocked_by`, for this run only.
 
-The path of a touchpoint is the text inside the first pair of backticks of
-its line in "Touchpoints", compared as written. A `(nuovo)` or
-`(symlink nuovo)` after it changes nothing, since two slices that both create
-a file conflict the same way, and a line with no backticks names no path.
+A path of a slice is every text between backticks on a line of its
+"Touchpoints" that is a path of the repo, one `git ls-files` lists or one the
+line marks `(new)`, compared as written: a line can name a second file after
+the first, and that file counts too. Text in backticks that is not a path, a
+command, a key, a string, names nothing. A `(new)` after a path changes
+nothing, since two slices that both create a file conflict the same way, and
+a line with no backticks names no path.
 
 The reason is the merge, not the code. Two PRs of one wave that write the
 same file both pass their gates, `policy.sh` says `merge` on the second, and

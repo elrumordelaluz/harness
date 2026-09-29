@@ -1854,6 +1854,27 @@ describe('/board and /next read the claim of a slice from the remote', () => {
     ).toContain('--prune')
   })
 
+  it('skills/next/SKILL.md does not read only the first pair of backticks of a touchpoint', () => {
+    expect(
+      section('next', '## 2. The board and the waves').replace(/\s+/g, ' '),
+      'section 2 of /next still reads the first pair of backticks: a file named second on a Touchpoints line puts two slices in one wave',
+    ).not.toContain('first pair of backticks')
+  })
+
+  it('skills/next/SKILL.md counts every path between backticks on a touchpoint line', () => {
+    const text = section('next', '## 2. The board and the waves').replace(
+      /\s+/g,
+      ' ',
+    )
+    expect(
+      text,
+      'section 2 of /next does not say that every text between backticks that is a path of the repo counts',
+    ).toContain('every text between backticks')
+    expect(text).toContain('path of the repo')
+    expect(text).toContain('`(new)`')
+    expect(text).not.toContain('nuovo')
+  })
+
   it('skills/next/SKILL.md gives the branch as a reason an argument is not eligible', () => {
     expect(
       section('next', '## 1. Refuse early').replace(/\s+/g, ' '),
