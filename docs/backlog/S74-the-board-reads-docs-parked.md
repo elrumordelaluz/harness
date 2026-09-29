@@ -1,7 +1,7 @@
 ---
 id: S74
 title: The board lists parked documents and never picks one as the next action
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
