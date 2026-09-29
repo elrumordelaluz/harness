@@ -37,7 +37,7 @@ read sits in "Policy block", and that is where it is changed.
 
 ## Human gates
 
-- Human merge by path: `docs/intent/**`, `docs/specs/**`, `docs/backlog/**`, `docs/decisions/**`, `docs/review-log/**`, `docs/inbox.md`.
+- Human merge by path: `docs/intent/**`, `docs/specs/**`, `docs/backlog/**`, `docs/decisions/**`, `docs/review-log/**`, `docs/inbox.md`, `docs/parked.md`.
 - The tier says how much scrutiny is needed, `human_gate_paths` says who merges: CI turns it into the `human-gate` label, neither `automerge.yml` nor `policy.sh` merges it, not even at tier 0, and only a human removes the label.
 - Documents: on main. The files of `human_gate_paths` go on main with a commit, without a PR: the human's yes in the conversation is the approval and the commit is the record. The git hooks do not read this line: they read `docs_mode`, and with `main` they let through on main a commit made only of those files; on a team the key says `pr`, and the approval goes back to being the merge.
 - Intent and spec: explicit approval. Board: review before the first PR. Tier 2 with an open `high` or `needs-human`, and tier 3: human merge. Audit: three automatic PRs a week.
@@ -81,7 +81,8 @@ removes one does not widen the rule, they stop whoever reads it.
     "docs/backlog/**",
     "docs/decisions/**",
     "docs/review-log/**",
-    "docs/inbox.md"
+    "docs/inbox.md",
+    "docs/parked.md"
   ],
   "docs_extra_paths": [],
   "max_lines": 200,

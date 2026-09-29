@@ -34,7 +34,7 @@ The criteria of the slice green with the tests written first; suite, typecheck, 
 
 ## Human gates
 
-- Human merge by path: `docs/intent/**`, `docs/specs/**`, `docs/backlog/**`, `docs/decisions/**`, `docs/review-log/**`, `docs/inbox.md`. The tier says how much scrutiny is needed, `human_gate_paths` says who merges: CI turns it into the `human-gate` label, neither `automerge.yml` nor `policy.sh` merges it, not even at tier 0, and only a human takes the label off.
+- Human merge by path: `docs/intent/**`, `docs/specs/**`, `docs/backlog/**`, `docs/decisions/**`, `docs/review-log/**`, `docs/inbox.md`, `docs/parked.md`. The tier says how much scrutiny is needed, `human_gate_paths` says who merges: CI turns it into the `human-gate` label, neither `automerge.yml` nor `policy.sh` merges it, not even at tier 0, and only a human takes the label off.
 - Documents: on main. The paths of `human_gate_paths` plus those of `docs_extra_paths`, `docs/spec.md`, `docs/codebase-map.md`, `skills/**/SKILL.md` and `skills/spec/templates/SPEC.md`, are committed straight on main: whoever writes them has the human in the room and the yes is the approval (ADR-0003). The git hooks do not read this line: they read `docs_mode`, and on main a commit made only of those paths goes through, and nothing else.
 - Intent and spec: explicit approval in the conversation, then the commit. Board: the board printed and one question, then the commit. Tier 2 with an open `high` or `needs-human`, and tier 3: human merge. Audit: three automatic PRs a week, in Docket.
 
@@ -78,7 +78,8 @@ What the programs read. The two sections above explain the policy to whoever rea
     "docs/backlog/**",
     "docs/decisions/**",
     "docs/review-log/**",
-    "docs/inbox.md"
+    "docs/inbox.md",
+    "docs/parked.md"
   ],
   "docs_extra_paths": [
     "docs/spec.md",

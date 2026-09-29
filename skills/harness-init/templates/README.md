@@ -12,6 +12,7 @@
 | `scripts/policy-lines.sh`                                                                           | `scripts/`, sourced by the hooks and tier.sh | local            |
 | `docs/codebase-map.md`, `docs/*/README.md`                                                          | `docs/`                                      | local            |
 | `docs/inbox.md`                                                                                     | `docs/inbox.md`, created if missing          | local            |
+| `docs/parked.md`                                                                                    | `docs/parked.md`, created if missing         | local            |
 | no file, the line `.claude/worktrees/`                                                              | `.gitignore`, appended if missing            | local            |
 | no file, the entry of the stage                                                                     | `.harness/stamp.json` (tracked)              | local, ci, judge |
 | `github/ci.yml`                                                                                     | `.github/workflows/ci.yml`                   | ci               |
