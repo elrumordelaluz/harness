@@ -1,12 +1,16 @@
 ---
 id: S74
 title: The board lists parked documents and never picks one as the next action
-status: todo
+status: blocked
 blocked_by: none
 tier: 2
 human: false
 spec: docs/specs/SPEC-intent-and-spec-later-state.md
 ---
+
+## Blocked
+
+An empty `Parked` section adds three lines and the existing forty-line case with three ADRs goes to 42, four parked lines on the seven-step plan print 43: which lines of the screen give way (no blank before `Parked`, `beyond` on the `Plan` head, an empty section folded into its head, or a higher ceiling) is a decision the slice does not make.
 
 ## Goal
 
