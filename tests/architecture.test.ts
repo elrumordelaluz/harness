@@ -2400,3 +2400,16 @@ describe('the open-questions sentinel is None.', () => {
     expect(skill).toContain('`Nessuna.`')
   })
 })
+
+// The map says how the tests are built, not which files hold them, so a new
+// test file leaves it alone. architecture.test.ts stays named: it is where a
+// session looks for the rule a check enforces. The Dragons tell what happened
+// and may point at the case that holds it, so they are not read here.
+describe('docs/codebase-map.md names no test file but architecture.test.ts', () => {
+  it('outside the Dragons', () => {
+    const map = readFileSync(join(root, 'docs/codebase-map.md'), 'utf8')
+    const [shape = ''] = map.split('\n## Dragons')
+    const named = new Set(shape.match(/[a-z-]+\.test\.ts/g) ?? [])
+    expect([...named]).toEqual(['architecture.test.ts'])
+  })
+})
