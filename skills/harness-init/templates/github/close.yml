@@ -81,7 +81,17 @@ jobs:
           sid="$(printf '%s' "$HEAD_REF" | sed -n 's#^slice/\(S[0-9][0-9]*\)-.*#\1#p')"
           if [ -n "$sid" ]; then
             for s in docs/backlog/"$sid"-*.md; do
-              [ -f "$s" ] && sed -i 's/^status: .*/status: done/' "$s"
+              [ -f "$s" ] || continue
+              # A blocked slice whose draft PR was merged anyway has not
+              # landed its work: it stays blocked, and the unblocking is the
+              # human's. Say so where whoever merged it will look.
+              if grep -q '^status: blocked' "$s"; then
+                blocked="PR #$PR merged, but $sid says \`status: blocked\` in \`$s\`: it stayed blocked and was not set to done. Read its \`## Blocked\` section and unblock it by hand once its work has landed."
+                printf '%s\n' "$blocked" >> "$GITHUB_STEP_SUMMARY"
+                gh pr comment "$PR" --body "$blocked" || true
+              else
+                sed -i 's/^status: .*/status: done/' "$s"
+              fi
             done
             # A branch named after a slice whose file is not on the default
             # branch closes nothing, and the slice stays an eligible todo: say
