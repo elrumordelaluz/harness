@@ -2493,3 +2493,35 @@ describe('docs/codebase-map.md names no test file but architecture.test.ts', () 
     expect([...named]).toEqual(['architecture.test.ts'])
   })
 })
+
+// A parked document says nothing about it in its own file: the list is
+// docs/parked.md. /spec and /slice read it before the first question, quote
+// the line and name the command that brings the document back, so nobody
+// reopens an interview or cuts a spec that was set aside.
+describe('/spec and /slice refuse a parked document', () => {
+  function section(skill: string, from: string, to: string): string {
+    const text = readFileSync(join(root, `skills/${skill}/SKILL.md`), 'utf8')
+    const start = text.indexOf(`\n${from}`)
+    const end = text.indexOf(`\n${to}`, start + 1)
+    expect(start, `skills/${skill}/SKILL.md has no "${from}"`).toBeGreaterThan(
+      -1,
+    )
+    expect(end, `skills/${skill}/SKILL.md has no "${to}"`).toBeGreaterThan(-1)
+    return text.slice(start, end)
+  }
+
+  it.each(['spec', 'slice'])(
+    'skills/%s/SKILL.md refuses in section 2 with the line and the command',
+    (skill) => {
+      const refuse = section(skill, '## 2.', '## 3.')
+      expect(refuse).toContain('docs/parked.md')
+      expect(refuse).toContain('scripts/park.sh resume')
+    },
+  )
+
+  it('skills/spec/SKILL.md leaves parked intents out of the list', () => {
+    const pick = section('spec', '## 1.', '## 2.')
+    const list = pick.slice(pick.indexOf('Without an argument'))
+    expect(list.split('\n\n')[0]).toContain('docs/parked.md')
+  })
+})
