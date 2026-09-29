@@ -7,4 +7,6 @@ Lines written by hand or by a skill when something shows up that does not deserv
 - 2026-09-24: `test-weakening.sh` flags `.skip(` inside a string literal of a test file, so a test of the detector itself gets tests-weakened unless its fixture avoids the literal (S66 built it with `join`).
 - 2026-09-25: `.github/ruleset.json` and its template ship `"bypass_actors": []`, so a repo that applies it as written refuses close.yml's push (the App) and the direct commits of `docs_mode: main` (the owner); on this repo the App and the admin role were added by hand, and the template should carry them
 - 2026-09-25: with strict required status checks, the second PR of a /next wave is BEHIND once the first merges, and policy.sh crashes at gh pr merge (PR #3); either the waves or the policy have to account for it
+- 2026-09-29: `tier.sh` counts a pure `git mv` as both the removed and the added file, so three unchanged renames push S77 over `max_lines`/`max_files` and to tier 2 instead of its declared tier 1.
+- 2026-09-29: `/slice` writes touchpoints like "`park.test.ts` among the tests" for `docs/codebase-map.md`, which `tests/architecture.test.ts` forbids outside the Dragons (S75).
 - 2026-09-29: the forty-line cases in `tests/board.test.ts` measure a fixture, while this repo's real board already prints 48 lines, so "one screen" is not held on real data.
