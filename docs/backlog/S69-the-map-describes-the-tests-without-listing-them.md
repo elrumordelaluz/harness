@@ -1,7 +1,7 @@
 ---
 id: S69
 title: The codebase map says how the tests work without listing every file
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
