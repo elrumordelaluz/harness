@@ -2083,6 +2083,32 @@ describe('the slice branch of /next is born without an upstream', () => {
       'the subagent block does not name `git push -u origin slice/S<NN>-<slug>`: the push that is the claim would be whatever git picks, and the upstream would stay wrong for every push after it',
     ).toContain('git push -u origin slice/S<NN>-<slug>')
   })
+
+  // S68: the local default branch falls behind every close.yml, and from a
+  // worktree `git fetch origin main:main` is refused, so the two scripts of
+  // point 4 read the ref the worktree was cut from.
+  it('skills/next/SKILL.md passes origin/<default branch> to the two scripts of the subagent block', () => {
+    const skill = readFileSync(join(root, 'skills/next/SKILL.md'), 'utf8')
+    const start = skill.indexOf('```\nRead AGENTS.md, docs/codebase-map.md')
+    const end = start === -1 ? -1 : skill.indexOf('\n```', start + 3)
+    const block =
+      start === -1 || end === -1
+        ? ''
+        : skill.slice(start, end).replace(/\s+/g, ' ')
+    for (const command of [
+      'scripts/tier.sh origin/<default branch>',
+      'scripts/test-weakening.sh origin/<default branch>',
+    ]) {
+      expect(
+        block,
+        `the subagent block of skills/next/SKILL.md does not run "${command}": the local default branch lags behind close.yml, and the tier is computed on the files of slices already merged`,
+      ).toContain(command)
+    }
+    expect(
+      block.match(/(?<!origin\/)<default branch>/g) ?? [],
+      'the subagent block of skills/next/SKILL.md passes the bare <default branch>: the local branch lags behind close.yml, and from a worktree it cannot be moved',
+    ).toEqual([])
+  })
 })
 
 // S61: the slices of a wave run on the same machine, one worktree each, and a

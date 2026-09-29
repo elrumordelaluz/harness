@@ -217,9 +217,12 @@ worktree path>. Work only on that slice.
    module boundaries.
 3. The four commands of AGENTS.md, all green: typecheck, test,
    format:check, build.
-4. scripts/tier.sh <default branch> and scripts/test-weakening.sh
-   <default branch>, and keep their output, stdout and stderr both: it
-   goes in the PR body. A clean test-weakening.sh says so on stderr only.
+4. git fetch origin, then scripts/tier.sh origin/<default branch> and
+   scripts/test-weakening.sh origin/<default branch>, and keep their
+   output, stdout and stderr both: it goes in the PR body. A clean
+   test-weakening.sh says so on stderr only. Never the local branch: it
+   lags behind every commit of close.yml, and from a worktree it cannot
+   be moved.
 5. Nothing outside the slice's scope. If a change out of scope seems
    necessary, do not make it: report it as a question. The prose the
    slice names in Touchpoints, docs/spec.md, docs/codebase-map.md, a
