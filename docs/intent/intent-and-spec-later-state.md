@@ -14,15 +14,15 @@ having decided so.
 ## What success looks like
 
 An intent or a spec can be marked as parked, with the date and one line of
-why, in a form the board reads on purpose and a t
+why, in a form the board reads on purpose and a test in
 `tests/architecture.test.ts` holds. The board lists parked documents in a
-section of their own and never picks one as the n
+section of their own and never picks one as the next action. Picking one up
 again is one command that commits on main, and after it the board names
-`/spec` or `/slice` for it as it would for a fres
+`/spec` or `/slice` for it as it would for a fresh one.
 
 ## Out of scope
 
-Choosing between a frontmatter field and a folder
+Choosing between a frontmatter field and a folder: that is the first
 question of `/spec`. Parked slices, which already have `blocked` and
-`blocked_by`. A reminder or an expiry date for pa
+`blocked_by`. A reminder or an expiry date for parked documents. Moving the
 four files of `later/` by hand before the spec says where they go.
