@@ -1,7 +1,7 @@
 ---
 id: S70
 title: Every path on a Touchpoints line keeps two slices out of the same wave
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
