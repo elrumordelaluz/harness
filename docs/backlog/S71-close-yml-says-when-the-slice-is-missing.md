@@ -1,7 +1,7 @@
 ---
 id: S71
 title: close.yml says out loud when a slice branch merges and its file is not there
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
