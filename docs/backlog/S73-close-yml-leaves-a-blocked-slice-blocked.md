@@ -1,7 +1,7 @@
 ---
 id: S73
 title: close.yml leaves a blocked slice blocked when its PR merges
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
