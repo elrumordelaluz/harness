@@ -1,6 +1,6 @@
 ---
 status: draft
-intent: docs/intent/later/audit-sample.md
+intent: docs/intent/audit-sample.md
 date: 2026-09-24
 approved:
 ---
