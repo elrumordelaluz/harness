@@ -2086,6 +2086,34 @@ describe('no template judges on the server', () => {
   })
 })
 
+// S36, the same ADR from the side of the spec. The first paragraph of 7.1 says
+// who enforces the verdict schema and what a verdict that breaks it becomes:
+// `judge.sh check` refuses it before archiving, and one that reaches
+// `policy.sh` missing or invalid is a crash. Only that paragraph is read: the
+// rest of 7.1 tells the cost the cloud judge measured, as history.
+describe('7.1 of docs/spec.md names judge.sh check and the crash', () => {
+  const lines = readFileSync(join(root, 'docs/spec.md'), 'utf8').split('\n')
+  const start = lines.findIndex((line) => line.startsWith('### 7.1 '))
+  const end = lines.findIndex(
+    (line, i) => i > start && line.startsWith('```json'),
+  )
+  const paragraph = lines.slice(start + 1, end).join('\n')
+
+  it('finds the paragraph between the heading and the json block', () => {
+    expect(start, 'no ### 7.1 heading').toBeGreaterThan(-1)
+    expect(end, 'no json block after ### 7.1').toBeGreaterThan(start)
+  })
+
+  it('names judge.sh check and the crash', () => {
+    expect(paragraph).toContain('judge.sh check')
+    expect(paragraph).toContain('crash')
+  })
+
+  it('names neither an action nor an escalation', () => {
+    expect(paragraph).not.toMatch(/action|escalation/)
+  })
+})
+
 // S35, the same ADR from the side of the skill. `/judge` is the text every
 // session runs to the letter: a sentence that sends the judgement or the
 // policy to CI makes it look for a second path that does not exist, and a
