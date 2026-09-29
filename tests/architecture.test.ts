@@ -442,6 +442,33 @@ describe('the workflows that act on a merge look at the default branch', () => {
     ).toMatch(/^ {2}pull-requests: write$/m)
   })
 
+  // S59's code merged in PR #79 while its slice file was untracked in a
+  // working tree: the loop found nothing, the job ended green, and the slice
+  // stayed an eligible `todo` holding S51 through `blocked_by`. The id the
+  // branch names with no file behind it is said in the summary and on the PR,
+  // and a comment the token may not post does not cost the log its commit.
+  it('close.yml: the close step says when the slice file is missing', () => {
+    const run = jobText(source('github/close.yml'), 'close')
+    const start = run.indexOf('if [ -n "$sid" ]; then')
+    expect(
+      start,
+      'the close step no longer reads the slice id from the branch',
+    ).not.toBe(-1)
+    const block = run.slice(start, run.indexOf('\n          fi\n', start))
+    expect(
+      block,
+      'the close step has no branch for a missing slice file: a slice merged without its file stays todo and nobody is told',
+    ).toMatch(/if !? ?(ls|compgen|\[)[^\n]*docs\/backlog\/"\$sid"-\*\.md/)
+    expect(
+      block,
+      'the missing-file branch does not write to $GITHUB_STEP_SUMMARY: the run ends green and silent',
+    ).toContain('>> "$GITHUB_STEP_SUMMARY"')
+    expect(
+      block,
+      'the missing-file branch does not comment on the PR, or a refused comment fails the job and the review log is not committed',
+    ).toMatch(/gh pr comment "\$PR"[^\n]*\|\| true/)
+  })
+
   // `automerge.yml` is not the only one that merges, and the base is in the
   // context of neither path: `automerge.yml` starts from `workflow_run` and
   // looks the PR up by itself, `scripts/policy.sh` runs from a terminal and
