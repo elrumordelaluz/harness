@@ -469,6 +469,38 @@ describe('the workflows that act on a merge look at the default branch', () => {
     ).toMatch(/gh pr comment "\$PR"[^\n]*\|\| true/)
   })
 
+  // S51's draft PR #80 was merged while the slice said `status: blocked`, and
+  // the `sed` rewrote it to `done`: the board counted work that never landed,
+  // and a human put the status back by hand. The status is read before it is
+  // written, and a blocked slice stays blocked and is said.
+  it('close.yml: the close step leaves a blocked slice blocked', () => {
+    const run = jobText(source('github/close.yml'), 'close')
+    const start = run.indexOf('for s in docs/backlog/"$sid"-*.md; do')
+    expect(
+      start,
+      'the close step no longer loops over the slice files of the id',
+    ).not.toBe(-1)
+    const loop = run.slice(start, run.indexOf('\n            done\n', start))
+    const write = loop.search(/sed -i[^\n]*status: done/)
+    expect(write, 'the close step no longer sets the slice to done').not.toBe(
+      -1,
+    )
+    const guard = loop.search(/grep -q[^\n]*\^status: blocked[^\n]*"\$s"/)
+    expect(
+      guard !== -1 && guard < write,
+      'the close step rewrites the status without reading it for blocked: a merged draft of a blocked slice closes work that never landed',
+    ).toBe(true)
+    const branch = loop.slice(guard, write)
+    expect(
+      branch,
+      'the blocked branch does not write to $GITHUB_STEP_SUMMARY: the slice stays blocked and nobody is told',
+    ).toContain('>> "$GITHUB_STEP_SUMMARY"')
+    expect(
+      branch,
+      'the blocked branch does not comment on the PR, or a refused comment fails the job and the review log is not committed',
+    ).toMatch(/gh pr comment "\$PR"[^\n]*\|\| true/)
+  })
+
   // `automerge.yml` is not the only one that merges, and the base is in the
   // context of neither path: `automerge.yml` starts from `workflow_run` and
   // looks the PR up by itself, `scripts/policy.sh` runs from a terminal and
