@@ -83,6 +83,14 @@ jobs:
             for s in docs/backlog/"$sid"-*.md; do
               [ -f "$s" ] && sed -i 's/^status: .*/status: done/' "$s"
             done
+            # A branch named after a slice whose file is not on the default
+            # branch closes nothing, and the slice stays an eligible todo: say
+            # so, and let a comment the token may not post cost only itself.
+            if ! ls docs/backlog/"$sid"-*.md >/dev/null 2>&1; then
+              missing="PR #$PR merged from \`$HEAD_REF\`, but no \`docs/backlog/$sid-*.md\` is on the default branch: $sid was not set to done. Commit the slice file on the default branch with \`status: done\`, or the board keeps offering it."
+              printf '%s\n' "$missing" >> "$GITHUB_STEP_SUMMARY"
+              gh pr comment "$PR" --body "$missing" || true
+            fi
           fi
           scripts/review-log.sh "$PR" docs/review-log/verdicts.jsonl
           git config user.name "harness[bot]"
