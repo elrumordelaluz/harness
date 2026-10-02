@@ -326,12 +326,62 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
     expect(ran).toContain('scripts/test-weakening.sh: pass')
     expect(
       ran,
+      'the stderr line of a clean test-weakening.sh is in the section',
+    ).not.toContain('nothing found in')
+    expect(
+      ran,
       'the session got to write inside the gates it did not run',
     ).not.toContain('I promise')
     expect(bundle).toContain(
       'commands reported by the session under review (not verified here)',
     )
     expect(bundle).toContain('I promise they passed')
+  })
+
+  // test-weakening.sh exits 0 with findings too: its answer is its stdout,
+  // which is how ci.yml reads it. Read from the exit status, a weakened test
+  // reaches the judge as a pass in the section it is told never to check.
+  it('reads a finding of test-weakening.sh from its stdout as a FAIL', () => {
+    // Joined, never written whole: test-weakening.sh would read the added
+    // line of this file as a skip added to the suite.
+    const skipped = ['it', 'skip('].join('.')
+    const dir = repo({
+      ...code,
+      'src/a.test.ts': `${skipped}'a', () => {})\n`,
+    })
+    const bundle = readFileSync(
+      judge(dir, ['bundle', 'main'], 'ok\n').out.trim(),
+      'utf8',
+    )
+    const ran = bundle.slice(
+      bundle.indexOf('BEGIN gates run here'),
+      bundle.indexOf('END gates run here'),
+    )
+    const lines = ran.split('\n')
+    const fail = lines.indexOf('- scripts/test-weakening.sh: FAIL')
+    expect(fail, 'the gate is not a FAIL').toBeGreaterThan(-1)
+    expect(lines[fail + 1], 'the finding is not under the FAIL line').toContain(
+      `src/a.test.ts: skip/only added: ${skipped}'a', () => {})`,
+    )
+    expect(ran).not.toContain('scripts/test-weakening.sh: pass')
+    expect(ran).toContain('scripts/prose.sh: pass')
+  })
+
+  it('reads a test-weakening.sh that exits non-zero as a FAIL, with nothing printed', () => {
+    const dir = repo({
+      ...code,
+      'scripts/test-weakening.sh': '#!/usr/bin/env bash\nexit 1\n',
+    })
+    const bundle = readFileSync(
+      judge(dir, ['bundle', 'main'], 'ok\n').out.trim(),
+      'utf8',
+    )
+    const ran = bundle.slice(
+      bundle.indexOf('BEGIN gates run here'),
+      bundle.indexOf('END gates run here'),
+    )
+    expect(ran).toContain('scripts/test-weakening.sh: FAIL')
+    expect(ran).not.toContain('scripts/test-weakening.sh: pass')
   })
 
   it('finds the slice from the branch name, and says so when there is none', () => {
