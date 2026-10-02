@@ -225,7 +225,7 @@ close_section() { printf '======== END %s [%s] ========\n' "$1" "$NONCE"; }
 # judge does not see, and two runs on the same head read the same thing.
 cmd_bundle() {
   [ $# -ge 1 ] || usage
-  local base="$1" role="${2:-correctness}" out sha branch slice tier checks mb
+  local base="$1" role="${2:-correctness}" out sha branch slice tier checks mb found failed
   check_role "$role"
   # Before anything is written: `git diff <base>...HEAD` reads from the merge
   # base and dies without one, halfway through the file, with git's own words
@@ -279,14 +279,24 @@ cmd_bundle() {
     # the party under review. What this script can run, it runs; the four
     # package commands it cannot (too slow, and the runner belongs to the
     # project), so they are labelled for what they are.
+    # The two gates do not answer the same way. prose.sh answers with its exit
+    # status: 0 is a pass, anything else a FAIL. test-weakening.sh answers with
+    # its stdout, as ci.yml reads it: it exits 0 with findings too, so an empty
+    # stdout is a pass and a non-empty one a FAIL, with the findings under it,
+    # one per line. Its stderr line, the one a clean run prints, stays out. A
+    # non-zero exit is a FAIL for both, whatever was printed.
     open_section 'gates run here (never verify these again)'
     printf -- '- scripts/tier.sh %s: %s\n' "$base" "$tier"
     for g in prose test-weakening; do
       if [ -x "scripts/$g.sh" ]; then
-        if "scripts/$g.sh" "$base" >/dev/null 2>&1; then
+        found="" failed=0
+        found="$("scripts/$g.sh" "$base" 2>/dev/null)" || failed=1
+        [ "$g" = test-weakening ] || found=""
+        if [ "$failed" -eq 0 ] && [ -z "$found" ]; then
           printf -- '- scripts/%s.sh: pass\n' "$g"
         else
           printf -- '- scripts/%s.sh: FAIL\n' "$g"
+          if [ -n "$found" ]; then printf '%s\n' "$found" | sed 's/^/    /'; fi
         fi
       fi
     done
