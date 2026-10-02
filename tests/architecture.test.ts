@@ -2470,6 +2470,98 @@ describe('no template names an Italian section of AGENTS.md', () => {
   })
 })
 
+// S79. The policy of a repo is the json block of AGENTS.md, under the headings
+// "Review policy" and "Human gates": the prose lines the spec used to name,
+// `Documenti: su main`, "Gate umani", `Path sensibili`, `Mai tier 0`, "Merge
+// umano per path", are gone, and a reader who looks for them in an AGENTS.md
+// finds nothing. From section 1 on the spec names the key a program reads.
+// Section 0 is left out: it records what each version said, under the name the
+// thing had then.
+describe('the body of docs/spec.md names the keys of the policy block', () => {
+  const names = [
+    'Gate umani',
+    'Documenti: su main',
+    'Documenti: PR',
+    '`Documenti` line',
+    'Path sensibili',
+    'Mai tier 0',
+    'Merge umano per path',
+  ]
+  const keys = [
+    'docs_mode',
+    'sensitive_paths',
+    'never_tier_0',
+    'human_gate_paths',
+    'docs_extra_paths',
+  ]
+  const spec = readFileSync(join(root, 'docs/spec.md'), 'utf8')
+
+  // The line the body starts at, counted from zero, or -1 with no heading.
+  const start = (text: string): number =>
+    text.split('\n').findIndex((line) => line.startsWith('## 1. Principles'))
+
+  const specBody = (text: string): string | undefined =>
+    start(text) === -1
+      ? undefined
+      : text.split('\n').slice(start(text)).join('\n')
+
+  const oldPolicyNames = (text: string, old: string[]): string[] => {
+    const from = start(text)
+    if (from === -1) return ['no "## 1. Principles" heading']
+    return text
+      .split('\n')
+      .flatMap((line, i) =>
+        i >= from && old.some((name) => line.includes(name))
+          ? [`${i + 1}: ${line.trim()}`]
+          : [],
+      )
+  }
+
+  it('docs/spec.md has no old name after section 0', () => {
+    const found = oldPolicyNames(spec, names)
+    expect(
+      found,
+      `docs/spec.md names a line of AGENTS.md that is gone, where the key of the policy block or the heading "Human gates" or "Review policy" goes:\n${found.join('\n')}`,
+    ).toEqual([])
+  })
+
+  it('the check bites on a sample that puts an old name back in the body', () => {
+    expect(
+      oldPolicyNames(
+        '## 0. What changes\n\n## 1. Principles\n\nthe "Gate umani" line',
+        names,
+      ),
+    ).toEqual(['5: the "Gate umani" line'])
+  })
+
+  it('the check leaves alone a sample that holds the old name in section 0', () => {
+    expect(
+      oldPolicyNames(
+        '## 0. What changes\n\nthe "Gate umani" line\n\n## 1. Principles\n\nhuman_gate_paths',
+        names,
+      ),
+    ).toEqual([])
+  })
+
+  it('the check says so when the heading of section 1 is missing', () => {
+    expect(oldPolicyNames('## 0. What changes\n\nprose', names)).toEqual([
+      'no "## 1. Principles" heading',
+    ])
+  })
+
+  it.each(keys)('the body names `%s`, a key of the policy block', (key) => {
+    const block = policyBlock(readFileSync(join(root, 'AGENTS.md'), 'utf8'))
+    expect(
+      Object.keys(block),
+      `${key} is not a key of the block of AGENTS.md`,
+    ).toContain(key)
+    expect(
+      specBody(spec)?.includes(`\`${key}\``),
+      `the body of docs/spec.md does not name \`${key}\``,
+    ).toBe(true)
+  })
+})
+
 // S64. `/next` used to start the whole board on "vai", and S46 took the
 // Italian triggers out of the descriptions: today it starts on `/next` and on
 // the English phrases of its description. A README or a spec that still quotes
