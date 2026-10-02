@@ -2363,6 +2363,170 @@ describe('the slice branch of /next is born without an upstream', () => {
   })
 })
 
+// S81: the ruleset of main wants a branch up to date before it merges. The
+// PRs of a wave were judged and opened from the same commit: the first merged,
+// close.yml committed after it, and every other PR was behind when policy.sh
+// said merge. The code is still written in parallel; the update, the
+// judgement, the PR and the wait run for one slice at a time, so the judge
+// reads the head that merges.
+describe('/next builds a wave in parallel and lands its slices one at a time', () => {
+  const file = 'skills/next/SKILL.md'
+  const skill = readFileSync(join(root, file), 'utf8')
+
+  // Section <n> of the skill, from its heading to the next one, on one line.
+  const part = (text: string, n: number): string => {
+    const start = text.search(new RegExp(`^## ${n}\\. `, 'm'))
+    if (start === -1) return ''
+    const rest = text.slice(start + 3)
+    const end = rest.search(/^## /m)
+    return (end === -1 ? rest : rest.slice(0, end)).replace(/\s+/g, ' ')
+  }
+
+  const rules: [string, number, string[]][] = [
+    [
+      'the calls of a wave go in a single message',
+      3,
+      ['All the calls of a wave go in a single message'],
+    ],
+    [
+      'the judgement runs for one slice at a time, in the order of the ids',
+      4,
+      [
+        'one slice at a time',
+        'in the order of the ids',
+        'merged and closed',
+        'ended its run without a merge',
+      ],
+    ],
+    ['the PR is opened for one slice at a time', 5, ['one slice at a time']],
+    ['the wait is for one slice at a time', 6, ['one slice at a time']],
+    [
+      'the update is a merge of origin/<default branch>, asked of the subagent with SendMessage',
+      4,
+      [
+        'git merge origin/<default branch>',
+        'SendMessage',
+        'the four commands',
+        'The orchestrator never writes code',
+        'conflict',
+      ],
+    ],
+    [
+      'the update is never a rebase or a force push, and why',
+      4,
+      ['never a rebase or a force push', 'the branch is the claim', 'squash'],
+    ],
+    [
+      'the first slice skips the update, and the two scripts run again after one',
+      4,
+      [
+        'has not moved',
+        'scripts/tier.sh origin/<default branch>',
+        'scripts/test-weakening.sh origin/<default branch>',
+      ],
+    ],
+    [
+      'the wait ends on the commit of close.yml, and a PR left open does not stop the wave',
+      6,
+      ['the commit of `close.yml`', 'the next slice of the wave still runs'],
+    ],
+    ['the update of a branch is an event', 2, ['the update of a branch']],
+    [
+      'two slices with a shared path still stay out of one wave',
+      2,
+      [
+        'inside a wave no path of "Touchpoints" appears in two slices',
+        'a rebase would change the head the verdict covers, and nobody judges twice (ADR-0003)',
+      ],
+    ],
+  ]
+
+  const together =
+    /\b(PRs|judgements) of (a|the) wave\b[^.]*\b(together|at the same time|in parallel)\b/i
+
+  // What a text of the skill gets wrong, one line per fault.
+  const broken = (text: string): string[] => {
+    const faults: string[] = []
+    for (const [name, n, phrases] of rules) {
+      for (const phrase of phrases) {
+        if (!part(text, n).includes(phrase)) {
+          faults.push(`${name}: section ${n} does not say "${phrase}"`)
+        }
+      }
+    }
+    const landing = [4, 5, 6].map((n) => part(text, n)).join(' ')
+    for (const sentence of landing.split(/(?<=[.:]) /)) {
+      if (
+        /rebase|--force|force push/i.test(sentence) &&
+        !/\b(never|not|no)\b/i.test(sentence)
+      ) {
+        faults.push(`a rebase or a force push as something to do: ${sentence}`)
+      }
+    }
+    if (together.test(landing)) {
+      faults.push('the PRs of a wave are opened or judged together')
+    }
+    return faults
+  }
+
+  it.each(rules)('%s', (name) => {
+    expect(
+      broken(skill).filter((fault) => fault.startsWith(`${name}: `)),
+      `${file}: a PR of a wave judged or opened before the one before it has closed is behind the default branch when policy.sh says merge, and gh pr merge refuses it`,
+    ).toEqual([])
+  })
+
+  it('names neither a rebase nor a force push as something to do, and opens no PRs together', () => {
+    expect(
+      broken(skill).filter((fault) => !fault.includes(': section ')),
+    ).toEqual([])
+  })
+
+  it('the check bites on a text that opens the PRs of a wave together', () => {
+    const sample = skill.replace(
+      '\n## 6. ',
+      '\nThe PRs of a wave are opened together, once every slice has its answers.\n\n## 6. ',
+    )
+    expect(sample).not.toBe(skill)
+    expect(broken(sample)).toContain(
+      'the PRs of a wave are opened or judged together',
+    )
+  })
+
+  it('the check bites on a text that rebases the branch', () => {
+    const sample = skill.replace(
+      '\n## 5. ',
+      '\nA branch that is behind is rebased and pushed with --force.\n\n## 5. ',
+    )
+    expect(sample).not.toBe(skill)
+    expect(
+      broken(sample).some((fault) => fault.startsWith('a rebase or a force')),
+    ).toBe(true)
+  })
+
+  it('5.4 of docs/spec.md says the slices of a wave land one at a time', () => {
+    const spec = readFileSync(join(root, 'docs/spec.md'), 'utf8')
+    const start = spec.indexOf('\n### 5.4 `/next`')
+    const end = start === -1 ? -1 : spec.indexOf('\n### ', start + 1)
+    const section =
+      start === -1 || end === -1
+        ? ''
+        : spec.slice(start, end).replace(/\s+/g, ' ')
+    for (const phrase of [
+      'land one at a time',
+      'in the order of the ids',
+      'origin/<default>',
+      'never a rebase or a force push',
+      'the commit of `close.yml`',
+    ]) {
+      expect(
+        section,
+        `5.4 of docs/spec.md does not say "${phrase}": the spec is the source, and the skill would land in series against it`,
+      ).toContain(phrase)
+    }
+  })
+})
+
 // S61: the slices of a wave run on the same machine, one worktree each, and a
 // subagent whose suite hung ran `pkill -f vitest`, which also ended the suite
 // of another slice: that one saw two runs at exit 143 with no output and no
