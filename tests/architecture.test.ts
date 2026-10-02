@@ -3066,3 +3066,72 @@ describe('/spec and /slice refuse a parked document', () => {
     expect(list.split('\n\n')[0]).toContain('docs/parked.md')
   })
 })
+
+// S77: later/ was the workaround docs/parked.md replaces. Its documents sit
+// where they belong again, parked, and the board lists them and picks none.
+describe('later/ is gone', () => {
+  const tracked = execFileSync('git', ['ls-files'], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean)
+  const parkedPaths = readFileSync(join(root, 'docs/parked.md'), 'utf8')
+    .split('\n')
+    .filter((line) => /^- \d{4}-\d{2}-\d{2}: /.test(line))
+    .map((line) => line.slice(14).split(': ')[0] ?? '')
+  const three = [
+    'docs/intent/audit-sample.md',
+    'docs/intent/roadmap-view.md',
+    'docs/specs/SPEC-audit-sample.md',
+  ]
+
+  it('tracks nothing under docs/intent/later/ or docs/specs/later/', () => {
+    expect(
+      tracked.filter(
+        (path) =>
+          path.startsWith('docs/intent/later/') ||
+          path.startsWith('docs/specs/later/'),
+      ),
+    ).toEqual([])
+  })
+
+  it('every line of docs/parked.md names a tracked file', () => {
+    for (const path of parkedPaths) {
+      expect(tracked, `docs/parked.md parks ${path}, not tracked`).toContain(
+        path,
+      )
+    }
+  })
+
+  it('parks the three documents that were in later/', () => {
+    for (const path of three) expect(parkedPaths).toContain(path)
+  })
+
+  it('SPEC-audit-sample.md names its intent where it sits now', () => {
+    const spec = readFileSync(
+      join(root, 'docs/specs/SPEC-audit-sample.md'),
+      'utf8',
+    )
+    expect(spec).toMatch(/^intent: docs\/intent\/audit-sample\.md$/m)
+  })
+
+  it('docs/inbox.md carries the idea of harness-inbox-across-repos', () => {
+    const inbox = readFileSync(join(root, 'docs/inbox.md'), 'utf8')
+    expect(inbox).toMatch(/^- \d{4}-\d{2}-\d{2}: .*harness-inbox-across-repos/m)
+  })
+
+  it('the board lists the three under Parked and picks none of them', () => {
+    const board = JSON.parse(
+      execFileSync(join(root, 'scripts/board.sh'), ['--json'], {
+        cwd: root,
+        encoding: 'utf8',
+      }),
+    ) as { parked: { path: string }[]; next: { action: string } }
+    const parked = board.parked.map((entry) => entry.path)
+    for (const path of three) {
+      expect(parked).toContain(path)
+      expect(board.next.action).not.toContain(path)
+    }
+  })
+})
