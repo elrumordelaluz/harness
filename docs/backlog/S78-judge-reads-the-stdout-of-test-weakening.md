@@ -1,7 +1,7 @@
 ---
 id: S78
 title: judge.sh reads the stdout of test-weakening.sh, not its exit status
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
