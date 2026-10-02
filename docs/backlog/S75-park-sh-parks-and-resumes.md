@@ -1,7 +1,7 @@
 ---
 id: S75
 title: scripts/park.sh parks a document and picks it up again with one command
-status: todo
+status: done
 blocked_by: S74
 tier: 2
 human: false

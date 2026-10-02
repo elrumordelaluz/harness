@@ -155,8 +155,11 @@ check holds because the skill has written nothing there yet: its own lines
 wait for 6.
 
 The lines are the `inbox` key of `scripts/board.sh --json`, in its order,
-with `date` and `text` whole: the screen cuts a line at its column, the
-question does not. No lines, nothing to ask: the screen was the run.
+with `date` and `text` whole: the screen cuts a line at its column, and on a
+board that would pass forty lines it cuts the inbox in number too, down to
+its oldest lines and a row that says how many more there are. The questions
+read `--json`, where every line is whole and none is missing: a line off the
+screen is still asked. No lines, nothing to ask: the screen was the run.
 
 ## 4. One question per line
 

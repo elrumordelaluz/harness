@@ -32,6 +32,19 @@
 #              backlog went past the highest id the plan names. The done steps
 #              are one row, `<first>-<last>  done`: their text is in --json.
 # The last line is `next action: <action>, because <rule>: <fact>`.
+# The screen is forty lines, and the script counts its own: a board that
+# would pass forty gives rows up in a fixed order, and only then. First the
+# Inbox, from its newest line back and only the rows needed: the oldest lines
+# stay, as many as fit, with one row under them, `and <n> more`, and the head
+# keeps the full count. Then, with the Inbox down to its head and that row,
+# the open slices that cannot be taken, a blocked one, one held by an ADR, one
+# that waits for a slice not done or for a human: they leave their rows and
+# become one, `waiting` and their ids in order, and the head keeps its counts.
+# Never cut: the row of a slice that is eligible or in progress, the Open
+# PRs, Waiting on a human, Parked, the Plan and the next action. A board still
+# over forty after both cuts prints over forty: the overflow is the fact. The
+# cut changes the rows printed and never the rule of the next action, and
+# `--json` knows nothing of it: `inbox` and `slices` are whole there.
 # A section with nothing in it says so on its head line, never a section that
 # disappears: a cold reader must be able to tell that there was nothing from
 # a board that skipped the section, and a row under the head that carries
@@ -342,6 +355,14 @@ intents="$(printf '%s' "$intents_list" | jq -R -s 'split("\n") | map(select(leng
 # next action and the screen read the same one.
 human_labels='def human: . == "human-gate" or . == "needs-human" or . == "tier:3";'
 
+# Eligible, the definition of the comment above the next action, on a map
+# from the id of a slice to its status: the rule reads it to choose, and the
+# screen to tell the slices that move from the ones it may fold into one row.
+eligible_def='def eligible($status):
+  .status == "todo" and (.human | not) and .branch == null
+  and all(.blocked_by | splits("[, \t]+") | select(. != "" and . != "none");
+    $status[.] == "done");'
+
 # Every ADR of docs/decisions/ by id and title, so that a slice held by a
 # decision can say which one in words. The title is the text of the first
 # heading without the `ADR-<nnnn>:` the id column already carries, and an ADR
@@ -479,7 +500,7 @@ board="$(jq -n \
   --argjson intents "$intents" \
   --argjson decisions "$decisions" \
   --argjson parked_lines "$parked_lines" \
-  "$human_labels"'
+  "$human_labels$eligible_def"'
   def num: ltrimstr("S") | tonumber? // 0;
   ([$parked_lines[] | . as $line
     | ([$specs[] | select(.path == $line.path)] | first) as $spec
@@ -528,12 +549,8 @@ board="$(jq -n \
          slices: (map(.slice) | unique_by(num))
        })
      | sort_by(.adr)) as $blocked
-  | def eligible:
-      .status == "todo" and (.human | not) and .branch == null
-      and all(.blocked_by | splits("[, \t]+") | select(. != "" and . != "none");
-        $status[.] == "done");
-  ([($prs // [])[] | select(.labels | any(human))] | sort_by(.number) | first) as $waiting
-  | ([$slices[] | select(eligible) | .id] | sort_by(num)) as $eligible
+  | ([($prs // [])[] | select(.labels | any(human))] | sort_by(.number) | first) as $waiting
+  | ([$slices[] | select(eligible($status)) | .id] | sort_by(num)) as $eligible
   | [$specs[] | select(.status == "approved") | select(.path | parked | not)
       | select(.path as $path | any($slice_specs[]; . == $path) | not)] as $unsliced
   | [$intents[] | select(parked | not)
@@ -576,8 +593,12 @@ if [ "$json" = 1 ]; then
   exit 0
 fi
 
-# The screen. The board cuts in width and never in number of rows: a slice or
-# a line that is not there is a slice nobody reads. Widths add up to a hundred
+# The screen. The board cuts every row in width, and in number only the two
+# kinds of row the header names, and only when the lines would pass forty:
+# `screen` is the whole board as lines, with `$keep` the inbox rows that stay,
+# null for all of them, and `$fold` true when the slices that wait become one
+# row. It is run whole first, and the count of its own lines decides the rest.
+# Widths add up to a hundred
 # columns, the width of a terminal nobody has resized: a column wider than its
 # minimum, the blocked_by of the slices and the labels of the two PR sections,
 # widens it for every row of that section and the title gives the columns
@@ -589,7 +610,8 @@ fi
 # are. An ADR row carries its id and the slices in the column of the labels,
 # so the title starts where the other titles do, and it is the only row whose
 # last column can be empty, when the ADR has no file to take a title from.
-printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels"'
+printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels$eligible_def"'
+  def num: ltrimstr("S") | tonumber? // 0;
   def pad($n): tostring | . + ((" " * ($n - length)) // "");
   def cut($n): tostring | if length > $n then .[0:$n - 3] + "..." else . end;
   def tag($prefix): (map(select(startswith($prefix))) | first) // "-";
@@ -624,27 +646,44 @@ printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels"'
     | if ($adrs | length) == 0 then .blocked_by
       else [$ids[] | select(test("^ADR-[0-9]{4}$") or . == "none" | not)]
         + ["held by " + ($adrs | join(", "))] | join(", ") end;
+  def screen($keep; $fold):
   (.parked | map(.path)) as $parked_paths
   | [$specs[] | select(.status == "draft")
       | select(.path as $path | any($parked_paths[]; . == $path) | not)] as $drafts
   | (.slices | map(select(.status != "done"))) as $open
   | (.slices | map(select(.status == "done")) | length) as $done
+  | (reduce .slices[] as $s ({}; .[$s.id] = $s.status)) as $status
+  | ($open | map(select(eligible($status) or state == "in progress" | not))
+      | if $fold and length > 1 then . else [] end) as $waiting
+  | ($open | map(select(.id as $id | any($waiting[]; .id == $id) | not))) as $rows
   | ["Harness  " + (.harness | stamp)]
   + [""]
   + (if ($open | length) == 0 then
       ["Slices  \($done) done, 0 open  no open slices"] else
       ["Slices  \($done) done, \($open | length) open"]
-      + (([12, ($open | map(blocked | length) | max) + 2] | max) as $wide
-      | ["  " + ("id" | pad(6)) + ("status" | pad(12)) + ("blocked_by" | pad($wide))
+      + (if ($rows | length) == 0 then [] else
+        ([12, ($rows | map(blocked | length) | max) + 2] | max) as $wide
+        | ["  " + ("id" | pad(6)) + ("status" | pad(12)) + ("blocked_by" | pad($wide))
             + ("tier" | pad(6)) + ("human" | pad(7)) + "title"]
-      + ($open | map("  " + (.id | pad(6)) + (state | pad(12))
+        + ($rows | map("  " + (.id | pad(6)) + (state | pad(12))
             + (blocked | pad($wide)) + (.tier | pad(6)) + (.human | pad(7))
-            + (.title | cut([69 - $wide, 20] | max)))))
+            + (.title | cut([69 - $wide, 20] | max))))
+        end)
+      + (if ($waiting | length) == 0 then [] else
+          ["  waiting  " + ($waiting | map(.id) | sort_by(num) | join(", "))]
+        end)
     end)
   + [""]
   + (if (.inbox | length) == 0 then ["Inbox  0 lines  inbox empty"] else
       ["Inbox  \(.inbox | length) lines"]
-      + (.inbox | map("  " + (.date | pad(12)) + (.text | cut(86))))
+      + (.inbox
+        | if $keep == null then . else
+            to_entries | sort_by(.value.date, .key) | .[0:$keep]
+            | sort_by(.key) | map(.value)
+          end
+        | map("  " + (.date | pad(12)) + (.text | cut(86))))
+      + (if $keep == null then []
+         else ["  and \((.inbox | length) - $keep) more"] end)
     end)
   + [""]
   + (if .prs == null then ["Open PRs", "  gh not available"]
@@ -716,5 +755,16 @@ printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels"'
     end)
   + [""]
   + [.next | "next action: \(.action), because \(.rule): " as $head
-      | $head + (.fact | cut([100 - ($head | length), 20] | max))]
+      | $head + (.fact | cut([100 - ($head | length), 20] | max))];
+  # The oldest inbox lines are the oldest by date, a line of the file before
+  # one of the same day, and they are printed in the order of the file. A cut
+  # costs the row of the count, so an inbox of one line has nothing to give.
+  (screen(null; false) | length) as $lines
+  | (.inbox | length) as $inbox
+  | if $lines <= 40 then screen(null; false)
+    else (if $inbox < 2 then null
+          else [$inbox - 1 - ($lines - 40), 0] | max end) as $keep
+      | if (screen($keep; false) | length) <= 40 then screen($keep; false)
+        else screen($keep; true) end
+    end
   | .[]'

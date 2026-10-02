@@ -282,13 +282,39 @@ Deterministic gates on the server. No LLM in this stage.
    test in and report the violation: it is the finding.
 6. **Repo settings and ruleset.** Run `gh repo edit` for squash-only and
    branch deletion on merge (every plan), and auto-merge where the plan
-   allows it. Apply `templates/github/ruleset.json` with
+   allows it. Write `.github/ruleset.json` and apply it with
    `gh api ... /rulesets --input` only when Detect found rulesets available;
    otherwise one line in the hand-back: main is protected by the hooks alone
    and the policy merges directly after green ci. The required check is
    `ci`. Solo: zero required reviews. Team: one required review,
    `CODEOWNERS` on the sensitive paths (write it from the AGENTS.md list),
    merge queue above two people.
+
+   `.github/ruleset.json` is `templates/github/ruleset.json` with
+   `bypass_actors` filled, and the file written is the file applied: the
+   ruleset on GitHub and the one in the repo are never two. The template
+   ships the list empty because neither actor can be known before the repo
+   is, and two writers of the chain push to main without a PR. The first is
+   `close.yml`, with the token of the GitHub App: the App goes in as an
+   `Integration` actor whose id is the value of the `HARNESS_APP_ID` variable
+   of the repo, read with `gh variable get`. With the variable unset the
+   actor is left out, and one line in the hand-back says that `close.yml`
+   will be refused once the App is set, until the stage runs again. The
+   second is the human who commits documents on main: the admin role goes in
+   as a `RepositoryRole` actor only when the `docs_mode` key of the policy
+   block is `main`. With `pr` it is left out, because nobody commits on main
+   there, and a bypass would only weaken the rule for the team. Both need a
+   bypass that holds for a direct push, not only inside a pull request.
+
+   The shape of an actor, `actor_id`, `actor_type` and `bypass_mode`, with
+   the values each one takes and the id of the admin role, is read from the
+   current rulesets REST reference before it is written, never from memory.
+   List the rulesets of the repo first: a ruleset already on the repo with
+   this name is updated and not created twice. A rerun changes
+   `bypass_actors` only by adding what is missing: an actor a human put
+   there stays, in the file and on GitHub, so the list on GitHub is read
+   before the file is written.
+
 7. **Stamp**: the entry `ci` of `.harness/stamp.json`, as "Ground rules" says.
    The entry of `local` stays as that stage left it, whatever it says: the two
    stages can come from two different commits of the harness, and the board

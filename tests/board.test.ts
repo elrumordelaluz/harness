@@ -789,7 +789,8 @@ describe('the screen fits in forty lines', () => {
     const { lines, status } = board({ slices, inbox, prs })
     expect(status).toBe(0)
     expect(lines.length).toBeLessThanOrEqual(40)
-    // Every row is there: the board cuts in width, never in number.
+    // Every row is there: the board cuts in width, and in number only when
+    // the screen would pass forty, which this one does not.
     expect(
       lines.filter((line) => /^\s+S(1[6-9]|20)\s/.test(line)),
     ).toHaveLength(5)
@@ -874,6 +875,197 @@ describe('the screen fits in forty lines', () => {
       lines.filter((line) => /^\s+S(1[6-9]|20)\s/.test(line)),
     ).toHaveLength(5)
     expect(lines.length).toBeLessThanOrEqual(40)
+  })
+
+  // S83. The same fixture with an inbox that no longer fits. The script
+  // counts its own lines and gives rows up in a fixed order: the inbox from
+  // its newest line back, then the open slices nobody can take, in one row of
+  // ids. What a session acts on keeps its rows.
+  const twenty = Array.from(
+    { length: 20 },
+    (_, i) =>
+      `- 2026-09-${String(i + 1).padStart(2, '0')}: an inbox line as long as the real ones, which says a fact, its reason and what should be done, and does not fit one terminal line`,
+  )
+  const sliceRows = (lines: string[]): string[] =>
+    lines.filter((line) => /^\s+S\d+\s/.test(line))
+  const dates = (rows: string[]): string[] =>
+    rows.map((line) => line.trim().slice(0, 10))
+
+  // Twelve open slices after the fifteen done: two eligible, two with their
+  // branch on the remote, eight that wait for S16.
+  const twelve: Slice[] = [
+    ...slices.slice(0, 15),
+    ...Array.from({ length: 12 }, (_, i) => ({
+      id: `S${i + 16}`,
+      title: `The long title of slice number ${i + 16}, which wraps if nobody cuts it`,
+      status: 'todo',
+      blocked_by: i < 4 ? 'none' : 'S16',
+      tier: 2,
+    })),
+  ]
+  const claimed = ['slice/S18-a-slice', 'slice/S19-a-slice']
+  const waitingIds = 'S20, S21, S22, S23, S24, S25, S26, S27'
+  // What is never cut, and takes the room the inbox alone cannot give back:
+  // six open PRs, the plan of seven steps and four parked lines.
+  const crowded: Options = {
+    prs: JSON.stringify(
+      [34, 35, 36, 37, 38, 39].map((n) => pr(n, `Open PR ${n}`, ['tier:2'])),
+    ),
+    decisions: {
+      'ADR-0003-the-plan.md': adr('ADR-0003', sevenSteps),
+    },
+    intents: ['audit-sample', 'roadmap-view', 'inbox-across-repos'],
+    parked: [
+      '- 2026-09-24: docs/intent/audit-sample.md: stopped at Q8 of the interview, the audit waits for real verdicts',
+      '- 2026-09-24: docs/intent/roadmap-view.md: the board comes first',
+      '- 2026-09-24: docs/intent/inbox-across-repos.md: not before two repos use the harness',
+      '- 2026-09-25: docs/intent/gone.md: a line that outlived its file',
+    ],
+  }
+  const folded: Options = {
+    ...crowded,
+    slices: twelve,
+    branches: claimed,
+    inbox: twenty,
+  }
+  // Thirty eligible slices and three that wait for one of them.
+  const thirty: Slice[] = [
+    ...Array.from({ length: 30 }, (_, i) => ({
+      id: `S${i + 10}`,
+      title: `Eligible slice ${i + 10}`,
+      status: 'todo',
+      tier: 2,
+    })),
+    ...[40, 41, 42].map((n) => ({
+      id: `S${n}`,
+      title: `Waiting slice ${n}`,
+      status: 'todo',
+      blocked_by: 'S10',
+      tier: 2,
+    })),
+  ]
+
+  it('cuts the inbox to its oldest lines when twenty of them pass forty', () => {
+    const { lines, status } = board({ slices, inbox: twenty, prs })
+    expect(status).toBe(0)
+    expect(lines).toHaveLength(40)
+    expect(lines).toContain('Inbox  20 lines')
+    const rows = section(lines, 'Inbox')
+    expect(rows).toHaveLength(17)
+    expect(dates(rows.slice(0, 16))).toEqual(
+      Array.from(
+        { length: 16 },
+        (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`,
+      ),
+    )
+    expect(rows[16]).toBe('  and 4 more')
+    expect(sliceRows(lines)).toHaveLength(5)
+  })
+
+  it('keeps the oldest lines by their date, in the order of the file', () => {
+    const { lines } = board({
+      slices,
+      inbox: [...twenty].reverse(),
+      prs,
+    })
+    expect(lines).toHaveLength(40)
+    const rows = section(lines, 'Inbox')
+    expect(dates(rows.slice(0, 16))).toEqual(
+      Array.from(
+        { length: 16 },
+        (_, i) => `2026-09-${String(16 - i).padStart(2, '0')}`,
+      ),
+    )
+    expect(rows[16]).toBe('  and 4 more')
+  })
+
+  it('gives up only the inbox rows it needs', () => {
+    const { lines } = board({ slices, inbox: twenty.slice(0, 18), prs })
+    expect(lines).toHaveLength(40)
+    expect(lines).toContain('Inbox  18 lines')
+    expect(section(lines, 'Inbox')).toHaveLength(17)
+    expect(section(lines, 'Inbox')[16]).toBe('  and 2 more')
+    expect(sliceRows(lines)).toHaveLength(5)
+  })
+
+  it('leaves the slices that wait their rows while cutting the inbox is enough', () => {
+    const { lines } = board({
+      slices: twelve,
+      branches: claimed,
+      inbox: twenty,
+      prs,
+    })
+    expect(lines).toHaveLength(40)
+    expect(sliceRows(lines)).toHaveLength(12)
+    expect(lines.join('\n')).not.toContain('waiting  S')
+  })
+
+  it('folds the slices that wait into one row of ids when the inbox is not enough', () => {
+    const { lines, status } = board(folded)
+    expect(status).toBe(0)
+    expect(lines.length).toBeLessThanOrEqual(40)
+    expect(lines).toContain('Slices  15 done, 12 open')
+    expect(lines).toContain(`  waiting  ${waitingIds}`)
+    expect(sliceRows(lines)).toHaveLength(4)
+    expect(row(lines, 'S16')).toMatch(/^ {2}S16 +todo +none /)
+    expect(row(lines, 'S17')).toMatch(/^ {2}S17 +todo +none /)
+    expect(row(lines, 'S18')).toMatch(/^ {2}S18 +in progress +none /)
+    expect(row(lines, 'S19')).toMatch(/^ {2}S19 +in progress +none /)
+    expect(lines).toContain('Inbox  20 lines')
+    expect(section(lines, 'Inbox')).toEqual(['  and 20 more'])
+    // What a session acts on is whole.
+    expect(section(lines, 'Open PRs')).toHaveLength(6)
+    expect(section(lines, 'Parked')).toHaveLength(4)
+    expect(section(lines, 'Plan')).toHaveLength(4)
+    expect(lines[lines.length - 1]).toBe(
+      'next action: /next, because eligible slice: S16, S17',
+    )
+  })
+
+  it('folds a blocked slice, one held by an ADR and one that waits for a slice', () => {
+    const mixed = twelve.map((slice) =>
+      slice.id === 'S20'
+        ? { ...slice, status: 'blocked', blocked_by: 'none' }
+        : slice.id === 'S21'
+          ? { ...slice, blocked_by: 'ADR-0009' }
+          : slice,
+    )
+    const { lines } = board({ ...folded, slices: mixed })
+    expect(lines).toContain(`  waiting  ${waitingIds}`)
+    expect(sliceRows(lines)).toHaveLength(4)
+    expect(section(lines, 'Waiting on a human')).toEqual([
+      '  adr    ADR-0009 S21',
+    ])
+  })
+
+  it('prints over forty when both cuts are made and thirty slices can be taken', () => {
+    const { lines, status } = board({ slices: thirty, inbox: twenty, prs })
+    expect(status).toBe(0)
+    expect(lines.length).toBeGreaterThan(40)
+    expect(lines).toContain('Slices  0 done, 33 open')
+    expect(sliceRows(lines)).toHaveLength(30)
+    expect(lines).toContain('  waiting  S40, S41, S42')
+    expect(lines).toContain('Inbox  20 lines')
+    expect(section(lines, 'Inbox')).toEqual(['  and 20 more'])
+    expect(section(lines, 'Open PRs')).toHaveLength(2)
+  })
+
+  it('keeps inbox and slices whole in --json, whatever the screen cuts', () => {
+    for (const [fixture, count] of [
+      [{ slices, inbox: twenty, prs }, 20],
+      [folded, 27],
+      [{ slices: thirty, inbox: twenty, prs }, 33],
+    ] as [Options, number][]) {
+      const { stdout, status } = board({ ...fixture, json: true })
+      expect(status).toBe(0)
+      const data = JSON.parse(stdout)
+      expect(data.inbox).toHaveLength(20)
+      expect(data.inbox.map((line: { date: string }) => line.date)).toEqual(
+        twenty.map((line) => line.slice(2, 12)),
+      )
+      expect(data.inbox[19].text).toMatch(/does not fit one terminal line$/)
+      expect(data.slices).toHaveLength(count)
+    }
   })
 })
 
@@ -1519,6 +1711,20 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
     expect(last(lines)).toBe(
       'next action: review PR #34, because PR waiting on a human: #34 human-gate',
     )
+  })
+
+  // S83: the cut changes the rows printed and never the rule.
+  it('2. an eligible slice, on a board the screen has to cut', () => {
+    const { lines, status } = board({
+      slices: [{ id: 'S18', title: 'The eligible slice', status: 'todo' }],
+      inbox: Array.from(
+        { length: 40 },
+        (_, i) => `- 2026-09-${String((i % 28) + 1).padStart(2, '0')}: a line`,
+      ),
+    })
+    expect(status).toBe(0)
+    expect(lines).toHaveLength(40)
+    expect(last(lines)).toBe('next action: /next, because eligible slice: S18')
   })
 
   it('1. takes the lowest number when more than one PR waits', () => {
