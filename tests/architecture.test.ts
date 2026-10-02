@@ -51,6 +51,14 @@ function expectSymlinkInto(link: string, dir: string): void {
   )
 }
 
+// A ruleset as the comparison of the copies reads it: every key but
+// `bypass_actors`, which stage ci of /harness-init fills per repo.
+function rulesetWithoutActors(text: string): string {
+  const ruleset = JSON.parse(text) as Record<string, unknown>
+  delete ruleset.bypass_actors
+  return JSON.stringify(ruleset, null, 2)
+}
+
 // templates/README.md is the one place that says where each template goes and
 // in which stage of /harness-init. Both describes below read it from here.
 const rows = readFileSync(join(templates, 'README.md'), 'utf8')
@@ -270,6 +278,21 @@ describe('.github matches the templates it was copied from', () => {
     return text.slice(0, cut)
   }
 
+  // The other copy that differs on purpose. Stage ci of /harness-init fills
+  // `bypass_actors` in the ruleset it writes and applies: the id of the App
+  // is one per account and the admin role goes in only with `docs_mode` on
+  // `main`, so the list of a repo is never the empty one of the template.
+  // The file is read as JSON and compared without that key, and with every
+  // other one.
+  const rulesetWhy =
+    '/harness-init ci fills `bypass_actors` with the App and the admin role of the repo it runs in'
+
+  const comparable = (template: string, text: string, what: string) => {
+    if (template === 'judge/prompt.md') return commonPart(text, what)
+    if (template === 'github/ruleset.json') return rulesetWithoutActors(text)
+    return text
+  }
+
   const copied = ['github', 'judge'].flatMap((dir) =>
     walk(join(templates, dir)).map((file) => `${dir}/${file}`),
   )
@@ -284,10 +307,57 @@ describe('.github matches the templates it was copied from', () => {
     const why = partial[template]
     const here = readFileSync(join(root, copy), 'utf8')
     const there = readFileSync(join(templates, template), 'utf8')
+    const except = why
+      ? ` above its "## This repo" section (${why})`
+      : template === 'github/ruleset.json'
+        ? ` outside \`bypass_actors\` (${rulesetWhy})`
+        : ''
     expect(
-      why ? commonPart(here, copy) : here,
-      `${copy} drifted from skills/harness-init/templates/${template}${why ? ` above its "## This repo" section (${why})` : ''}: run /harness-init ${stage} to copy it back, do not edit the copy`,
-    ).toBe(why ? commonPart(there, `templates/${template}`) : there)
+      comparable(template, here, copy),
+      `${copy} drifted from skills/harness-init/templates/${template}${except}: run /harness-init ${stage} to copy it back, do not edit the copy`,
+    ).toBe(comparable(template, there, `templates/${template}`))
+  })
+
+  // The exception proved on two objects, because today the copy of this repo
+  // is equal to the template and the case above would pass with or without
+  // it: the actors of this repo live in the ruleset on GitHub.
+  it('reads ruleset.json without `bypass_actors`, and with every other key', () => {
+    const ruleset = (rules: string[], actors: unknown[]) =>
+      JSON.stringify({
+        name: 'main',
+        rules: rules.map((type) => ({ type })),
+        bypass_actors: actors,
+      })
+    const filled = [
+      { actor_id: 1, actor_type: 'Integration', bypass_mode: 'always' },
+    ]
+    expect(
+      rulesetWithoutActors(ruleset(['deletion'], filled)),
+      `two rulesets equal but for \`bypass_actors\` compare as different, and the copy goes red the day ${rulesetWhy}`,
+    ).toBe(rulesetWithoutActors(ruleset(['deletion'], [])))
+    expect(
+      rulesetWithoutActors(ruleset(['deletion'], [])),
+      'two rulesets that differ in `rules` compare as equal: the exception for `bypass_actors` has swallowed the rest of the file',
+    ).not.toBe(rulesetWithoutActors(ruleset(['non_fast_forward'], [])))
+    expect(
+      rulesetWithoutActors(ruleset(['deletion'], filled)),
+      'the comparison of ruleset.json still carries `bypass_actors`',
+    ).not.toContain('bypass_actors')
+  })
+
+  // The template side of the same exception. The list ships empty because
+  // neither actor can be known before the repo is: the id of the App belongs
+  // to the account that installed it, and the admin role is a bypass only
+  // where `docs_mode` is `main`. An actor written here would land in every
+  // repo, with an App id that is nobody's and a bypass a team never asked for.
+  it('ships the template of ruleset.json with an empty `bypass_actors`', () => {
+    const template: unknown = JSON.parse(
+      readFileSync(join(templates, 'github/ruleset.json'), 'utf8'),
+    )
+    expect(
+      (template as { bypass_actors?: unknown }).bypass_actors,
+      'skills/harness-init/templates/github/ruleset.json no longer ships an empty `bypass_actors`: stage ci of /harness-init fills the list per repo, the template stays empty',
+    ).toEqual([])
   })
 
   // The other direction, which the comparison above does not make: a workflow
@@ -2426,6 +2496,119 @@ describe('stage local of /harness-init merges the policy block key by key', () =
       merge,
       `${file}: the rule does not say that \`version\` is what makes an orphan key visible, and an orphan nothing announces stays in the block for good`,
     ).toContain('the new `version` is what makes it visible')
+  })
+})
+
+// S80. The ruleset of main wants a PR and a green `ci` for every push, and
+// two writers of the chain push without one: `close.yml` with the token of
+// the App, and the human who commits documents where `docs_mode` is `main`.
+// The template ships an empty `bypass_actors` and the step applied it as
+// written, so both pushes were refused until somebody added the actors by
+// hand. The step is prose a session follows: what is proved here is that it
+// says each thing, in the step that applies the ruleset and not elsewhere.
+describe('stage ci of /harness-init fills the bypass actors of the ruleset', () => {
+  const file = 'skills/harness-init/SKILL.md'
+  const skill = readFileSync(join(root, file), 'utf8')
+  const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+  function between(text: string, from: string, to: string): string {
+    const at = text.indexOf(from)
+    if (at === -1) return ''
+    const rest = text.slice(at)
+    const end = rest.indexOf(to, from.length)
+    return end === -1 ? rest : rest.slice(0, end)
+  }
+
+  const stage = between(skill, '\n## 3. Stage `ci`', '\n## ')
+  const step = squash(between(stage, '\n6. **', '\n7. **'))
+
+  it('has step 6 of the stage, the one of the ruleset', () => {
+    expect(
+      step,
+      `${file} has no step 6 in "## 3. Stage \`ci\`": the step that applies the ruleset has moved somewhere this test does not read`,
+    ).toContain('**Repo settings and ruleset.**')
+  })
+
+  it('says the file is the template with `bypass_actors` filled, and that it is the file applied', () => {
+    expect(
+      step,
+      `${file}: step 6 does not say \`.github/ruleset.json\` is the template with \`bypass_actors\` filled, and the session applies the empty list`,
+    ).toContain(
+      '`.github/ruleset.json` is `templates/github/ruleset.json` with `bypass_actors` filled',
+    )
+    expect(
+      step,
+      `${file}: step 6 does not say the file written is the file applied, and the ruleset on GitHub and the one in the repo become two`,
+    ).toContain('the file written is the file applied')
+  })
+
+  it('puts the App in as an `Integration` actor, from `HARNESS_APP_ID`', () => {
+    expect(
+      step,
+      `${file}: step 6 does not say the App is an \`Integration\` actor with the value of \`HARNESS_APP_ID\` for an id`,
+    ).toContain(
+      'an `Integration` actor whose id is the value of the `HARNESS_APP_ID` variable of the repo',
+    )
+    expect(
+      step,
+      `${file}: step 6 does not say what happens with the variable unset`,
+    ).toContain('With the variable unset the actor is left out')
+    expect(
+      step,
+      `${file}: step 6 does not give the hand-back its line: nobody learns that \`close.yml\` will be refused once the App is set`,
+    ).toContain(
+      '`close.yml` will be refused once the App is set, until the stage runs again',
+    )
+    expect(step).toContain('one line in the hand-back')
+  })
+
+  it('puts the admin role in as a `RepositoryRole` actor only with `docs_mode` on `main`', () => {
+    expect(
+      step,
+      `${file}: step 6 does not tie the \`RepositoryRole\` actor to \`docs_mode\` on \`main\``,
+    ).toContain(
+      'a `RepositoryRole` actor only when the `docs_mode` key of the policy block is `main`',
+    )
+    expect(
+      step,
+      `${file}: step 6 does not say that with \`pr\` the admin role is left out, and why`,
+    ).toContain(
+      'With `pr` it is left out, because nobody commits on main there',
+    )
+  })
+
+  it('reads the shape of an actor from the rulesets REST reference, never from memory', () => {
+    for (const field of ['`actor_id`', '`actor_type`', '`bypass_mode`'])
+      expect(
+        step,
+        `${file}: step 6 does not name ${field} among what is read from the reference`,
+      ).toContain(field)
+    expect(
+      step,
+      `${file}: step 6 does not send the session to the rulesets REST reference before it writes an actor`,
+    ).toContain(
+      'read from the current rulesets REST reference before it is written, never from memory',
+    )
+  })
+
+  it('updates a ruleset that is already on the repo, and does not create a second', () => {
+    expect(
+      step,
+      `${file}: step 6 does not say a ruleset already on the repo is updated, and a rerun leaves two rulesets on main`,
+    ).toContain('is updated and not created twice')
+  })
+
+  it('adds on a rerun only what is missing, and keeps the actor a human put there', () => {
+    expect(
+      step,
+      `${file}: step 6 does not say a rerun changes \`bypass_actors\` only by adding what is missing`,
+    ).toContain(
+      'A rerun changes `bypass_actors` only by adding what is missing',
+    )
+    expect(
+      step,
+      `${file}: step 6 does not say an actor a human put there stays`,
+    ).toContain('an actor a human put there stays')
   })
 })
 
