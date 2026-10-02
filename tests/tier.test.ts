@@ -438,6 +438,132 @@ describe('tier.sh, who may merge', () => {
     expect(slice.tier).toBe(3)
   })
 
+  // S82. The reading above, with the renames off, fed the two thresholds too,
+  // and a file moved and not changed counted as two files and twice its
+  // lines. The thresholds follow the renames that are exact: one file, zero
+  // lines. At zero both thresholds make the script print what it counted.
+  const tight = (max_lines: number, max_files: number) => ({
+    'AGENTS.md': withPolicy(agents, (block) => {
+      block.max_lines = max_lines
+      block.max_files = max_files
+    }),
+  })
+
+  it('gives tier 1 to three files moved and not changed', () => {
+    const run = tier(
+      {
+        'src/a.ts': null,
+        'src/b.ts': null,
+        'src/c.ts': null,
+        'lib/a.ts': body(20),
+        'lib/b.ts': body(21),
+        'lib/c.ts': body(22),
+      },
+      {},
+      {
+        base: {
+          ...tight(50, 4),
+          'src/a.ts': body(20),
+          'src/b.ts': body(21),
+          'src/c.ts': body(22),
+        },
+      },
+    )
+    expect(run.why).not.toMatch(/ > /)
+    expect(run.tier).toBe(1)
+  })
+
+  it('counts an exact rename as one file and no lines', () => {
+    const alone = tier(
+      { 'src/a.ts': null, 'lib/a.ts': body(20) },
+      {},
+      { base: { ...tight(0, 0), 'src/a.ts': body(20) } },
+    )
+    expect(alone.why).toMatch(/tier: 1 files > 0/)
+    expect(alone.why).not.toMatch(/lines >/)
+
+    const withAnother = tier(
+      { 'src/a.ts': null, 'lib/a.ts': body(20), 'src/new.ts': body(3) },
+      {},
+      { base: { ...tight(0, 0), 'src/a.ts': body(20) } },
+    )
+    expect(withAnother.why).toMatch(/tier: 3 lines > 0/)
+    expect(withAnother.why).toMatch(/tier: 2 files > 0/)
+  })
+
+  it('counts a file moved and changed as a delete and an add', () => {
+    const run = tier(
+      { 'src/a.ts': null, 'lib/a.ts': `${body(10)}one more\n` },
+      {},
+      { base: { ...tight(0, 0), 'src/a.ts': body(10) } },
+    )
+    expect(run.why).toMatch(/tier: 21 lines > 0/)
+    expect(run.why).toMatch(/tier: 2 files > 0/)
+  })
+
+  it('counts right a rename whose name has a space, an accent or a tab', () => {
+    for (const file of ['my file.ts', 'città.ts']) {
+      const run = tier(
+        { [`src/${file}`]: null, [`lib/${file}`]: body(20) },
+        {},
+        { base: { ...tight(0, 0), [`src/${file}`]: body(20) } },
+      )
+      expect(run.why, file).toMatch(/tier: 1 files > 0/)
+      expect(run.why, file).not.toMatch(/lines >/)
+      expect(run.why, file).not.toMatch(/quoted/)
+    }
+
+    const tab = tier(
+      { 'src/a\tb.ts': null, 'lib/a\tb.ts': body(20) },
+      {},
+      { base: { ...tight(0, 0), 'src/a\tb.ts': body(20) } },
+    )
+    expect(tab.why).toMatch(/tier: 1 files > 0/)
+    expect(tab.why).not.toMatch(/lines >/)
+    expect(tab.why).toMatch(/quoted/)
+    expect(tab.tier).toBe(2)
+  })
+
+  it('keeps a generated file that is renamed out of the counts', () => {
+    const run = tier(
+      {
+        'pnpm-lock.yaml': null,
+        'app/pnpm-lock.yaml': body(30),
+        'src/a.ts': body(3),
+      },
+      {},
+      { base: { ...tight(0, 0), 'pnpm-lock.yaml': body(30) } },
+    )
+    expect(run.why).toMatch(/tier: 3 lines > 0/)
+    expect(run.why).toMatch(/tier: 1 files > 0/)
+    expect(run.why).toMatch(/lockfile pnpm-lock\.yaml/)
+    expect(run.tier).toBe(2)
+  })
+
+  it('puts both names of an exact rename through every pattern', () => {
+    const contract = tier(
+      { 'docs/spec.md': null, 'notes/spec.md': body(5) },
+      {},
+      { base: { 'docs/spec.md': body(5) } },
+    )
+    expect(contract.tier).toBe(1)
+
+    const gate = tier(
+      { 'docs/inbox.md': null, 'notes/inbox.md': body(5) },
+      {},
+      { base: { 'docs/inbox.md': body(5) } },
+    )
+    expect(gate.why).toMatch(/human-gate: docs\/inbox\.md/)
+
+    const sensitive = tier(
+      { 'src/foo.sh': null, 'scripts/foo.sh': body(5) },
+      {},
+      { base: { 'src/foo.sh': body(5) } },
+    )
+    expect(sensitive.tier).toBe(2)
+    expect(sensitive.why).toMatch(/sensitive path scripts\/foo\.sh/)
+  })
+
   it('still reads a slice that exists only on the branch', () => {
     const run = tier(
       {

@@ -83,26 +83,46 @@ CLAUDE.md
 docs/codebase-map.md
 $(policy '.never_tier_0[]')"
 
-# A name has to reach the patterns as the name it is. core.quotePath off, or
-# a name with a byte over 0x80 comes quoted and escaped; a name with a double
-# quote, a backslash or a control character comes quoted whatever the setting,
-# and the loop below reads it as sensitive: a miss on that list is a tier too
-# low. --no-renames, or a file moved out of a sensitive path would show only
-# under its new name, and an exact move counts zero lines.
+# The diff is read twice, because the patterns and the thresholds ask it two
+# different questions.
+# The first reading is for the patterns: every name the diff touches, old and
+# new, with the renames off. A name has to reach the patterns as the name it
+# is. core.quotePath off, or a name with a byte over 0x80 comes quoted and
+# escaped; a name with a double quote, a backslash or a control character
+# comes quoted whatever the setting, and the loop below reads it as sensitive:
+# a miss on that list is a tier too low. --no-renames, or a file moved out of
+# a sensitive path would show only under its new name.
 names="$(git -c core.quotePath=false diff --no-renames --name-only "$range")"
 nnames="$(printf '%s\n' "$names" | grep -c . || true)"
+# The second reading is for the thresholds: what a reader has to read. It
+# follows the renames that are exact, a similarity of 100%, byte for byte, so
+# a file moved and not changed is one file and zero lines instead of two files
+# and twice its lines. A lower bar would let a file be moved and rewritten for
+# the price of the lines that differ: a file moved and edited stays a delete
+# and an add. -M on the command line, so no diff.renames of the machine turns
+# it into copies or off. Nothing of this reading reaches the patterns.
+exact="-M100%"
 # Generated files: lockfiles, build info, build output. Their size says
 # nothing about what there is to get wrong, so they leave the count of files
 # and lines, and only that. Every name still goes through the contracts, the
 # sensitive paths and the human gate: filtered before the matching, a lockfile
 # alone or a file under any dist/ would count as no file at all, and pass at 0.
 generated='(^|/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|uv\.lock)$|\.tsbuildinfo$|(^|/)dist/'
-nfiles="$(printf '%s\n' "$names" | { grep -Ev "$generated" || true; } | grep -c . || true)"
+# name-status is the status and the name, split by tabs, and a rename is R100
+# with the old name and the new one: one file, out of the count only when both
+# its names are generated. A name with a tab comes quoted, with the tab
+# escaped, so the tabs that are left are the separators. The pattern goes in
+# through ENVIRON: -v would read its backslashes as escapes.
+nfiles="$(git -c core.quotePath=false diff "$exact" --name-status "$range" | generated="$generated" awk -F'\t' '
+  $1 ~ /^R/ { if ($2 !~ ENVIRON["generated"] || $3 !~ ENVIRON["generated"]) n++; next }
+  $2 !~ ENVIRON["generated"] { n++ }
+  END { print n+0 }')"
 # numstat is added, deleted and the name, split by tabs. On awk's default
 # whitespace a name with a space would be cut there, and a first word that
-# looks generated would take the whole file's lines out of the count. The
-# pattern goes in through ENVIRON: -v would read its backslashes as escapes.
-lines="$(git -c core.quotePath=false diff --no-renames --numstat "$range" | generated="$generated" awk -F'\t' '$3 !~ ENVIRON["generated"] {a+=$1+$2} END {print a+0}')"
+# looks generated would take the whole file's lines out of the count. An exact
+# rename comes as 0 and 0 with both names in the third field, and adds nothing
+# whatever that field looks like.
+lines="$(git -c core.quotePath=false diff "$exact" --numstat "$range" | generated="$generated" awk -F'\t' '$3 !~ ENVIRON["generated"] {a+=$1+$2} END {print a+0}')"
 
 # File names come from the PR author: read one per line, never word-split.
 all_prose=1
