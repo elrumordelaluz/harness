@@ -1,7 +1,7 @@
 ---
 id: S77
 title: later/ is gone and its documents are parked where they belong
-status: todo
+status: done
 blocked_by: S74
 tier: 1
 human: false
