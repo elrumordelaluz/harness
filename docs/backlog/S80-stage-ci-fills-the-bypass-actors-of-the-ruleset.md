@@ -1,7 +1,7 @@
 ---
 id: S80
 title: Stage ci of /harness-init fills the bypass actors of the ruleset it applies
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false

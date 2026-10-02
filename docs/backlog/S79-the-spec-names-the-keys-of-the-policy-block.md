@@ -1,7 +1,7 @@
 ---
 id: S79
 title: The body of the spec names the keys of the policy block, not the Italian lines
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false

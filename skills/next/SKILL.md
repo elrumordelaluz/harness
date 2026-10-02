@@ -141,8 +141,9 @@ under the waves one line for every slice moved for a path, with the path, for
 example `S22 dopo S21: skills/harness-init/templates/scripts/board.sh`. It is
 the last thing the human sees before the run, and it is what they interrupt if
 a slice is in the wrong place. After it, one line per event and nothing
-more: the subagents launched, a subagent reporting back, a verdict in one
-word, a PR opened with its number, the wait on the policy. Never the plan,
+more: the subagents launched, a subagent reporting back, the update of a branch
+with the default branch, a verdict in one word, a PR opened with its number,
+the wait on the policy. Never the plan,
 never what this skill says, never the code: the plan is this file and the code
 is in the PRs. A human watching a half-hour run needs to know where it is,
 not what it will do next.
@@ -265,8 +266,58 @@ PR and the `needs-human` label from 5, and its question goes to the hand-back.
 
 ## 4. The judge, once
 
-For every slice that came back green, `/judge` on its branch, once per role,
-with the tier the subagent's `scripts/tier.sh` printed: correctness alone at
+From here on the run is in series. The code of a wave was written at the same
+time; 4, 5 and 6 run for one slice at a time, in the order of the ids: a slice
+is brought up to date, judged, opened and waited for, and the next one starts
+when the one before is merged and closed, or has ended its run without a
+merge. The ruleset of the default branch asks for a branch that is up to date
+before it merges, and `close.yml` commits after every merge: two slices judged
+from the same commit leave the second one behind when `policy.sh` says
+`merge`, and `gh pr merge` is refused.
+
+Before the judgement of a slice comes the update, from the root:
+
+```
+git fetch origin
+git log --oneline slice/S<NN>-<slug>..origin/<default branch>
+```
+
+No line, and the default branch has not moved since the worktree was cut:
+there is nothing to update. That is the first slice of a wave, most of the
+time, and any slice that follows a PR that did not merge. A line, and
+`origin/<default branch>` holds a commit the branch does not. The orchestrator
+never writes code, and a merge that can conflict is code, so the update goes
+to the subagent that wrote the slice, with SendMessage:
+
+```
+The default branch moved while your slice waited its turn. In your
+worktree: git fetch origin, then git merge origin/<default branch>. Never
+rebase and never force push: the branch is on the remote and it is the
+claim. A conflict is yours to resolve, inside the scope of the slice. If
+it cannot be resolved honestly, git merge --abort, set the slice to
+status: blocked with its one line under ## Blocked, commit, push and
+report that. Otherwise run the four commands, push only from green, then
+run scripts/tier.sh origin/<default branch> and scripts/test-weakening.sh
+origin/<default branch> again. Report the sha and the output of the two
+scripts, stdout and stderr both.
+```
+
+The update is a merge of the default branch into the slice branch and never a
+rebase or a force push: the branch is the claim and is on the remote, so its
+history is not rewritten under whoever reads it, and the squash lands one
+commit whatever the branch holds, so a merge commit in it costs nothing. The
+two scripts run again after an update because the PR body carries their
+output, and the tier of the judgement is the one this last run printed. The
+update comes before the judgement on purpose: the judge reads the head that
+will merge, and one judgement per PR holds without a new rule.
+
+A subagent that has ended and cannot be reached with SendMessage leaves a
+branch behind that nobody here may touch: that slice ends there for this run,
+and the hand-back reports it with its branch as it is.
+
+Then, for the slice that is green and up to date, `/judge` on its branch, once
+per role, with the tier the subagent's `scripts/tier.sh` printed: correctness
+alone at
 tier 1, correctness and security together at tier 2, and the model the tier
 asks for, `sonnet` at tier 1 and `opus` at tier 2 (ADR-0002, decision 5).
 
@@ -312,8 +363,10 @@ then the policy holds the PR for a human, whatever the judge said.
 
 ## 5. The PR and the verdict
 
-Once every `high` and `medium` has its answer, the orchestrator opens the PR,
-one per slice, from its worktree, with `--body-file -` and a quoted heredoc:
+Once every `high` and `medium` has its answer, the orchestrator opens the PR
+of that slice, from its worktree, with `--body-file -` and a quoted heredoc.
+Still one slice at a time: the next slice of the wave gets its PR after this
+one has been through 6, never before.
 
 ```
 (cd .claude/worktrees/S<NN> && gh pr create --base <default branch> --head slice/S<NN>-<slug> --title "<the slice's commit subject>" --body-file -)
@@ -351,9 +404,13 @@ and not `path` alone, for the reason section 7 of `/judge` gives.
 
 ## 6. Wait for the merge
 
-With `HARNESS_AUTOMERGE` on, `policy.sh` merges what the tier allows, and
-`close.yml` then sets the slice to `done` on the default branch. The next wave
-needs both, because its slices read `blocked_by` against that board:
+Still one slice at a time. With `HARNESS_AUTOMERGE` on, `policy.sh` merges
+what the tier allows, and `close.yml` then sets the slice to `done` with a
+commit on the default branch. The wait ends on the commit of `close.yml` and
+not on the merge alone: the next slice of the wave is updated against that
+commit, and a branch updated between the merge and the close would be behind
+again when its own PR came to merge. The next wave needs it too, because its
+slices read `blocked_by` against that board:
 
 ```
 gh pr view <pr> --json state,mergedAt
@@ -371,7 +428,13 @@ open with `policy.sh`'s "would have merged" comment. That is how the chain is
 tried without trusting it yet, and in that mode the next wave does not start:
 its prerequisites are not `done`, so say so in the hand-back and stop.
 
-Then the next wave, from the default branch pulled again.
+A PR that stays open holds the next wave and not the rest of its own. With
+the cap passed, with `HARNESS_AUTOMERGE` off, or with a PR left to a human,
+the next slice of the wave still runs its steps, the update, the judgement
+and the PR, and its PR waits like the first.
+
+Then the next slice of the wave, from 4, and after the last one the next
+wave, from the default branch pulled again.
 
 ## 7. Hand back
 

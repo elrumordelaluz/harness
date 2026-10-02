@@ -1,7 +1,7 @@
 ---
 id: S82
 title: tier.sh counts an exact rename as one file and no lines
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false

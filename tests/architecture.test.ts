@@ -51,6 +51,14 @@ function expectSymlinkInto(link: string, dir: string): void {
   )
 }
 
+// A ruleset as the comparison of the copies reads it: every key but
+// `bypass_actors`, which stage ci of /harness-init fills per repo.
+function rulesetWithoutActors(text: string): string {
+  const ruleset = JSON.parse(text) as Record<string, unknown>
+  delete ruleset.bypass_actors
+  return JSON.stringify(ruleset, null, 2)
+}
+
 // templates/README.md is the one place that says where each template goes and
 // in which stage of /harness-init. Both describes below read it from here.
 const rows = readFileSync(join(templates, 'README.md'), 'utf8')
@@ -270,6 +278,21 @@ describe('.github matches the templates it was copied from', () => {
     return text.slice(0, cut)
   }
 
+  // The other copy that differs on purpose. Stage ci of /harness-init fills
+  // `bypass_actors` in the ruleset it writes and applies: the id of the App
+  // is one per account and the admin role goes in only with `docs_mode` on
+  // `main`, so the list of a repo is never the empty one of the template.
+  // The file is read as JSON and compared without that key, and with every
+  // other one.
+  const rulesetWhy =
+    '/harness-init ci fills `bypass_actors` with the App and the admin role of the repo it runs in'
+
+  const comparable = (template: string, text: string, what: string) => {
+    if (template === 'judge/prompt.md') return commonPart(text, what)
+    if (template === 'github/ruleset.json') return rulesetWithoutActors(text)
+    return text
+  }
+
   const copied = ['github', 'judge'].flatMap((dir) =>
     walk(join(templates, dir)).map((file) => `${dir}/${file}`),
   )
@@ -284,10 +307,57 @@ describe('.github matches the templates it was copied from', () => {
     const why = partial[template]
     const here = readFileSync(join(root, copy), 'utf8')
     const there = readFileSync(join(templates, template), 'utf8')
+    const except = why
+      ? ` above its "## This repo" section (${why})`
+      : template === 'github/ruleset.json'
+        ? ` outside \`bypass_actors\` (${rulesetWhy})`
+        : ''
     expect(
-      why ? commonPart(here, copy) : here,
-      `${copy} drifted from skills/harness-init/templates/${template}${why ? ` above its "## This repo" section (${why})` : ''}: run /harness-init ${stage} to copy it back, do not edit the copy`,
-    ).toBe(why ? commonPart(there, `templates/${template}`) : there)
+      comparable(template, here, copy),
+      `${copy} drifted from skills/harness-init/templates/${template}${except}: run /harness-init ${stage} to copy it back, do not edit the copy`,
+    ).toBe(comparable(template, there, `templates/${template}`))
+  })
+
+  // The exception proved on two objects, because today the copy of this repo
+  // is equal to the template and the case above would pass with or without
+  // it: the actors of this repo live in the ruleset on GitHub.
+  it('reads ruleset.json without `bypass_actors`, and with every other key', () => {
+    const ruleset = (rules: string[], actors: unknown[]) =>
+      JSON.stringify({
+        name: 'main',
+        rules: rules.map((type) => ({ type })),
+        bypass_actors: actors,
+      })
+    const filled = [
+      { actor_id: 1, actor_type: 'Integration', bypass_mode: 'always' },
+    ]
+    expect(
+      rulesetWithoutActors(ruleset(['deletion'], filled)),
+      `two rulesets equal but for \`bypass_actors\` compare as different, and the copy goes red the day ${rulesetWhy}`,
+    ).toBe(rulesetWithoutActors(ruleset(['deletion'], [])))
+    expect(
+      rulesetWithoutActors(ruleset(['deletion'], [])),
+      'two rulesets that differ in `rules` compare as equal: the exception for `bypass_actors` has swallowed the rest of the file',
+    ).not.toBe(rulesetWithoutActors(ruleset(['non_fast_forward'], [])))
+    expect(
+      rulesetWithoutActors(ruleset(['deletion'], filled)),
+      'the comparison of ruleset.json still carries `bypass_actors`',
+    ).not.toContain('bypass_actors')
+  })
+
+  // The template side of the same exception. The list ships empty because
+  // neither actor can be known before the repo is: the id of the App belongs
+  // to the account that installed it, and the admin role is a bypass only
+  // where `docs_mode` is `main`. An actor written here would land in every
+  // repo, with an App id that is nobody's and a bypass a team never asked for.
+  it('ships the template of ruleset.json with an empty `bypass_actors`', () => {
+    const template: unknown = JSON.parse(
+      readFileSync(join(templates, 'github/ruleset.json'), 'utf8'),
+    )
+    expect(
+      (template as { bypass_actors?: unknown }).bypass_actors,
+      'skills/harness-init/templates/github/ruleset.json no longer ships an empty `bypass_actors`: stage ci of /harness-init fills the list per repo, the template stays empty',
+    ).toEqual([])
   })
 
   // The other direction, which the comparison above does not make: a workflow
@@ -2293,6 +2363,170 @@ describe('the slice branch of /next is born without an upstream', () => {
   })
 })
 
+// S81: the ruleset of main wants a branch up to date before it merges. The
+// PRs of a wave were judged and opened from the same commit: the first merged,
+// close.yml committed after it, and every other PR was behind when policy.sh
+// said merge. The code is still written in parallel; the update, the
+// judgement, the PR and the wait run for one slice at a time, so the judge
+// reads the head that merges.
+describe('/next builds a wave in parallel and lands its slices one at a time', () => {
+  const file = 'skills/next/SKILL.md'
+  const skill = readFileSync(join(root, file), 'utf8')
+
+  // Section <n> of the skill, from its heading to the next one, on one line.
+  const part = (text: string, n: number): string => {
+    const start = text.search(new RegExp(`^## ${n}\\. `, 'm'))
+    if (start === -1) return ''
+    const rest = text.slice(start + 3)
+    const end = rest.search(/^## /m)
+    return (end === -1 ? rest : rest.slice(0, end)).replace(/\s+/g, ' ')
+  }
+
+  const rules: [string, number, string[]][] = [
+    [
+      'the calls of a wave go in a single message',
+      3,
+      ['All the calls of a wave go in a single message'],
+    ],
+    [
+      'the judgement runs for one slice at a time, in the order of the ids',
+      4,
+      [
+        'one slice at a time',
+        'in the order of the ids',
+        'merged and closed',
+        'ended its run without a merge',
+      ],
+    ],
+    ['the PR is opened for one slice at a time', 5, ['one slice at a time']],
+    ['the wait is for one slice at a time', 6, ['one slice at a time']],
+    [
+      'the update is a merge of origin/<default branch>, asked of the subagent with SendMessage',
+      4,
+      [
+        'git merge origin/<default branch>',
+        'SendMessage',
+        'the four commands',
+        'The orchestrator never writes code',
+        'conflict',
+      ],
+    ],
+    [
+      'the update is never a rebase or a force push, and why',
+      4,
+      ['never a rebase or a force push', 'the branch is the claim', 'squash'],
+    ],
+    [
+      'the first slice skips the update, and the two scripts run again after one',
+      4,
+      [
+        'has not moved',
+        'scripts/tier.sh origin/<default branch>',
+        'scripts/test-weakening.sh origin/<default branch>',
+      ],
+    ],
+    [
+      'the wait ends on the commit of close.yml, and a PR left open does not stop the wave',
+      6,
+      ['the commit of `close.yml`', 'the next slice of the wave still runs'],
+    ],
+    ['the update of a branch is an event', 2, ['the update of a branch']],
+    [
+      'two slices with a shared path still stay out of one wave',
+      2,
+      [
+        'inside a wave no path of "Touchpoints" appears in two slices',
+        'a rebase would change the head the verdict covers, and nobody judges twice (ADR-0003)',
+      ],
+    ],
+  ]
+
+  const together =
+    /\b(PRs|judgements) of (a|the) wave\b[^.]*\b(together|at the same time|in parallel)\b/i
+
+  // What a text of the skill gets wrong, one line per fault.
+  const broken = (text: string): string[] => {
+    const faults: string[] = []
+    for (const [name, n, phrases] of rules) {
+      for (const phrase of phrases) {
+        if (!part(text, n).includes(phrase)) {
+          faults.push(`${name}: section ${n} does not say "${phrase}"`)
+        }
+      }
+    }
+    const landing = [4, 5, 6].map((n) => part(text, n)).join(' ')
+    for (const sentence of landing.split(/(?<=[.:]) /)) {
+      if (
+        /rebase|--force|force push/i.test(sentence) &&
+        !/\b(never|not|no)\b/i.test(sentence)
+      ) {
+        faults.push(`a rebase or a force push as something to do: ${sentence}`)
+      }
+    }
+    if (together.test(landing)) {
+      faults.push('the PRs of a wave are opened or judged together')
+    }
+    return faults
+  }
+
+  it.each(rules)('%s', (name) => {
+    expect(
+      broken(skill).filter((fault) => fault.startsWith(`${name}: `)),
+      `${file}: a PR of a wave judged or opened before the one before it has closed is behind the default branch when policy.sh says merge, and gh pr merge refuses it`,
+    ).toEqual([])
+  })
+
+  it('names neither a rebase nor a force push as something to do, and opens no PRs together', () => {
+    expect(
+      broken(skill).filter((fault) => !fault.includes(': section ')),
+    ).toEqual([])
+  })
+
+  it('the check bites on a text that opens the PRs of a wave together', () => {
+    const sample = skill.replace(
+      '\n## 6. ',
+      '\nThe PRs of a wave are opened together, once every slice has its answers.\n\n## 6. ',
+    )
+    expect(sample).not.toBe(skill)
+    expect(broken(sample)).toContain(
+      'the PRs of a wave are opened or judged together',
+    )
+  })
+
+  it('the check bites on a text that rebases the branch', () => {
+    const sample = skill.replace(
+      '\n## 5. ',
+      '\nA branch that is behind is rebased and pushed with --force.\n\n## 5. ',
+    )
+    expect(sample).not.toBe(skill)
+    expect(
+      broken(sample).some((fault) => fault.startsWith('a rebase or a force')),
+    ).toBe(true)
+  })
+
+  it('5.4 of docs/spec.md says the slices of a wave land one at a time', () => {
+    const spec = readFileSync(join(root, 'docs/spec.md'), 'utf8')
+    const start = spec.indexOf('\n### 5.4 `/next`')
+    const end = start === -1 ? -1 : spec.indexOf('\n### ', start + 1)
+    const section =
+      start === -1 || end === -1
+        ? ''
+        : spec.slice(start, end).replace(/\s+/g, ' ')
+    for (const phrase of [
+      'land one at a time',
+      'in the order of the ids',
+      'origin/<default>',
+      'never a rebase or a force push',
+      'the commit of `close.yml`',
+    ]) {
+      expect(
+        section,
+        `5.4 of docs/spec.md does not say "${phrase}": the spec is the source, and the skill would land in series against it`,
+      ).toContain(phrase)
+    }
+  })
+})
+
 // S61: the slices of a wave run on the same machine, one worktree each, and a
 // subagent whose suite hung ran `pkill -f vitest`, which also ended the suite
 // of another slice: that one saw two runs at exit 143 with no output and no
@@ -2429,6 +2663,119 @@ describe('stage local of /harness-init merges the policy block key by key', () =
   })
 })
 
+// S80. The ruleset of main wants a PR and a green `ci` for every push, and
+// two writers of the chain push without one: `close.yml` with the token of
+// the App, and the human who commits documents where `docs_mode` is `main`.
+// The template ships an empty `bypass_actors` and the step applied it as
+// written, so both pushes were refused until somebody added the actors by
+// hand. The step is prose a session follows: what is proved here is that it
+// says each thing, in the step that applies the ruleset and not elsewhere.
+describe('stage ci of /harness-init fills the bypass actors of the ruleset', () => {
+  const file = 'skills/harness-init/SKILL.md'
+  const skill = readFileSync(join(root, file), 'utf8')
+  const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+  function between(text: string, from: string, to: string): string {
+    const at = text.indexOf(from)
+    if (at === -1) return ''
+    const rest = text.slice(at)
+    const end = rest.indexOf(to, from.length)
+    return end === -1 ? rest : rest.slice(0, end)
+  }
+
+  const stage = between(skill, '\n## 3. Stage `ci`', '\n## ')
+  const step = squash(between(stage, '\n6. **', '\n7. **'))
+
+  it('has step 6 of the stage, the one of the ruleset', () => {
+    expect(
+      step,
+      `${file} has no step 6 in "## 3. Stage \`ci\`": the step that applies the ruleset has moved somewhere this test does not read`,
+    ).toContain('**Repo settings and ruleset.**')
+  })
+
+  it('says the file is the template with `bypass_actors` filled, and that it is the file applied', () => {
+    expect(
+      step,
+      `${file}: step 6 does not say \`.github/ruleset.json\` is the template with \`bypass_actors\` filled, and the session applies the empty list`,
+    ).toContain(
+      '`.github/ruleset.json` is `templates/github/ruleset.json` with `bypass_actors` filled',
+    )
+    expect(
+      step,
+      `${file}: step 6 does not say the file written is the file applied, and the ruleset on GitHub and the one in the repo become two`,
+    ).toContain('the file written is the file applied')
+  })
+
+  it('puts the App in as an `Integration` actor, from `HARNESS_APP_ID`', () => {
+    expect(
+      step,
+      `${file}: step 6 does not say the App is an \`Integration\` actor with the value of \`HARNESS_APP_ID\` for an id`,
+    ).toContain(
+      'an `Integration` actor whose id is the value of the `HARNESS_APP_ID` variable of the repo',
+    )
+    expect(
+      step,
+      `${file}: step 6 does not say what happens with the variable unset`,
+    ).toContain('With the variable unset the actor is left out')
+    expect(
+      step,
+      `${file}: step 6 does not give the hand-back its line: nobody learns that \`close.yml\` will be refused once the App is set`,
+    ).toContain(
+      '`close.yml` will be refused once the App is set, until the stage runs again',
+    )
+    expect(step).toContain('one line in the hand-back')
+  })
+
+  it('puts the admin role in as a `RepositoryRole` actor only with `docs_mode` on `main`', () => {
+    expect(
+      step,
+      `${file}: step 6 does not tie the \`RepositoryRole\` actor to \`docs_mode\` on \`main\``,
+    ).toContain(
+      'a `RepositoryRole` actor only when the `docs_mode` key of the policy block is `main`',
+    )
+    expect(
+      step,
+      `${file}: step 6 does not say that with \`pr\` the admin role is left out, and why`,
+    ).toContain(
+      'With `pr` it is left out, because nobody commits on main there',
+    )
+  })
+
+  it('reads the shape of an actor from the rulesets REST reference, never from memory', () => {
+    for (const field of ['`actor_id`', '`actor_type`', '`bypass_mode`'])
+      expect(
+        step,
+        `${file}: step 6 does not name ${field} among what is read from the reference`,
+      ).toContain(field)
+    expect(
+      step,
+      `${file}: step 6 does not send the session to the rulesets REST reference before it writes an actor`,
+    ).toContain(
+      'read from the current rulesets REST reference before it is written, never from memory',
+    )
+  })
+
+  it('updates a ruleset that is already on the repo, and does not create a second', () => {
+    expect(
+      step,
+      `${file}: step 6 does not say a ruleset already on the repo is updated, and a rerun leaves two rulesets on main`,
+    ).toContain('is updated and not created twice')
+  })
+
+  it('adds on a rerun only what is missing, and keeps the actor a human put there', () => {
+    expect(
+      step,
+      `${file}: step 6 does not say a rerun changes \`bypass_actors\` only by adding what is missing`,
+    ).toContain(
+      'A rerun changes `bypass_actors` only by adding what is missing',
+    )
+    expect(
+      step,
+      `${file}: step 6 does not say an actor a human put there stays`,
+    ).toContain('an actor a human put there stays')
+  })
+})
+
 // S60. The template of AGENTS.md calls its sections "Human gates" and "Do
 // not": a comment that still sends the reader to the Italian title points at
 // a section no installed AGENTS.md has, and an agent that follows it finds
@@ -2467,6 +2814,98 @@ describe('no template names an Italian section of AGENTS.md', () => {
     expect(hits('# a\n# named in the "Gate umani" line of AGENTS.md')).toEqual([
       '2: # named in the "Gate umani" line of AGENTS.md',
     ])
+  })
+})
+
+// S79. The policy of a repo is the json block of AGENTS.md, under the headings
+// "Review policy" and "Human gates": the prose lines the spec used to name,
+// `Documenti: su main`, "Gate umani", `Path sensibili`, `Mai tier 0`, "Merge
+// umano per path", are gone, and a reader who looks for them in an AGENTS.md
+// finds nothing. From section 1 on the spec names the key a program reads.
+// Section 0 is left out: it records what each version said, under the name the
+// thing had then.
+describe('the body of docs/spec.md names the keys of the policy block', () => {
+  const names = [
+    'Gate umani',
+    'Documenti: su main',
+    'Documenti: PR',
+    '`Documenti` line',
+    'Path sensibili',
+    'Mai tier 0',
+    'Merge umano per path',
+  ]
+  const keys = [
+    'docs_mode',
+    'sensitive_paths',
+    'never_tier_0',
+    'human_gate_paths',
+    'docs_extra_paths',
+  ]
+  const spec = readFileSync(join(root, 'docs/spec.md'), 'utf8')
+
+  // The line the body starts at, counted from zero, or -1 with no heading.
+  const start = (text: string): number =>
+    text.split('\n').findIndex((line) => line.startsWith('## 1. Principles'))
+
+  const specBody = (text: string): string | undefined =>
+    start(text) === -1
+      ? undefined
+      : text.split('\n').slice(start(text)).join('\n')
+
+  const oldPolicyNames = (text: string, old: string[]): string[] => {
+    const from = start(text)
+    if (from === -1) return ['no "## 1. Principles" heading']
+    return text
+      .split('\n')
+      .flatMap((line, i) =>
+        i >= from && old.some((name) => line.includes(name))
+          ? [`${i + 1}: ${line.trim()}`]
+          : [],
+      )
+  }
+
+  it('docs/spec.md has no old name after section 0', () => {
+    const found = oldPolicyNames(spec, names)
+    expect(
+      found,
+      `docs/spec.md names a line of AGENTS.md that is gone, where the key of the policy block or the heading "Human gates" or "Review policy" goes:\n${found.join('\n')}`,
+    ).toEqual([])
+  })
+
+  it('the check bites on a sample that puts an old name back in the body', () => {
+    expect(
+      oldPolicyNames(
+        '## 0. What changes\n\n## 1. Principles\n\nthe "Gate umani" line',
+        names,
+      ),
+    ).toEqual(['5: the "Gate umani" line'])
+  })
+
+  it('the check leaves alone a sample that holds the old name in section 0', () => {
+    expect(
+      oldPolicyNames(
+        '## 0. What changes\n\nthe "Gate umani" line\n\n## 1. Principles\n\nhuman_gate_paths',
+        names,
+      ),
+    ).toEqual([])
+  })
+
+  it('the check says so when the heading of section 1 is missing', () => {
+    expect(oldPolicyNames('## 0. What changes\n\nprose', names)).toEqual([
+      'no "## 1. Principles" heading',
+    ])
+  })
+
+  it.each(keys)('the body names `%s`, a key of the policy block', (key) => {
+    const block = policyBlock(readFileSync(join(root, 'AGENTS.md'), 'utf8'))
+    expect(
+      Object.keys(block),
+      `${key} is not a key of the block of AGENTS.md`,
+    ).toContain(key)
+    expect(
+      specBody(spec)?.includes(`\`${key}\``),
+      `the body of docs/spec.md does not name \`${key}\``,
+    ).toBe(true)
   })
 })
 

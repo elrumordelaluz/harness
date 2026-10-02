@@ -1,7 +1,7 @@
 ---
 id: S83
 title: The board cuts the inbox, then the slices that wait, to stay in forty lines
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
