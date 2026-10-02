@@ -1,7 +1,7 @@
 ---
 id: S81
 title: /next builds a wave in parallel and lands its slices one at a time
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
