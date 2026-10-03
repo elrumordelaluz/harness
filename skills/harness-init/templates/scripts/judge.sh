@@ -304,7 +304,7 @@ cmd_bundle() {
     open_section 'commands reported by the session under review (not verified here)'
     printf '%s\n' "$checks"
     close_section 'commands reported by the session under review'
-    section "AGENTS.md" "AGENTS.md"
+    section ".harness/AGENTS.md" ".harness/AGENTS.md"
     section "docs/codebase-map.md" "docs/codebase-map.md"
     if [ -n "$slice" ]; then section "$slice" "$slice"; fi
     open_section 'commits'

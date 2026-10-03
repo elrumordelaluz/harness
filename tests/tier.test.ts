@@ -1,8 +1,9 @@
 // Behaviour of .harness/bin/tier.sh, the script the CI calls to decide how much
 // scrutiny a diff needs. Each case is a throwaway git repo with a base commit
 // and a work commit, so the test covers the shell on a real range, not a port
-// of its rules. The base commit carries the repo's own AGENTS.md: the policy
-// block the script reads is the real one and cannot drift from the test.
+// of its rules. The base commit carries the repo's own .harness/AGENTS.md:
+// the policy block the script reads is the real one and cannot drift from the
+// test.
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   copyFileSync,
@@ -20,7 +21,7 @@ import { brokenPolicies, withPolicy } from './agents.js'
 
 const root = resolve(import.meta.dirname, '..')
 const script = join(root, '.harness/bin/tier.sh')
-const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+const agents = readFileSync(join(root, '.harness/AGENTS.md'), 'utf8')
 
 // null deletes the file: a case can move one out of its path.
 type Files = Record<string, string | null>
@@ -63,9 +64,13 @@ function tier(
   git(dir, 'config', 'user.email', 'tier@test')
   git(dir, 'config', 'user.name', 'tier')
   if (fixture.agents ?? true) {
-    copyFileSync(join(root, 'AGENTS.md'), join(dir, 'AGENTS.md'))
+    mkdirSync(join(dir, '.harness'))
+    copyFileSync(
+      join(root, '.harness/AGENTS.md'),
+      join(dir, '.harness/AGENTS.md'),
+    )
   } else {
-    writeFileSync(join(dir, 'README.md'), 'no AGENTS.md here\n')
+    writeFileSync(join(dir, 'README.md'), 'no .harness/AGENTS.md here\n')
   }
   write(dir, fixture.base ?? {})
   git(dir, 'add', '-A')
@@ -112,7 +117,10 @@ describe('tier.sh, how much scrutiny', () => {
     expect(tier({ 'docs/spec.md': body(1) }).tier).toBe(1)
     expect(tier({ 'docs/codebase-map.md': body(1) }).tier).toBe(1)
     expect(tier({ 'CLAUDE.md': body(1) }).tier).toBe(1)
-    expect(tier({ 'AGENTS.md': `${agents}one more line\n` }).tier).toBe(2)
+    expect(tier({ 'AGENTS.md': body(1) }).tier).toBe(1)
+    expect(
+      tier({ '.harness/AGENTS.md': `${agents}one more line\n` }).tier,
+    ).toBe(2)
   })
 
   // The first harness brought up to date on Tipoff: the list of the contracts
@@ -125,7 +133,7 @@ describe('tier.sh, how much scrutiny', () => {
     const bare = withPolicy(agents, (block) => {
       block.never_tier_0 = []
     })
-    const base = { 'AGENTS.md': bare }
+    const base = { '.harness/AGENTS.md': bare }
     expect(tier({ 'CLAUDE.md': body(2) }, {}, { base }).tier).toBe(1)
     expect(tier({ 'docs/codebase-map.md': body(2) }, {}, { base }).tier).toBe(1)
     expect(tier({ 'docs/spec.md': body(2) }, {}, { base }).tier).toBe(0)
@@ -135,7 +143,7 @@ describe('tier.sh, how much scrutiny', () => {
   // Claude Code loads and follows stayed at tier 0 one folder further along.
   it('keeps .claude/ and nested CLAUDE.md or AGENTS.md above 0, from the floor', () => {
     const base = {
-      'AGENTS.md': withPolicy(agents, (block) => {
+      '.harness/AGENTS.md': withPolicy(agents, (block) => {
         block.never_tier_0 = []
       }),
     }
@@ -165,7 +173,7 @@ describe('tier.sh, how much scrutiny', () => {
       {},
       {
         base: {
-          'AGENTS.md': withPolicy(agents, (block) => {
+          '.harness/AGENTS.md': withPolicy(agents, (block) => {
             block.never_tier_0 = []
           }),
         },
@@ -177,7 +185,7 @@ describe('tier.sh, how much scrutiny', () => {
     const unreadable = tier(
       { [file]: body(2) },
       {},
-      { base: { 'AGENTS.md': brokenPolicy('a fence jq refuses') } },
+      { base: { '.harness/AGENTS.md': brokenPolicy('a fence jq refuses') } },
     )
     expect(unreadable.tier).toBe(3)
     expect(unreadable.why).not.toMatch(/docs only|prose nobody executes/)
@@ -195,13 +203,13 @@ describe('tier.sh, how much scrutiny', () => {
   })
 
   // S39. The two thresholds were written inside the script and written again
-  // by hand in the prose of AGENTS.md: two copies of the same number. They
+  // by hand in the prose of .harness/AGENTS.md: two copies of the same number. They
   // come from the block now, and a repo that widens its tier 1 does it by
-  // changing AGENTS.md, which is sensitive and never tier 0, so with the judge
+  // changing .harness/AGENTS.md, which is sensitive and never tier 0, so with the judge
   // on it.
   it('takes the two thresholds from max_lines and max_files', () => {
     const base = {
-      'AGENTS.md': withPolicy(agents, (block) => {
+      '.harness/AGENTS.md': withPolicy(agents, (block) => {
         block.max_lines = 50
         block.max_files = 2
       }),
@@ -314,7 +322,7 @@ describe('tier.sh, who may merge', () => {
       block.human_gate_paths = ['docs/decisions/**']
     })
     const run = tier({
-      'AGENTS.md': rewritten,
+      '.harness/AGENTS.md': rewritten,
       '.harness/bin/foo.sh': body(1),
       'docs/specs/SPEC-x.md': body(1),
     })
@@ -324,22 +332,25 @@ describe('tier.sh, who may merge', () => {
     expect(run.why).toMatch(/^human-gate: docs\/specs\/SPEC-x\.md/m)
   })
 
-  // No AGENTS.md at the base ref: the repo cannot say how it is judged, and
-  // since S40 the answer is 3, the tier no model judges, as for the four faces
-  // of the unreadable block below.
-  it('fails closed when AGENTS.md is missing at the base ref', () => {
+  // No .harness/AGENTS.md at the base ref: the repo cannot say how it is
+  // judged, and since S40 the answer is 3, the tier no model judges, as for
+  // the four faces of the unreadable block below.
+  it('fails closed when .harness/AGENTS.md is missing at the base ref', () => {
     const run = tier({ 'docs/specs/SPEC-x.md': body(5) }, {}, { agents: false })
     expect(run.tier).toBe(3)
-    expect(run.why).toMatch(/no AGENTS\.md at/)
+    expect(run.why).toMatch(/no \.harness\/AGENTS\.md at/)
     expect(run.why).toContain('/harness-init local')
   })
 
   // A repo set up before the block has the file and not the keys: the lists
   // arrive empty, and without this case a PR that touches scripts/ would work
   // itself out as tier 1. It fails closed, as when the file is missing whole.
-  it('fails closed when AGENTS.md at the base ref has no policy block', () => {
+  it('fails closed when .harness/AGENTS.md at the base ref has no policy block', () => {
     const base = {
-      'AGENTS.md': agents.replace(/## Policy block[\s\S]*?(?=## Do not)/, ''),
+      '.harness/AGENTS.md': agents.replace(
+        /## Policy block[\s\S]*?(?=## Do not)/,
+        '',
+      ),
     }
     const run = tier({ '.harness/bin/foo.sh': body(5) }, {}, { base })
     expect(run.tier).toBe(3)
@@ -443,7 +454,7 @@ describe('tier.sh, who may merge', () => {
   // lines. The thresholds follow the renames that are exact: one file, zero
   // lines. At zero both thresholds make the script print what it counted.
   const tight = (max_lines: number, max_files: number) => ({
-    'AGENTS.md': withPolicy(agents, (block) => {
+    '.harness/AGENTS.md': withPolicy(agents, (block) => {
       block.max_lines = max_lines
       block.max_files = max_files
     }),
@@ -614,13 +625,27 @@ describe('tier.sh, a policy block it cannot read', () => {
       const run = tier(
         { '.harness/bin/foo.sh': body(5) },
         {},
-        { base: { 'AGENTS.md': broken } },
+        { base: { '.harness/AGENTS.md': broken } },
       )
       expect(run.tier).toBe(3)
       expect(run.why).toMatch(fault)
       expect(run.why).toContain('/harness-init local')
     },
   )
+
+  // S86. The block lives in .harness/AGENTS.md alone: a valid one in the root
+  // AGENTS.md, with no .harness/AGENTS.md at the base ref, is read as no
+  // block at all, and no transitional reading of the root file opens it.
+  it('gives 3 to a block in the root AGENTS.md alone, naming .harness/AGENTS.md', () => {
+    const run = tier(
+      { '.harness/bin/foo.sh': body(5) },
+      {},
+      { agents: false, base: { 'AGENTS.md': agents } },
+    )
+    expect(run.tier).toBe(3)
+    expect(run.why).toMatch(/no \.harness\/AGENTS\.md at/)
+    expect(run.why).toContain('/harness-init local')
+  })
 
   // jq missing is not the block, it is the machine, and it cannot land among
   // the four faults above: at 3 nobody judges, so `ensure-verdict.sh` would

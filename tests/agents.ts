@@ -1,8 +1,9 @@
-// The policy block of AGENTS.md, for the fixtures that need a repo whose
-// policy is not this repo's. The fence is the one scripts/policy-lines.sh
-// extracts and gives to jq: a test that rewrote the prose around it would
-// change nothing, and one that wrote its own AGENTS.md from scratch would
-// stop proving that the real file is the one the scripts read.
+// The policy block of .harness/AGENTS.md, for the fixtures that need a repo
+// whose policy is not this repo's. The fence is the one
+// .harness/bin/policy-lines.sh extracts and gives to jq: a test that rewrote
+// the prose around it would change nothing, and one that wrote its own
+// .harness/AGENTS.md from scratch would stop proving that the real file is the
+// one the scripts read.
 const fence = /(## Policy block[\s\S]*?```json\n)([\s\S]*?)(\n```)/
 
 export type PolicyBlock = {
@@ -23,21 +24,21 @@ export type PolicyBlock = {
 export function policyBlock(text: string): PolicyBlock {
   const match = text.match(fence)
   if (match === null)
-    throw new Error('the AGENTS.md under test has no policy block')
+    throw new Error('the .harness/AGENTS.md under test has no policy block')
   return JSON.parse(match[2] ?? '') as PolicyBlock
 }
 
 // The four ways the block can be unreadable, from S40: no fence at all, a
 // fence jq refuses, one of the eight keys missing, a version this harness has
 // never read. They are one fault with four faces, every reader of the block
-// has to stop on all four, and the list lives here so tier.sh, the git hooks
-// and intent.sh are held to the same fixtures.
+// has to stop on all four, and the list lives here so tier.sh, the git hooks,
+// intent.sh and park.sh are held to the same fixtures.
 export type BrokenPolicy = { name: string; agents: string; fault: RegExp }
 
 export function brokenPolicies(text: string): BrokenPolicy[] {
   const match = text.match(fence)
   if (match === null)
-    throw new Error('the AGENTS.md under test has no policy block')
+    throw new Error('the .harness/AGENTS.md under test has no policy block')
   const [whole, head = '', body = '', tail = ''] = match
   // A comma after the last key: what a hand that edits the block leaves. It
   // throws when the block does not end the way it thinks, or the fixture
@@ -75,15 +76,16 @@ export function brokenPolicies(text: string): BrokenPolicy[] {
   ]
 }
 
-// The same AGENTS.md with some of its keys changed, or taken out: what a repo
-// with its own policy, or with a block written by hand, hands the scripts.
+// The same .harness/AGENTS.md with some of its keys changed, or taken out:
+// what a repo with its own policy, or with a block written by hand, hands the
+// scripts.
 export function withPolicy(
   text: string,
   change: (block: Record<string, unknown>) => void,
 ): string {
   const match = text.match(fence)
   if (match === null)
-    throw new Error('the AGENTS.md under test has no policy block')
+    throw new Error('the .harness/AGENTS.md under test has no policy block')
   const block = JSON.parse(match[2] ?? '') as Record<string, unknown>
   change(block)
   const [whole, head = '', , tail = ''] = match

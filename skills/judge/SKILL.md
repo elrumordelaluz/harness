@@ -118,7 +118,7 @@ printf '%s\n' "$checks" | .harness/bin/judge.sh bundle <base> <role>
 ```
 
 It prints the path of one file holding the protocol, the tier, the role, the
-gate results, `AGENTS.md`, `docs/codebase-map.md`, the slice file when the
+gate results, `.harness/AGENTS.md`, `docs/codebase-map.md`, the slice file when the
 branch name names one, the commit messages and the diff against the base.
 Do not assemble this by hand and do not add to it: what the judge may see is a
 decision of the chain, not of this session.

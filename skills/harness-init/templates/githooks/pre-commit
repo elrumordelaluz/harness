@@ -8,22 +8,23 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 branch="$(git symbolic-ref --short -q HEAD || true)"
 if [ "${HARNESS_ALLOW_MAIN:-}" != 1 ] && { [ "$branch" = main ] || [ "$branch" = master ]; }; then
-  refused="harness: no commits on $branch. Switch to slice/S<NN>-<slug> or harness/<stage>; intent/<slug> and spec/<slug> where the policy block of AGENTS.md says docs_mode pr."
+  refused="harness: no commits on $branch. Switch to slice/S<NN>-<slug> or harness/<stage>; intent/<slug> and spec/<slug> where the policy block of .harness/AGENTS.md says docs_mode pr."
   # The one exception: with `"docs_mode": "main"` in the policy block a commit
   # made only of documents goes through, every staged file, deletions
   # included, under a path of human_gate_paths or of docs_extra_paths. The
   # rules are the ones at HEAD, which is the base of a commit on main: the
-  # commit could rewrite AGENTS.md, and then the rules it is held to would be
-  # its own. A commit that touches AGENTS.md is not a document anyway, so the
-  # copy at HEAD is the one that counts.
+  # commit could rewrite .harness/AGENTS.md, and then the rules it is held to
+  # would be its own. A commit that touches it is not a document anyway, so
+  # the copy at HEAD is the one that counts. The root AGENTS.md is the
+  # project's and holds no block: one left there is not read.
   if [ ! -f .harness/bin/policy-lines.sh ]; then echo "$refused" >&2; exit 1; fi
   . .harness/bin/policy-lines.sh
-  agents="$(git show HEAD:AGENTS.md 2>/dev/null || true)"
+  agents="$(git show HEAD:.harness/AGENTS.md 2>/dev/null || true)"
   # No fence, a fence jq refuses, a key missing, a version this harness has
   # never read: four faults, and main stays closed on all four instead of
   # falling back to pr, which refused for a reason that was not the true one.
   why="$(policy_why "$agents")"
-  if [ -n "$why" ]; then echo "$refused AGENTS.md at HEAD: $why" >&2; exit 1; fi
+  if [ -n "$why" ]; then echo "$refused .harness/AGENTS.md at HEAD: $why" >&2; exit 1; fi
   if [ "$(docs_mode "$agents")" != main ]; then echo "$refused" >&2; exit 1; fi
   files="$(git -c core.quotePath=false diff --cached --no-renames --name-only)"
   if [ -z "$files" ]; then
@@ -32,7 +33,7 @@ if [ "${HARNESS_ALLOW_MAIN:-}" != 1 ] && { [ "$branch" = main ] || [ "$branch" =
   fi
   outside="$(docs_outside "$agents" "$files")"
   if [ -n "$outside" ]; then
-    echo "$refused Only documents go on $branch (AGENTS.md, docs_mode), and $outside is not one." >&2
+    echo "$refused Only documents go on $branch (.harness/AGENTS.md, docs_mode), and $outside is not one." >&2
     exit 1
   fi
 fi

@@ -55,7 +55,7 @@ function identity(dir: string): void {
   git(dir, 'config', 'user.name', 'intent')
 }
 
-// Every repo of the chain carries an AGENTS.md with the policy block: from
+// Every repo of the chain carries a .harness/AGENTS.md with the policy block: from
 // S40 a repo without one stops the script, which is its own case below, so
 // the default fixture has the template's with docs_mode on pr, the team flow
 // most of these cases are about.
@@ -64,10 +64,14 @@ const suPr = withPolicy(template, (block) => {
 })
 
 // A bare origin whose main carries the intent README, the script with the
-// reading of AGENTS.md it sources, and `base`, and a clone of it to work in.
-// Next to them, a bin with a pnpm that runs the real Prettier and logs the
-// call.
-function repo(base: Files = {}): { dir: string; origin: string } {
+// reading of .harness/AGENTS.md it sources, and `base`, and a clone of it to
+// work in. Next to them, a bin with a pnpm that runs the real Prettier and
+// logs the call. `file` is where the default block goes, so a case can put it
+// where the script must not look.
+function repo(
+  base: Files = {},
+  file = '.harness/AGENTS.md',
+): { dir: string; origin: string } {
   const top = mkdtempSync(join(tmpdir(), 'intent-'))
   const origin = join(top, 'origin.git')
   const seed = join(top, 'seed')
@@ -76,7 +80,7 @@ function repo(base: Files = {}): { dir: string; origin: string } {
   mkdirSync(seed)
   git(seed, 'init', '-q', '-b', 'main')
   identity(seed)
-  write(seed, { 'AGENTS.md': suPr, 'docs/intent/README.md': readme, ...base })
+  write(seed, { [file]: suPr, 'docs/intent/README.md': readme, ...base })
   mkdirSync(join(seed, '.harness/bin'), { recursive: true })
   for (const script of ['intent.sh', 'policy-lines.sh']) {
     copyFileSync(
@@ -196,7 +200,7 @@ describe('intent.sh new', () => {
   // block on pr the flow is the team's, whatever the prose around it says.
   it('takes the team flow when docs_mode says pr', () => {
     const { dir } = repo({
-      'AGENTS.md': withPolicy(template, (block) => {
+      '.harness/AGENTS.md': withPolicy(template, (block) => {
         block.docs_mode = 'pr'
       }),
     })
@@ -472,11 +476,11 @@ describe('intent.sh open', () => {
   )
 })
 
-// With `"docs_mode": "main"` in the policy block of the AGENTS.md on the
-// default branch the intent has no branch and no PR: the human wrote it, and
-// the commit on main is the approval (ADR-0003). The AGENTS.md is the
+// With `"docs_mode": "main"` in the policy block of the .harness/AGENTS.md on
+// the default branch the intent has no branch and no PR: the human wrote it,
+// and the commit on main is the approval (ADR-0003). The block is the
 // template's, so the block under test is the one /harness-init local installs.
-const suMain = { 'AGENTS.md': template }
+const suMain = { '.harness/AGENTS.md': template }
 
 // A commit pushed to origin's main from somewhere else while the human was
 // writing: the seed next to the clone is that somewhere.
@@ -663,7 +667,7 @@ describe('intent.sh, a policy block it cannot read', () => {
   it.each(brokenPolicies(template))(
     '$name: new stops and names the fault',
     ({ agents: broken, fault }) => {
-      const { dir } = repo({ 'AGENTS.md': broken })
+      const { dir } = repo({ '.harness/AGENTS.md': broken })
       const result = run(dir, ['new', 'export-pdf'])
       expect(result.status).not.toBe(0)
       expect(result.stderr).toMatch(fault)
@@ -677,7 +681,7 @@ describe('intent.sh, a policy block it cannot read', () => {
     '$name: open stops and names the fault',
     ({ agents: broken, fault }) => {
       const { dir, origin } = repo({
-        'AGENTS.md': broken,
+        '.harness/AGENTS.md': broken,
         'docs/intent/export-pdf.md': filled,
       })
       const before = git(origin, 'rev-parse', 'refs/heads/main')
@@ -689,4 +693,17 @@ describe('intent.sh, a policy block it cannot read', () => {
       expect(logs(dir).gh).toBe('')
     },
   )
+
+  // S86. A valid block in the root AGENTS.md alone is no block: the script
+  // reads .harness/AGENTS.md and says so, and nothing falls back to the root.
+  it('a block in the root AGENTS.md alone stops new and names .harness/AGENTS.md', () => {
+    const { dir } = repo({}, 'AGENTS.md')
+    const result = run(dir, ['new', 'export-pdf'])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('.harness/AGENTS.md')
+    expect(result.stderr).toMatch(/no policy block/)
+    expect(result.stderr).toContain('/harness-init local')
+    expect(git(dir, 'branch', '--list', 'intent/*')).toBe('')
+    expect(existsSync(join(dir, 'docs/intent/export-pdf.md'))).toBe(false)
+  })
 })
