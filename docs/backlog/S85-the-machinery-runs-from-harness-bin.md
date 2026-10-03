@@ -1,7 +1,7 @@
 ---
 id: S85
 title: The scripts, the hooks and the workflows run from `.harness/bin/`, in this repo first
-status: todo
+status: done
 blocked_by: S84
 tier: 2
 human: false
