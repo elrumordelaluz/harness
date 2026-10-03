@@ -1,7 +1,7 @@
 ---
 id: S91
 title: The board prints the pin on its first line, next to the stages
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
