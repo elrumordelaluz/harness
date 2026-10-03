@@ -8,8 +8,8 @@
 #                           `- <YYYY-MM-DD>: <path>: <why>` to docs/parked.md
 #   park.sh resume <path>   take the line of <path> out, even when the file
 #                           it names is gone
-# What happens to the list depends on the docs_mode key of AGENTS.md on the
-# default branch, read as intent.sh reads it: with `main` the list is
+# What happens to the list depends on the docs_mode key of .harness/AGENTS.md
+# on the default branch, read as intent.sh reads it: with `main` the list is
 # committed alone on the default branch, formatted, and pushed, as
 # `docs(parked): <slug>` and `docs(parked): resume <slug>`; with `pr` the file
 # is written and the change travels on a PR. The document itself never moves
@@ -35,14 +35,15 @@ usage() {
 [ -f .harness/bin/policy-lines.sh ] || die "no .harness/bin/policy-lines.sh: run /harness-init local"
 . .harness/bin/policy-lines.sh
 
-# main or pr, from AGENTS.md as the default branch has it on the remote. A
-# block that cannot be read stops the script: there is no flow to fall back
-# on. It runs inside $(...), so the callers read the status and stop on it.
+# main or pr, from .harness/AGENTS.md as the default branch has it on the
+# remote. A block that cannot be read stops the script: there is no flow to
+# fall back on. It runs inside $(...), so the callers read the status and
+# stop on it.
 mode() {
   local agents why
-  agents="$(git show "origin/$1:AGENTS.md" 2>/dev/null || true)"
+  agents="$(git show "origin/$1:.harness/AGENTS.md" 2>/dev/null || true)"
   why="$(policy_why "$agents")"
-  [ -z "$why" ] || die "AGENTS.md on $1: $why"
+  [ -z "$why" ] || die ".harness/AGENTS.md on $1: $why"
   docs_mode "$agents"
 }
 
@@ -123,7 +124,7 @@ ready_main() {
   local base="$1" branch others
   branch="$(git symbolic-ref -q --short HEAD || true)"
   [ "$branch" = "$base" ] ||
-    die "AGENTS.md says docs_mode main, so $LIST goes on $base: run it from $base, this is ${branch:-a detached HEAD}"
+    die ".harness/AGENTS.md says docs_mode main, so $LIST goes on $base: run it from $base, this is ${branch:-a detached HEAD}"
   git merge -q --ff-only "origin/$base" 2>/dev/null ||
     die "$base and origin/$base have gone apart: git pull --rebase, then run this again"
   others="$(git diff --no-renames --name-only "origin/$base...HEAD")"
@@ -142,7 +143,7 @@ land() {
   local flow="$1" base="$2" subject="$3"
   pnpm exec prettier --write --log-level warn "$LIST"
   if [ "$flow" != main ]; then
-    echo "park: $LIST is written; AGENTS.md says docs_mode pr, so the change travels on a PR"
+    echo "park: $LIST is written; .harness/AGENTS.md says docs_mode pr, so the change travels on a PR"
     return 0
   fi
   git add -- "$LIST"

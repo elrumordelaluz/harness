@@ -9,7 +9,7 @@
 - [ ] Adds or updates dependencies
 - [ ] Touches schema, migrations or persisted data
 - [ ] Calls a new external service
-- [ ] Touches a sensitive path (the list is in AGENTS.md)
+- [ ] Touches a sensitive path (the list is in .harness/AGENTS.md)
 
 ## How to check by hand
 

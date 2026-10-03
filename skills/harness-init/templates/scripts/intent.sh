@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The typing around an intent, so the human writes the ten lines and nothing
 # else. Two commands, because the writing happens in between. What they do
-# depends on the docs_mode key of AGENTS.md on the default branch.
+# depends on the docs_mode key of .harness/AGENTS.md on the default branch.
 # With `"docs_mode": "main"`:
 #   intent.sh new <slug>    on the default branch, brought up to date, write
 #                           docs/intent/<slug>.md with the three sections of
@@ -37,18 +37,18 @@ die() {
 [ -f .harness/bin/policy-lines.sh ] || die "no .harness/bin/policy-lines.sh: run /harness-init local"
 . .harness/bin/policy-lines.sh
 
-# main or pr, from AGENTS.md as the default branch has it on the remote: the
-# rule the hooks will hold the push to, not a copy edited here. A block this
-# harness cannot read stops the script on all four of its faults, instead of
-# falling back to pr: in a repo that puts the intent on main the fallback
+# main or pr, from .harness/AGENTS.md as the default branch has it on the
+# remote: the rule the hooks will hold the push to, not a copy edited here. A
+# block this harness cannot read stops the script on all four of its faults,
+# instead of falling back to pr: in a repo that puts the intent on main the fallback
 # would cut a branch nobody merges, and a repo whose rules nobody can read has
 # no flow to pick. It runs inside $(...), where die exits the subshell alone,
 # so both callers read the status and stop on it.
 mode() {
   local agents why
-  agents="$(git show "origin/$1:AGENTS.md" 2>/dev/null || true)"
+  agents="$(git show "origin/$1:.harness/AGENTS.md" 2>/dev/null || true)"
   why="$(policy_why "$agents")"
-  [ -z "$why" ] || die "AGENTS.md on $1: $why"
+  [ -z "$why" ] || die ".harness/AGENTS.md on $1: $why"
   docs_mode "$agents"
 }
 
@@ -218,7 +218,7 @@ open_main() {
   local base="$1" slug="${2:-}" branch file found
   branch="$(git symbolic-ref -q --short HEAD || true)"
   [ "$branch" = "$base" ] ||
-    die "AGENTS.md says docs_mode main, so the intent goes on $base: run it from $base, this is ${branch:-a detached HEAD}"
+    die ".harness/AGENTS.md says docs_mode main, so the intent goes on $base: run it from $base, this is ${branch:-a detached HEAD}"
   if [ -z "$slug" ]; then
     found="$(pending "$base")"
     case "$(printf '%s' "$found" | grep -c . || true)" in

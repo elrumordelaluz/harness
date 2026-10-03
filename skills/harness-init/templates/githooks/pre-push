@@ -5,8 +5,9 @@
 # The one exception is the one pre-commit makes: with `"docs_mode": "main"`
 # in the policy block a push whose commits touch only documents goes through.
 # Every file any commit of the range touched counts, not the net diff, and
-# the rules are read at main as the remote has it, the base of the push: a
-# commit of the range could rewrite them, and it is not a document.
+# the rules are read from .harness/AGENTS.md at main as the remote has it,
+# the base of the push: a commit of the range could rewrite them, and it is
+# not a document.
 set -euo pipefail
 [ "${HARNESS_ALLOW_MAIN:-}" = 1 ] && exit 0
 cd "$(git rev-parse --show-toplevel)"
@@ -30,12 +31,12 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
   fi
   if [ ! -f .harness/bin/policy-lines.sh ]; then echo "$refused" >&2; exit 1; fi
   . .harness/bin/policy-lines.sh
-  agents="$(git show "$remote_sha:AGENTS.md" 2>/dev/null || true)"
+  agents="$(git show "$remote_sha:.harness/AGENTS.md" 2>/dev/null || true)"
   # The four faults pre-commit stops on, read at the same ref as the rules:
   # a block nobody can read keeps the branch closed and says which fault it is.
   why="$(policy_why "$agents")"
   if [ -n "$why" ]; then
-    echo "$refused AGENTS.md at $target as the remote has it: $why" >&2
+    echo "$refused .harness/AGENTS.md at $target as the remote has it: $why" >&2
     exit 1
   fi
   if [ "$(docs_mode "$agents")" != main ]; then echo "$refused" >&2; exit 1; fi
@@ -48,7 +49,7 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
   fi
   outside="$(docs_outside "$agents" "$files")"
   if [ -n "$outside" ]; then
-    echo "$refused Only documents go on $target (AGENTS.md, docs_mode), and $outside is not one." >&2
+    echo "$refused Only documents go on $target (.harness/AGENTS.md, docs_mode), and $outside is not one." >&2
     exit 1
   fi
 done

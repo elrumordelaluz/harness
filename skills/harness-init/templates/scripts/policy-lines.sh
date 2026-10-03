@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Sourced, never run: how the scripts of the chain read the policy block of
-# AGENTS.md, written once. tier.sh reads it at the base ref in CI, the git
-# hooks and intent.sh on main, and a pattern one of them accepts is one the
-# others accept too. Bash 3.2, jq, and the text of AGENTS.md in, no side
-# effects.
+# .harness/AGENTS.md, written once. tier.sh reads it at the base ref in CI,
+# the git hooks, intent.sh and park.sh on main, and a pattern one of them
+# accepts is one the others accept too. The root AGENTS.md is the project's
+# and none of them reads a block there. Bash 3.2, jq, and the text of
+# .harness/AGENTS.md in, no side effects.
 #   policy_fence <agents>          the json fence under the heading, as it is
 #   policy_json <agents> <filter>  the policy block through jq, one value a line
 #   policy_tool_missing            says so when jq is not installed, empty otherwise
@@ -136,9 +137,9 @@ docs_paths() {
 # name git prints quoted is outside: quoted, it no longer looks like the name
 # it is, and tier.sh reads it as sensitive for the same reason. So is a
 # contract wherever it sits, the floor tier.sh keeps too: Claude Code loads an
-# AGENTS.md or a CLAUDE.md at any depth and follows it, and under a document
-# path the pattern alone would let one onto main with no PR and no judge. The
-# floor stays here and not in the block, because the file that holds the gates
+# AGENTS.md or a CLAUDE.md at any depth and follows it, .harness/AGENTS.md
+# included, and under a document path the pattern alone would let one onto
+# main with no PR and no judge. The floor stays here and not in the block, because the file that holds the gates
 # cannot be the one to declare itself sensitive.
 docs_outside() {
   local paths file

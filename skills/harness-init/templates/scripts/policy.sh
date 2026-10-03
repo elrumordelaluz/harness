@@ -338,8 +338,8 @@ elif [ -n "$label_tier" ] && [ "$label_tier" -gt "$tier" ]; then
 elif printf '%s\n' "$labels" | grep -qx human-gate; then
   # The tier said how much scrutiny was needed and the judge gave it. Who may
   # merge is the other question: a path under the "Human gates" line of
-  # AGENTS.md carries human-gate, and the machine never merges it, here as in
-  # automerge.yml. An approve there is a verdict for the human who merges.
+  # .harness/AGENTS.md carries human-gate, and the machine never merges it,
+  # here as in automerge.yml. An approve there is a verdict for the human who merges.
   action=human
   decision="$lead, and the PR is under a human gate: a human merges it"
 # A merge counts only on the default branch (4.7), and the rule holds for every

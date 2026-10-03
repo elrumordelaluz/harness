@@ -1,8 +1,9 @@
 // Behaviour of .harness/bin/judge.sh and .harness/bin/ensure-verdict.sh, the two halves
 // of the local judgement: the one that builds what the judge reads and checks
 // what it wrote, and the hook that refuses to open a PR for a head nobody
-// judged. Each case is a throwaway git repo carrying the repo's own AGENTS.md
-// and judge files, so the rules under test are the real ones.
+// judged. Each case is a throwaway git repo carrying the repo's own
+// .harness/AGENTS.md and judge files, so the rules under test are the real
+// ones.
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -46,15 +47,16 @@ function install(dir: string, file: string): void {
   chmodSync(path, 0o755)
 }
 
-// A repo with the chain installed: the real AGENTS.md at the base commit, so
-// tier.sh reads the real policy block, and the real scripts and judge files.
+// A repo with the chain installed: the real .harness/AGENTS.md at the base
+// commit, so tier.sh reads the real policy block, and the real scripts and
+// judge files.
 function repo(work: Files = {}, branch?: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'judge-'))
   git(dir, 'init', '-b', 'main', '-q')
   git(dir, 'config', 'user.email', 'judge@test')
   git(dir, 'config', 'user.name', 'judge')
   for (const file of [
-    'AGENTS.md',
+    '.harness/AGENTS.md',
     'docs/codebase-map.md',
     '.harness/bin/tier.sh',
     '.harness/bin/policy-lines.sh',
@@ -140,8 +142,8 @@ function reasonFor(out: string): string {
 }
 
 const code = { 'src/a.ts': 'export const a = 1\n' }
-// .harness/bin/** is a sensitive path in the AGENTS.md the fixture carries, so this
-// is a tier 2 diff: the tier that asks for two judgements.
+// .harness/bin/** is a sensitive path in the .harness/AGENTS.md the fixture
+// carries, so this is a tier 2 diff: the tier that asks for two judgements.
 const sensitive = {
   ...code,
   '.harness/bin/extra.sh': '#!/usr/bin/env bash\ntrue\n',
@@ -260,7 +262,7 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
     for (const marker of [
       '.github/judge/prompt.md',
       '.github/judge/verdict.schema.json',
-      'AGENTS.md',
+      '.harness/AGENTS.md',
       'docs/codebase-map.md',
     ]) {
       expect(bundle, `the bundle has no ${marker}`).toContain(

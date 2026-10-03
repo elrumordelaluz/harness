@@ -28,11 +28,11 @@ The slice's criteria green with the tests written first; suite, typecheck, forma
 The lines below explain the policy to whoever reads them; what the programs
 read sits in "Policy block", and that is where it is changed.
 
-- Sensitive paths: `AGENTS.md`, `.claude/settings.json`, `.github/**`, `.githooks/**`, `.harness/**`, `scripts/**`, `package.json`, `pnpm-lock.yaml`, `tsconfig*.json`, {{`server/**`, `src/lib/engine/**`, `src/state/**`, `vite.config.ts`}}.
+- Sensitive paths: `.harness/stamp.json`, `.harness/bootstrap.sh`, `.harness/AGENTS.md`, `.harness/judge.md`, `.github/**`, `.claude/settings.json`, `package.json`, `pnpm-lock.yaml`, `tsconfig*.json`, {{`server/**`, `src/lib/engine/**`, `src/state/**`, `vite.config.ts`}}.
 - Tier 0: the prose nobody executes, at any length; the other docs up to 20 lines. The files on the line below are never tier 0, and neither are comments and formatting in code. Tier 1: within `max_lines` and `max_files` of the block below, no sensitive path, no dependency.
-- Never tier 0: `AGENTS.md`, `CLAUDE.md`, `.claude/**`, `docs/codebase-map.md`.
+- Never tier 0: `AGENTS.md`, `CLAUDE.md`, `.claude/**`, `.harness/AGENTS.md`, `.harness/judge.md`, `docs/codebase-map.md`.
 - Tier 2: over the thresholds, or a sensitive path, or a dependency, or a schema, or `.github/**`. Tier 3: slice `human: true`, tests weakened, judges in disagreement, fix rounds used up, or a policy block that cannot be read at the base ref.
-- The tier is the maximum of the signals. CI computes it with `scripts/tier.sh`, not whoever opens the PR.
+- The tier is the maximum of the signals. CI computes it with `.harness/bin/tier.sh`, not whoever opens the PR.
 - The judge never merges. The policy in `.github/` decides.
 
 ## Human gates
@@ -45,9 +45,10 @@ read sits in "Policy block", and that is where it is changed.
 ## Policy block
 
 What the programs read. The two paragraphs above explain it in prose, this
-block states it: `scripts/policy-lines.sh` extracts the fence and passes it to
-`jq`, and `tier.sh`, the git hooks and `intent.sh` read only from here. The
-globs sit in JSON strings, without backticks. Every key is required: whoever
+block states it: `.harness/bin/policy-lines.sh` extracts the fence and passes
+it to `jq`, and `tier.sh`, the git hooks, `intent.sh` and `park.sh` read it
+from this file, `.harness/AGENTS.md`, and from no other. The globs sit in JSON
+strings, without backticks. Every key is required: whoever
 removes one does not widen the rule, they stop whoever reads it.
 
 ```json
@@ -55,12 +56,12 @@ removes one does not widen the rule, they stop whoever reads it.
   "version": 1,
   "docs_mode": "main",
   "sensitive_paths": [
-    "AGENTS.md",
-    ".claude/settings.json",
+    ".harness/stamp.json",
+    ".harness/bootstrap.sh",
+    ".harness/AGENTS.md",
+    ".harness/judge.md",
     ".github/**",
-    ".githooks/**",
-    ".harness/**",
-    "scripts/**",
+    ".claude/settings.json",
     "package.json",
     "pnpm-lock.yaml",
     "tsconfig*.json",
@@ -73,6 +74,8 @@ removes one does not widen the rule, they stop whoever reads it.
     "AGENTS.md",
     "CLAUDE.md",
     ".claude/**",
+    ".harness/AGENTS.md",
+    ".harness/judge.md",
     "docs/codebase-map.md"
   ],
   "human_gate_paths": [
