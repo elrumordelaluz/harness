@@ -221,8 +221,8 @@ worktree path>. Work only on that slice.
    module boundaries.
 3. The four commands of AGENTS.md, all green: typecheck, test,
    format:check, build.
-4. git fetch origin, then scripts/tier.sh origin/<default branch> and
-   scripts/test-weakening.sh origin/<default branch>, and keep their
+4. git fetch origin, then .harness/bin/tier.sh origin/<default branch> and
+   .harness/bin/test-weakening.sh origin/<default branch>, and keep their
    output, stdout and stderr both: it goes in the PR body. A clean
    test-weakening.sh says so on stderr only. Never the local branch: it
    lags behind every commit of close.yml, and from a worktree it cannot
@@ -297,7 +297,7 @@ claim. A conflict is yours to resolve, inside the scope of the slice. If
 it cannot be resolved honestly, git merge --abort, set the slice to
 status: blocked with its one line under ## Blocked, commit, push and
 report that. Otherwise run the four commands, push only from green, then
-run scripts/tier.sh origin/<default branch> and scripts/test-weakening.sh
+run .harness/bin/tier.sh origin/<default branch> and .harness/bin/test-weakening.sh
 origin/<default branch> again. Report the sha and the output of the two
 scripts, stdout and stderr both.
 ```
@@ -316,7 +316,7 @@ branch behind that nobody here may touch: that slice ends there for this run,
 and the hand-back reports it with its branch as it is.
 
 Then, for the slice that is green and up to date, `/judge` on its branch, once
-per role, with the tier the subagent's `scripts/tier.sh` printed: correctness
+per role, with the tier the subagent's `.harness/bin/tier.sh` printed: correctness
 alone at
 tier 1, correctness and security together at tier 2, and the model the tier
 asks for, `sonnet` at tier 1 and `opus` at tier 2 (ADR-0002, decision 5).
@@ -338,7 +338,7 @@ SendMessage, in one message:
 ```
 The judge found these on your branch. For each one: decide whether it is
 right. If it is, fix it, run the four commands, commit from green, and
-answer it with scripts/judge.sh answer <id> <sha> <role>, one commit per
+answer it with .harness/bin/judge.sh answer <id> <sha> <role>, one commit per
 finding. If you believe a finding is wrong, say so in one line with the
 reason and answer it anyway with the commit that makes the code say why,
 a comment or a test. Do not open a second judgement and do not touch the
@@ -346,7 +346,7 @@ verdict by hand. If a fix would make the code say something the approved
 spec does not, do not fix it here: write one dated line in docs/inbox.md,
 it becomes a slice with spec: inbox (<date>), and say so in your report.
 
-<the findings, as scripts/judge.sh findings <role> prints them>
+<the findings, as .harness/bin/judge.sh findings <role> prints them>
 ```
 
 The `low` findings are not sent: they are declared in the PR body, with their
@@ -356,7 +356,7 @@ the ids, and that refusal is correct, not something to work around.
 
 A human who reads a PR this run opened and finds something goes through the
 same message, not through a second judgement and never through a merge as it
-is: `scripts/judge.sh finding <severity> <file>[:<line>] <claim> [role]`
+is: `.harness/bin/judge.sh finding <severity> <file>[:<line>] <claim> [role]`
 writes it into the verdict of the judged head with `by: human`, it is sent to
 the subagent like the others, and the fix answers it with its commit. Until
 then the policy holds the PR for a human, whatever the judge said.
@@ -390,8 +390,8 @@ Then wait for the CI on the PR head and post the verdict, once per role:
 
 ```
 gh pr checks <pr> --watch
-(cd .claude/worktrees/S<NN> && scripts/judge.sh have <role> <base> && \
-  scripts/policy.sh "$(scripts/judge.sh path <role>)" <pr> <tier> <role>)
+(cd .claude/worktrees/S<NN> && .harness/bin/judge.sh have <role> <base> && \
+  .harness/bin/policy.sh "$(.harness/bin/judge.sh path <role>)" <pr> <tier> <role>)
 ```
 
 From the worktree too, because `have` and `path` read `HEAD`: in the root they

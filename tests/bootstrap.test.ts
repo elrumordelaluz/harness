@@ -220,6 +220,29 @@ describe('bootstrap.sh fills .harness/bin/ from the pin', () => {
     expect(existsSync(join(dir, '.harness/bin'))).toBe(false)
   })
 
+  // The harness repo itself: .harness/bin is tracked there, links into its
+  // own templates, and there is no stamp to read a pin from.
+  it('fetches nothing where .harness/bin is tracked, and sets the hooks', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-tracked-'))
+    git(dir, 'init', '-b', 'main', '-q')
+    mkdirSync(join(dir, '.harness/bin/hooks'), { recursive: true })
+    copyFileSync(script, join(dir, '.harness/bootstrap.sh'))
+    writeFileSync(join(dir, '.harness/bin/tier.sh'), '#!/usr/bin/env bash\n')
+    writeFileSync(join(dir, '.harness/bin/hooks/pre-commit'), '#!/bin/sh\n')
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-q', '-m', 'chore: the harness, tracked')
+    const before = snapshot(join(dir, '.harness/bin'))
+    const { bin, log } = recorder()
+
+    const run = bootstrap(dir, `${bin}:${process.env.PATH ?? ''}`)
+
+    expect(run.stderr).toBe('')
+    expect(run.status).toBe(0)
+    expect(readFileSync(log, 'utf8')).not.toMatch(/(^| )fetch /m)
+    expect(snapshot(join(dir, '.harness/bin'))).toEqual(before)
+    expect(git(dir, 'config', 'core.hooksPath')).toBe('.harness/bin/hooks')
+  })
+
   // The stamp is tracked: whoever can push it chooses what every teammate's
   // git runs, so a pin that git would read as an option never reaches git.
   it.each([

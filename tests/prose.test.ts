@@ -1,4 +1,4 @@
-// Behaviour of scripts/prose.sh, the gate on the prose: an em dash in a line
+// Behaviour of .harness/bin/prose.sh, the gate on the prose: an em dash in a line
 // the diff adds fails the commit and the CI, so the judge never has to read
 // for style. Each case is a throwaway git repo; the dash is written as an
 // escape so this file passes its own gate.
@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const script = resolve(import.meta.dirname, '../scripts/prose.sh')
+const script = resolve(import.meta.dirname, '../.harness/bin/prose.sh')
 const dash = '\u2014'
 
 function git(dir: string, ...args: string[]): string {

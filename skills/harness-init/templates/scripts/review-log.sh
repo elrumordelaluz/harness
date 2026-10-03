@@ -156,7 +156,7 @@ if [ "$kept" -eq 0 ] && [ "$skipped" -eq 0 ] && [ "$have" -eq 0 ]; then
   notice="$(printf '%s\n' \
     "No verdict reached \`$out\` for this PR: there was nothing to read on the PR when the log was written, and a PR with no line reads to the audit as a PR nobody judged." \
     "" \
-    "Once the verdict is on the PR, \`scripts/review-log.sh $pr\` on a clone of the default branch appends it, and the file is committed from there. The run repeats safely: a line the log already holds is not written twice.")"
+    "Once the verdict is on the PR, \`.harness/bin/review-log.sh $pr\` on a clone of the default branch appends it, and the file is committed from there. The run repeats safely: a line the log already holds is not written twice.")"
   if ! gh pr comment "$pr" --body "$notice"; then
     echo "review-log: could not comment on PR $pr, the token may not write on it" >&2
     if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then

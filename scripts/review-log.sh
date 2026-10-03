@@ -1,1 +1,0 @@
-../skills/harness-init/templates/scripts/review-log.sh

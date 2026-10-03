@@ -34,7 +34,7 @@ base="${1:-origin/main}"
 # would otherwise get a tier job that dies here with bash's words alone.
 here="$(cd "$(dirname "$0")" && pwd)"
 if [ ! -f "$here/policy-lines.sh" ]; then
-  echo "tier: no scripts/policy-lines.sh next to this script, the reading of the policy block: run /harness-init local" >&2
+  echo "tier: no .harness/bin/policy-lines.sh next to this script, the reading of the policy block: run /harness-init local" >&2
   exit 2
 fi
 . "$here/policy-lines.sh"

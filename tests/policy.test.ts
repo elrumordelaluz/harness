@@ -1,4 +1,4 @@
-// Behaviour of scripts/policy.sh, the deterministic step that turns a verdict
+// Behaviour of .harness/bin/policy.sh, the deterministic step that turns a verdict
 // into one comment, the labels and, when allowed, a merge. The script talks
 // to GitHub only through `gh`, so `gh` is the stub in tests/fixtures/bin: it
 // records every call, keeps every comment body, and answers the reads the
@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
-const script = join(root, 'scripts/policy.sh')
+const script = join(root, '.harness/bin/policy.sh')
 const bin = join(root, 'tests/fixtures/bin')
 const sample = JSON.parse(
   readFileSync(join(root, 'tests/fixtures/verdict.json'), 'utf8'),

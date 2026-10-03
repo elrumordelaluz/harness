@@ -32,6 +32,14 @@ jobs:
       SHA: ${{ github.event.workflow_run.head_sha }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
+      # The default branch, checked out for the bootstrap alone: every
+      # workflow gets the machinery the way a laptop does, and a bootstrap
+      # that fails is a red job. The merge below reads the PR through gh.
+      - uses: actions/checkout@v7
+
+      - name: harness bootstrap
+        run: .harness/bootstrap.sh
+
       - uses: actions/create-github-app-token@v3
         id: app
         if: vars.HARNESS_APP_ID != ''

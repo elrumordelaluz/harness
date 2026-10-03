@@ -5,7 +5,8 @@
 # under the git dir, where `git status` does not see it, and the new tree is
 # swapped in only when complete: a failed run leaves the old .harness/bin/ as
 # it was. .harness/bin/.sha holds the sha it was filled from, and when it is
-# already the pin nothing is fetched.
+# already the pin nothing is fetched. In the harness repo itself .harness/bin
+# is tracked, links into its own templates, and there is nothing to fetch.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -13,6 +14,10 @@ stamp=.harness/stamp.json
 bin=.harness/bin
 templates=skills/harness-init/templates
 
+if [ -n "$(git ls-files -- "$bin")" ]; then
+  git config core.hooksPath "$bin/hooks"
+  exit 0
+fi
 if [ ! -f "$stamp" ]; then
   echo "bootstrap: no $stamp, run /harness-init local first" >&2
   exit 1

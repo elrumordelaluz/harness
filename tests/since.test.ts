@@ -1,4 +1,4 @@
-// Behaviour of scripts/since.sh, the answer to a sha that comes back from a
+// Behaviour of .harness/bin/since.sh, the answer to a sha that comes back from a
 // repo with a line of feedback: what moved in the templates between that
 // commit and HEAD. The three outcomes are what the script exists for, because
 // plain `git log` prints the same nothing for a sha this repo does not have
@@ -12,7 +12,7 @@ import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
-const script = join(root, 'scripts/since.sh')
+const script = join(root, '.harness/bin/since.sh')
 
 const template = 'skills/harness-init/templates/scripts/x.sh'
 const outside = 'docs/inbox.md'
@@ -84,7 +84,7 @@ function since(
   return { status: run.status, stdout: run.stdout, stderr: run.stderr }
 }
 
-describe('scripts/since.sh', () => {
+describe('.harness/bin/since.sh', () => {
   it('prints the commits of the templates in the range, and nothing else', () => {
     const { dir, base } = repo()
     const { status, stdout } = since(dir, [base])

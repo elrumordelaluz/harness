@@ -1,4 +1,4 @@
-// Behaviour of scripts/review-log.sh, which close.yml runs on merge: it reads
+// Behaviour of .harness/bin/review-log.sh, which close.yml runs on merge: it reads
 // the comments of the PR, keeps the verdicts the judge posted, and appends
 // each to the review log with the outcome filled in. `gh` is the stub in
 // tests/fixtures/bin, fed with the comments through STUB_COMMENTS.
@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
-const script = join(root, 'scripts/review-log.sh')
+const script = join(root, '.harness/bin/review-log.sh')
 const bin = join(root, 'tests/fixtures/bin')
 
 type Comment = {
@@ -365,7 +365,7 @@ describe('review-log.sh, a verdict that arrives late', () => {
     ])
     expect(r.status, r.stderr).toBe(0)
     expect(r.lines).toHaveLength(0)
-    expect(r.posted).toMatch(/scripts\/review-log\.sh 7/)
+    expect(r.posted).toMatch(/\.harness\/bin\/review-log\.sh 7/)
     expect(r.posted).toMatch(/verdicts\.jsonl/)
     expect(r.summary).toBe('')
   })
@@ -382,7 +382,7 @@ describe('review-log.sh, a verdict that arrives late', () => {
       STUB_FAIL: 'pr comment',
     })
     expect(r.status, r.stderr).toBe(0)
-    expect(r.summary).toMatch(/scripts\/review-log\.sh 7/)
+    expect(r.summary).toMatch(/\.harness\/bin\/review-log\.sh 7/)
     expect(r.summary).toMatch(/verdicts\.jsonl/)
     expect(r.stderr).toMatch(/could not comment/)
   })

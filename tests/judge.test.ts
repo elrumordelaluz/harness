@@ -1,4 +1,4 @@
-// Behaviour of scripts/judge.sh and scripts/ensure-verdict.sh, the two halves
+// Behaviour of .harness/bin/judge.sh and .harness/bin/ensure-verdict.sh, the two halves
 // of the local judgement: the one that builds what the judge reads and checks
 // what it wrote, and the hook that refuses to open a PR for a head nobody
 // judged. Each case is a throwaway git repo carrying the repo's own AGENTS.md
@@ -56,12 +56,12 @@ function repo(work: Files = {}, branch?: string): string {
   for (const file of [
     'AGENTS.md',
     'docs/codebase-map.md',
-    'scripts/tier.sh',
-    'scripts/policy-lines.sh',
-    'scripts/judge.sh',
-    'scripts/ensure-verdict.sh',
-    'scripts/prose.sh',
-    'scripts/test-weakening.sh',
+    '.harness/bin/tier.sh',
+    '.harness/bin/policy-lines.sh',
+    '.harness/bin/judge.sh',
+    '.harness/bin/ensure-verdict.sh',
+    '.harness/bin/prose.sh',
+    '.harness/bin/test-weakening.sh',
     '.github/judge/prompt.md',
     '.github/judge/verdict.schema.json',
   ]) {
@@ -97,7 +97,7 @@ function judge(
   input = '',
   path?: string,
 ): { code: number; out: string; err: string } {
-  const run = spawnSync('scripts/judge.sh', args, {
+  const run = spawnSync('.harness/bin/judge.sh', args, {
     cwd: dir,
     input,
     encoding: 'utf8',
@@ -117,7 +117,7 @@ function hook(
   command: string,
   path?: string,
 ): { code: number; out: string } {
-  const run = spawnSync('scripts/ensure-verdict.sh', [], {
+  const run = spawnSync('.harness/bin/ensure-verdict.sh', [], {
     cwd: dir,
     input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
     encoding: 'utf8',
@@ -140,9 +140,12 @@ function reasonFor(out: string): string {
 }
 
 const code = { 'src/a.ts': 'export const a = 1\n' }
-// scripts/** is a sensitive path in the AGENTS.md the fixture carries, so this
+// .harness/bin/** is a sensitive path in the AGENTS.md the fixture carries, so this
 // is a tier 2 diff: the tier that asks for two judgements.
-const sensitive = { ...code, 'scripts/extra.sh': '#!/usr/bin/env bash\ntrue\n' }
+const sensitive = {
+  ...code,
+  '.harness/bin/extra.sh': '#!/usr/bin/env bash\ntrue\n',
+}
 
 // A PATH with the tools the scripts use and no jq, to exercise the fallback
 // the hook takes when the payload cannot be parsed. Built by resolving each
@@ -229,7 +232,7 @@ describe('judge.sh required: the tier decides whether to judge at all', () => {
   it('keeps "cannot tell" apart from "no verdict needed"', () => {
     const dir = repo(code)
     writeFileSync(
-      join(dir, 'scripts/tier.sh'),
+      join(dir, '.harness/bin/tier.sh'),
       '#!/usr/bin/env bash\nexit 1\n',
       {
         mode: 0o755,
@@ -321,9 +324,9 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
       bundle.indexOf('BEGIN gates run here'),
       bundle.indexOf('END gates run here'),
     )
-    expect(ran).toContain('scripts/tier.sh main: 1')
-    expect(ran).toContain('scripts/prose.sh: pass')
-    expect(ran).toContain('scripts/test-weakening.sh: pass')
+    expect(ran).toContain('.harness/bin/tier.sh main: 1')
+    expect(ran).toContain('.harness/bin/prose.sh: pass')
+    expect(ran).toContain('.harness/bin/test-weakening.sh: pass')
     expect(
       ran,
       'the stderr line of a clean test-weakening.sh is in the section',
@@ -358,19 +361,19 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
       bundle.indexOf('END gates run here'),
     )
     const lines = ran.split('\n')
-    const fail = lines.indexOf('- scripts/test-weakening.sh: FAIL')
+    const fail = lines.indexOf('- .harness/bin/test-weakening.sh: FAIL')
     expect(fail, 'the gate is not a FAIL').toBeGreaterThan(-1)
     expect(lines[fail + 1], 'the finding is not under the FAIL line').toContain(
       `src/a.test.ts: skip/only added: ${skipped}'a', () => {})`,
     )
-    expect(ran).not.toContain('scripts/test-weakening.sh: pass')
-    expect(ran).toContain('scripts/prose.sh: pass')
+    expect(ran).not.toContain('.harness/bin/test-weakening.sh: pass')
+    expect(ran).toContain('.harness/bin/prose.sh: pass')
   })
 
   it('reads a test-weakening.sh that exits non-zero as a FAIL, with nothing printed', () => {
     const dir = repo({
       ...code,
-      'scripts/test-weakening.sh': '#!/usr/bin/env bash\nexit 1\n',
+      '.harness/bin/test-weakening.sh': '#!/usr/bin/env bash\nexit 1\n',
     })
     const bundle = readFileSync(
       judge(dir, ['bundle', 'main'], 'ok\n').out.trim(),
@@ -380,8 +383,8 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
       bundle.indexOf('BEGIN gates run here'),
       bundle.indexOf('END gates run here'),
     )
-    expect(ran).toContain('scripts/test-weakening.sh: FAIL')
-    expect(ran).not.toContain('scripts/test-weakening.sh: pass')
+    expect(ran).toContain('.harness/bin/test-weakening.sh: FAIL')
+    expect(ran).not.toContain('.harness/bin/test-weakening.sh: pass')
   })
 
   it('finds the slice from the branch name, and says so when there is none', () => {
@@ -972,7 +975,7 @@ describe('ensure-verdict.sh: no verdict for this head, no PR', () => {
     git(dir, 'init', '-b', 'main', '-q')
     git(dir, 'config', 'user.email', 'judge@test')
     git(dir, 'config', 'user.name', 'judge')
-    install(dir, 'scripts/ensure-verdict.sh')
+    install(dir, '.harness/bin/ensure-verdict.sh')
     write(dir, { 'README.md': 'no chain here\n' })
     git(dir, 'add', '-A')
     git(dir, 'commit', '-q', '-m', 'base')
@@ -984,14 +987,14 @@ describe('ensure-verdict.sh: no verdict for this head, no PR', () => {
   it('denies when the tier cannot be computed', () => {
     const dir = repo(code)
     writeFileSync(
-      join(dir, 'scripts/tier.sh'),
+      join(dir, '.harness/bin/tier.sh'),
       '#!/usr/bin/env bash\nexit 1\n',
       {
         mode: 0o755,
       },
     )
     expect(reasonFor(hook(dir, `${open} --fill`).out)).toContain(
-      'scripts/tier.sh failed',
+      '.harness/bin/tier.sh failed',
     )
   })
 
@@ -1221,7 +1224,7 @@ describe('ensure-verdict.sh: the judged head, answered, opens the PR without a s
     const reason = reasonFor(hook(dir, `${open} --fill`).out)
     expect(reason).toContain('F2')
     expect(reason, 'F1 has its answer').not.toMatch(/\bF1\b/)
-    expect(reason).toContain('scripts/judge.sh answer')
+    expect(reason).toContain('.harness/bin/judge.sh answer')
     expect(reason, 'it sends the session to judge again').not.toMatch(
       /\/judge(?!\.sh)/,
     )
@@ -1238,7 +1241,7 @@ describe('ensure-verdict.sh: the judged head, answered, opens the PR without a s
     const b = fix(dir, 'src/more.ts')
     const reason = reasonFor(hook(dir, `${open} --fill`).out)
     expect(reason).toContain(b.slice(0, 7))
-    expect(reason).toContain('scripts/judge.sh answer')
+    expect(reason).toContain('.harness/bin/judge.sh answer')
   })
 
   it('still denies a PR against a base the verdict never saw', () => {

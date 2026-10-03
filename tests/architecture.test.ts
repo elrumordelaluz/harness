@@ -9,7 +9,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
-  readlinkSync,
+  realpathSync,
   statSync,
   writeFileSync,
 } from 'node:fs'
@@ -35,29 +35,6 @@ function globToRegExp(glob: string): RegExp {
     .replace(/[.+^${}()|[\]\\]/g, '\\$&')
     .replace(/\*/g, '[^/]*')
   return new RegExp(`^${escaped}$`)
-}
-
-function expectSymlinkInto(link: string, dir: string): void {
-  const path = join(root, link)
-  expect(
-    lstatSync(path).isSymbolicLink(),
-    `${link} is a copy, not a symlink`,
-  ).toBe(true)
-  const target = resolve(dirname(path), readlinkSync(path))
-  expect(target.startsWith(`${dir}/`), `${link} points outside ${dir}`).toBe(
-    true,
-  )
-  expect(statSync(target).isFile(), `${link} points to a missing file`).toBe(
-    true,
-  )
-}
-
-// A ruleset as the comparison of the copies reads it: every key but
-// `bypass_actors`, which stage ci of /harness-init fills per repo.
-function rulesetWithoutActors(text: string): string {
-  const ruleset = JSON.parse(text) as Record<string, unknown>
-  delete ruleset.bypass_actors
-  return JSON.stringify(ruleset, null, 2)
 }
 
 // templates/README.md is the one place that says where each template goes and
@@ -231,21 +208,114 @@ describe('template scripts and hooks run on bash 3.2', () => {
   })
 })
 
-// AGENTS.md, "Do not": "Do not modify the files in .githooks/ and the
-// symlinks in scripts/: the template is what changes"
+// AGENTS.md, "Do not": "Do not modify the symlinks in .harness/bin/: the
+// template is what changes". This repo runs on the layout it installs, and is
+// the one repo that does not fetch it: .harness/bin here is tracked and made
+// of links into the templates, laid out the way bootstrap.sh lays out the
+// fetch. The list is read from the template directories, so a new script
+// without its link is red here.
 describe('the repo runs on its own templates', () => {
-  it.each(readdirSync(join(root, '.githooks')))(
-    '.githooks/%s is a symlink into the templates',
-    (hook) =>
-      expectSymlinkInto(join('.githooks', hook), join(templates, 'githooks')),
+  const bin = join(root, '.harness/bin')
+  // This repo's own two scripts: they answer about the templates and are not
+  // in the tree the bootstrap copies, so they are regular files here.
+  const own = ['check-shell.sh', 'since.sh']
+  const layout: Array<[string, string]> = [
+    ...readdirSync(join(templates, 'scripts')).map((file): [string, string] => [
+      file,
+      `scripts/${file}`,
+    ]),
+    ['hooks', 'githooks'],
+    ['judge', 'judge'],
+    ['ruleset.json', 'github/ruleset.json'],
+  ]
+  const tracked = execFileSync('git', ['ls-files', '--', '.harness'], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean)
+
+  it.each(layout)(
+    '.harness/bin/%s is a tracked symlink to templates/%s',
+    (landed, template) => {
+      const link = join(bin, landed)
+      expect(
+        existsSync(link) && lstatSync(link).isSymbolicLink(),
+        `.harness/bin/${landed} is missing or not a symlink: link it to skills/harness-init/templates/${template}`,
+      ).toBe(true)
+      expect(realpathSync(link)).toBe(realpathSync(join(templates, template)))
+      expect(tracked).toContain(`.harness/bin/${landed}`)
+    },
   )
 
-  const shared = readdirSync(join(root, 'scripts')).filter((file) =>
-    existsSync(join(templates, 'scripts', file)),
+  it('holds nothing else but check-shell.sh and since.sh, regular files', () => {
+    const landed = layout.map(([name]) => name)
+    for (const name of readdirSync(bin)) {
+      if (landed.includes(name)) continue
+      expect(
+        own,
+        `.harness/bin/${name} is neither a template nor this repo's own`,
+      ).toContain(name)
+      expect(
+        lstatSync(join(bin, name)).isFile(),
+        `.harness/bin/${name} is this repo's own and should be a regular file`,
+      ).toBe(true)
+      expect(tracked).toContain(`.harness/bin/${name}`)
+    }
+    for (const name of own) expect(readdirSync(bin)).toContain(name)
+  })
+
+  it('has no scripts/ and no .githooks/ any more', () => {
+    expect(existsSync(join(root, 'scripts')), 'scripts/ is still here').toBe(
+      false,
+    )
+    expect(
+      existsSync(join(root, '.githooks')),
+      '.githooks/ is still here',
+    ).toBe(false)
+  })
+
+  it('links .harness/bootstrap.sh to its template', () => {
+    const link = join(root, '.harness/bootstrap.sh')
+    expect(lstatSync(link).isSymbolicLink()).toBe(true)
+    expect(realpathSync(link)).toBe(
+      realpathSync(join(templates, 'bootstrap.sh')),
+    )
+    expect(tracked).toContain('.harness/bootstrap.sh')
+  })
+
+  it('points typecheck and prepare at .harness/bin', () => {
+    const pkg = JSON.parse(
+      readFileSync(join(root, 'package.json'), 'utf8'),
+    ) as { scripts: Record<string, string> }
+    expect(pkg.scripts.typecheck).toContain('.harness/bin/check-shell.sh')
+    expect(pkg.scripts.prepare).toBe(
+      'git config core.hooksPath .harness/bin/hooks',
+    )
+  })
+})
+
+// The machinery of a project lives in .harness/bin/, and the templates call
+// it there: a script, a hook, a workflow or the settings that still named
+// scripts/<name>.sh or .githooks would call a path no repo has any more.
+describe('the templates call the machinery under .harness/bin/', () => {
+  const names = readdirSync(join(templates, 'scripts')).map((file) =>
+    file.replace(/[.]/g, '\\.'),
   )
-  it.each(shared)('scripts/%s is a symlink to its template', (file) =>
-    expectSymlinkInto(join('scripts', file), join(templates, 'scripts')),
-  )
+  const old = new RegExp(`scripts/(${names.join('|')})|\\.githooks`)
+  const files = [
+    ...['scripts', 'githooks', 'github'].flatMap((dir) =>
+      walk(join(templates, dir)).map((file) => `${dir}/${file}`),
+    ),
+    'settings.json',
+  ]
+
+  it.each(files)('%s', (file) => {
+    const hit = readFileSync(join(templates, file), 'utf8')
+      .split('\n')
+      .find((line) => old.test(line))
+    expect(hit, `${file} still names the old path`).toBeUndefined()
+  })
 })
 
 // The same line, its other half. Under `.github/` nothing can be a symlink:
@@ -286,24 +356,19 @@ describe('.github matches the templates it was copied from', () => {
     return text.slice(0, cut)
   }
 
-  // The other copy that differs on purpose. Stage ci of /harness-init fills
-  // `bypass_actors` in the ruleset it writes and applies: the id of the App
-  // is one per account and the admin role goes in only with `docs_mode` on
-  // `main`, so the list of a repo is never the empty one of the template.
-  // The file is read as JSON and compared without that key, and with every
-  // other one.
-  const rulesetWhy =
-    '/harness-init ci fills `bypass_actors` with the App and the admin role of the repo it runs in'
-
   const comparable = (template: string, text: string, what: string) => {
     if (template === 'judge/prompt.md') return commonPart(text, what)
-    if (template === 'github/ruleset.json') return rulesetWithoutActors(text)
     return text
   }
 
-  const copied = ['github', 'judge'].flatMap((dir) =>
-    walk(join(templates, dir)).map((file) => `${dir}/${file}`),
-  )
+  // The ruleset is not copied under .github/: it lands in .harness/bin/,
+  // linked here and fetched in a project repo, and stage ci applies it from
+  // there.
+  const copied = ['github', 'judge']
+    .flatMap((dir) =>
+      walk(join(templates, dir)).map((file) => `${dir}/${file}`),
+    )
+    .filter((template) => template !== 'github/ruleset.json')
 
   it.each(copied)('%s', (template) => {
     const copy = copyOf(template)
@@ -315,45 +380,15 @@ describe('.github matches the templates it was copied from', () => {
     const why = partial[template]
     const here = readFileSync(join(root, copy), 'utf8')
     const there = readFileSync(join(templates, template), 'utf8')
-    const except = why
-      ? ` above its "## This repo" section (${why})`
-      : template === 'github/ruleset.json'
-        ? ` outside \`bypass_actors\` (${rulesetWhy})`
-        : ''
+    const except = why ? ` above its "## This repo" section (${why})` : ''
     expect(
       comparable(template, here, copy),
       `${copy} drifted from skills/harness-init/templates/${template}${except}: run /harness-init ${stage} to copy it back, do not edit the copy`,
     ).toBe(comparable(template, there, `templates/${template}`))
   })
 
-  // The exception proved on two objects, because today the copy of this repo
-  // is equal to the template and the case above would pass with or without
-  // it: the actors of this repo live in the ruleset on GitHub.
-  it('reads ruleset.json without `bypass_actors`, and with every other key', () => {
-    const ruleset = (rules: string[], actors: unknown[]) =>
-      JSON.stringify({
-        name: 'main',
-        rules: rules.map((type) => ({ type })),
-        bypass_actors: actors,
-      })
-    const filled = [
-      { actor_id: 1, actor_type: 'Integration', bypass_mode: 'always' },
-    ]
-    expect(
-      rulesetWithoutActors(ruleset(['deletion'], filled)),
-      `two rulesets equal but for \`bypass_actors\` compare as different, and the copy goes red the day ${rulesetWhy}`,
-    ).toBe(rulesetWithoutActors(ruleset(['deletion'], [])))
-    expect(
-      rulesetWithoutActors(ruleset(['deletion'], [])),
-      'two rulesets that differ in `rules` compare as equal: the exception for `bypass_actors` has swallowed the rest of the file',
-    ).not.toBe(rulesetWithoutActors(ruleset(['non_fast_forward'], [])))
-    expect(
-      rulesetWithoutActors(ruleset(['deletion'], filled)),
-      'the comparison of ruleset.json still carries `bypass_actors`',
-    ).not.toContain('bypass_actors')
-  })
-
-  // The template side of the same exception. The list ships empty because
+  // Stage ci fills `bypass_actors` in the ruleset it applies. The template
+  // list ships empty because
   // neither actor can be known before the repo is: the id of the App belongs
   // to the account that installed it, and the admin role is a bypass only
   // where `docs_mode` is `main`. An actor written here would land in every
@@ -367,6 +402,43 @@ describe('.github matches the templates it was copied from', () => {
       'skills/harness-init/templates/github/ruleset.json no longer ships an empty `bypass_actors`: stage ci of /harness-init fills the list per repo, the template stays empty',
     ).toEqual([])
   })
+
+  // CI gets the machinery the way a laptop does: every checkout of a
+  // workflow is followed by the bootstrap, as a plain step, so a bootstrap
+  // that exits non-zero is a red job. A workflow with no checkout has no tree
+  // to run the bootstrap in, so each of the four checks out first.
+  const workflows = ['ci.yml', 'automerge.yml', 'escalate.yml', 'close.yml']
+  it.each(workflows)(
+    '%s runs .harness/bootstrap.sh right after each checkout',
+    (file) => {
+      const lines = readFileSync(join(templates, 'github', file), 'utf8').split(
+        '\n',
+      )
+      const steps: string[][] = []
+      for (const line of lines) {
+        if (/^\s+- (uses|name|run|id|if|env):/.test(line)) steps.push([line])
+        else if (/^\S/.test(line) || /^  \S/.test(line)) steps.push([])
+        else steps[steps.length - 1]?.push(line)
+      }
+      const checkouts = steps
+        .map((step, i) => [step, i] as const)
+        .filter(([step]) => /uses: actions\/checkout@/.test(step.join('\n')))
+      expect(
+        checkouts.length,
+        `${file} has no actions/checkout`,
+      ).toBeGreaterThan(0)
+      for (const [, i] of checkouts) {
+        const next = (steps[i + 1] ?? []).join('\n')
+        expect(
+          next,
+          `${file}: the step after the checkout is not the bootstrap`,
+        ).toMatch(/^\s+run: \.harness\/bootstrap\.sh$/m)
+        expect(next, `${file}: the bootstrap may not fail quietly`).not.toMatch(
+          /continue-on-error|\|\| true/,
+        )
+      }
+    },
+  )
 
   // The other direction, which the comparison above does not make: a workflow
   // under .github/workflows/ with no template is a piece of the chain no repo
@@ -1176,7 +1248,7 @@ describe('the gates are wired and the judge is told to leave them alone', () => 
 
   it('ci.yml runs prose.sh on the range in the conventions steps', () => {
     expect(read('github/ci.yml')).toMatch(
-      /- run: scripts\/prose\.sh "origin\/\$BASE_REF"/,
+      /- run: \.harness\/bin\/prose\.sh "origin\/\$BASE_REF"/,
     )
   })
 
@@ -1192,7 +1264,7 @@ describe('the gates are wired and the judge is told to leave them alone', () => 
     expect(
       yml,
       `${file}: the conventions steps do not lint the title of the PR`,
-    ).toMatch(/scripts\/commitlint\.sh --subject "\$PR_TITLE \(#\$PR\)"/)
+    ).toMatch(/\.harness\/bin\/commitlint\.sh --subject "\$PR_TITLE \(#\$PR\)"/)
     expect(yml, `${file}: the job has no PR_TITLE in its env`).toMatch(
       /PR_TITLE: \$\{\{ github\.event\.pull_request\.title \}\}/,
     )
@@ -1226,7 +1298,7 @@ describe('the gates are wired and the judge is told to leave them alone', () => 
 
   it('pre-commit runs prose.sh on the staged lines', () => {
     expect(read('githooks/pre-commit')).toMatch(
-      /^scripts\/prose\.sh --staged$/m,
+      /^\.harness\/bin\/prose\.sh --staged$/m,
     )
   })
 
@@ -1246,7 +1318,9 @@ describe('the gates are wired and the judge is told to leave them alone', () => 
   })
 
   it('close.yml hands the comments to review-log.sh', () => {
-    expect(read('github/close.yml')).toMatch(/scripts\/review-log\.sh "\$PR"/)
+    expect(read('github/close.yml')).toMatch(
+      /\.harness\/bin\/review-log\.sh "\$PR"/,
+    )
   })
 })
 
@@ -1266,14 +1340,14 @@ describe('skills/judge/SKILL.md posts only what check stored', () => {
     const calls = skill
       .replace(/\\\n\s*/g, ' ')
       .split('\n')
-      .filter((line) => /scripts\/policy\.sh\s+"\$\(/.test(line))
+      .filter((line) => /\.harness\/bin\/policy\.sh\s+"\$\(/.test(line))
     expect(
       calls.length,
       'the skill no longer shows the command that posts the verdict',
     ).toBeGreaterThan(0)
     for (const call of calls) {
       expect(call, 'policy.sh runs on a path nobody checked').toMatch(
-        /scripts\/judge\.sh have <role>.*&&\s+scripts\/policy\.sh/,
+        /\.harness\/bin\/judge\.sh have <role>.*&&\s+\.harness\/bin\/policy\.sh/,
       )
     }
   })
@@ -1399,7 +1473,7 @@ describe('every description keeps its command and the English triggers', () => {
   const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
   // The command at the start of a word and whole: `docs/specs/` is not the
-  // command of /spec, and `scripts/board.sh` is not the command of /board.
+  // command of /spec, and `.harness/bin/board.sh` is not the command of /board.
   const missing = (description: string, skill: string): string[] =>
     [`/${skill}`, ...(triggers[skill] ?? [])].filter((trigger) =>
       trigger.startsWith('/')
@@ -1791,14 +1865,14 @@ describe('.claude/settings.json is the template without the verdict hook', () =>
 
   it('the template still installs both hooks', () => {
     expect(commands(theirs)).toEqual([
-      '"$CLAUDE_PROJECT_DIR"/scripts/ensure-hooks.sh',
-      '"$CLAUDE_PROJECT_DIR"/scripts/ensure-verdict.sh',
+      '"$CLAUDE_PROJECT_DIR"/.harness/bin/ensure-hooks.sh',
+      '"$CLAUDE_PROJECT_DIR"/.harness/bin/ensure-verdict.sh',
     ])
   })
 
   it('this repo keeps ensure-hooks.sh and drops ensure-verdict.sh', () => {
     expect(commands(mine)).toEqual([
-      '"$CLAUDE_PROJECT_DIR"/scripts/ensure-hooks.sh',
+      '"$CLAUDE_PROJECT_DIR"/.harness/bin/ensure-hooks.sh',
     ])
   })
 
@@ -1818,7 +1892,7 @@ describe('.claude/settings.json is the template without the verdict hook', () =>
 
 // Decision 1 of ADR-0003. The skills that produce documents do not decide by
 // themselves how they travel: the `docs_mode` key of the policy block says
-// it, the same one the git hooks read through scripts/policy-lines.sh. A
+// it, the same one the git hooks read through .harness/bin/policy-lines.sh. A
 // skill that forgot a branch of the key would do it in silence, and the wrong
 // mode shows only when the hook refuses the commit or when, in a team, a spec
 // lands on main without anybody merging it. /board is the third since S23: a
@@ -1863,7 +1937,7 @@ describe('/spec, /slice and /board read docs_mode, and say both modes', () => {
 })
 
 // S23, from SPEC-board. The screen and the next action are computed by
-// scripts/board.sh, and /board is the wrapper that shows them and closes the
+// .harness/bin/board.sh, and /board is the wrapper that shows them and closes the
 // inbox. The rule of the next action sits in two places, the script that
 // applies it and the skill that says it as prose: if the names or the order
 // drift, the skill explains a rule the script does not apply, and two
@@ -1901,8 +1975,8 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
     const skill = squash(readFileSync(file, 'utf8'))
     expect(
       skill,
-      'the skill does not name scripts/board.sh: the screen is the script, not the skill',
-    ).toContain('scripts/board.sh')
+      'the skill does not name .harness/bin/board.sh: the screen is the script, not the skill',
+    ).toContain('.harness/bin/board.sh')
     let from = 0
     for (const rule of rules) {
       const at = skill.indexOf(rule, from)
@@ -1936,7 +2010,7 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
       'docs(backlog): s<NN> from the inbox',
       'docs(backlog): take ADR-<nnnn> out of blocked_by',
       'spec: inbox (<',
-      'scripts/intent.sh new <slug>',
+      '.harness/bin/intent.sh new <slug>',
       'intent.sh open',
     ]) {
       expect(skill, `the skill does not name ${name}`).toContain(name)
@@ -1951,7 +2025,7 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
 // runs the script instead of copying its regex, so a rule that changes in the
 // template changes here too.
 describe('the commit subjects the skills give as a model pass commitlint', () => {
-  const commitlint = join(root, 'scripts/commitlint.sh')
+  const commitlint = join(root, '.harness/bin/commitlint.sh')
   const types = 'feat|fix|chore|docs|style|refactor|test|perf|revert|build|ci'
   const model = new RegExp(`^(${types})\\([a-z0-9-]+\\): `)
 
@@ -2400,8 +2474,8 @@ describe('the slice branch of /next is born without an upstream', () => {
         ? ''
         : skill.slice(start, end).replace(/\s+/g, ' ')
     for (const command of [
-      'scripts/tier.sh origin/<default branch>',
-      'scripts/test-weakening.sh origin/<default branch>',
+      '.harness/bin/tier.sh origin/<default branch>',
+      '.harness/bin/test-weakening.sh origin/<default branch>',
     ]) {
       expect(
         block,
@@ -2473,8 +2547,8 @@ describe('/next builds a wave in parallel and lands its slices one at a time', (
       4,
       [
         'has not moved',
-        'scripts/tier.sh origin/<default branch>',
-        'scripts/test-weakening.sh origin/<default branch>',
+        '.harness/bin/tier.sh origin/<default branch>',
+        '.harness/bin/test-weakening.sh origin/<default branch>',
       ],
     ],
     [
@@ -3108,7 +3182,7 @@ describe('/spec and /slice refuse a parked document', () => {
     (skill) => {
       const refuse = section(skill, '## 2.', '## 3.')
       expect(refuse).toContain('docs/parked.md')
-      expect(refuse).toContain('scripts/park.sh resume')
+      expect(refuse).toContain('.harness/bin/park.sh resume')
     },
   )
 
@@ -3170,7 +3244,7 @@ describe('later/ is gone', () => {
 
   it('the board lists the three under Parked and picks none of them', () => {
     const board = JSON.parse(
-      execFileSync(join(root, 'scripts/board.sh'), ['--json'], {
+      execFileSync(join(root, '.harness/bin/board.sh'), ['--json'], {
         cwd: root,
         encoding: 'utf8',
       }),

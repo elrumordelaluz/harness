@@ -10,6 +10,7 @@ on:
     types: [labeled]
 
 permissions:
+  contents: read
   pull-requests: read
 
 jobs:
@@ -25,6 +26,14 @@ jobs:
       LABEL: ${{ github.event.label.name }}
       NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
     steps:
+      # Checked out for the bootstrap alone: every workflow gets the
+      # machinery the way a laptop does, and a bootstrap that fails is a red
+      # job. Hence `contents: read` above.
+      - uses: actions/checkout@v7
+
+      - name: harness bootstrap
+        run: .harness/bootstrap.sh
+
       - name: ntfy
         if: env.NTFY_TOPIC != ''
         run: |

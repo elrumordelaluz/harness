@@ -74,7 +74,7 @@
 # (`intent`, `spec`, `document` or `missing`), `status` (the status of a
 # spec, null otherwise), `date` and `why` whole, [] when nothing is parked.
 # The board does not check that a parked document is one that can be parked:
-# scripts/park.sh does, and here any line is shown with its kind.
+# .harness/bin/park.sh does, and here any line is shown with its kind.
 # `harness` is never null and says which of four states the stamp is in:
 # `stamped`, with the `origin` the stage copied from, the `pin` with its
 # `origin`, full `sha` and `date`, null when the stamp has none, and one entry

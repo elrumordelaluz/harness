@@ -1,4 +1,4 @@
-// Behaviour of scripts/tier.sh, the script the CI calls to decide how much
+// Behaviour of .harness/bin/tier.sh, the script the CI calls to decide how much
 // scrutiny a diff needs. Each case is a throwaway git repo with a base commit
 // and a work commit, so the test covers the shell on a real range, not a port
 // of its rules. The base commit carries the repo's own AGENTS.md: the policy
@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest'
 import { brokenPolicies, withPolicy } from './agents.js'
 
 const root = resolve(import.meta.dirname, '..')
-const script = join(root, 'scripts/tier.sh')
+const script = join(root, '.harness/bin/tier.sh')
 const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8')
 
 // null deletes the file: a case can move one out of its path.
@@ -315,12 +315,12 @@ describe('tier.sh, who may merge', () => {
     })
     const run = tier({
       'AGENTS.md': rewritten,
-      'scripts/foo.sh': body(1),
+      '.harness/bin/foo.sh': body(1),
       'docs/specs/SPEC-x.md': body(1),
     })
 
     expect(run.tier).toBe(2)
-    expect(run.why).toMatch(/sensitive path scripts\/foo\.sh/)
+    expect(run.why).toMatch(/sensitive path \.harness\/bin\/foo\.sh/)
     expect(run.why).toMatch(/^human-gate: docs\/specs\/SPEC-x\.md/m)
   })
 
@@ -341,7 +341,7 @@ describe('tier.sh, who may merge', () => {
     const base = {
       'AGENTS.md': agents.replace(/## Policy block[\s\S]*?(?=## Do not)/, ''),
     }
-    const run = tier({ 'scripts/foo.sh': body(5) }, {}, { base })
+    const run = tier({ '.harness/bin/foo.sh': body(5) }, {}, { base })
     expect(run.tier).toBe(3)
     expect(run.why).toMatch(/no policy block/)
   })
@@ -373,9 +373,9 @@ describe('tier.sh, who may merge', () => {
   // git quotes the paths with bytes beyond 0x80 while core.quotePath is on,
   // and a quoted name no longer looks like the pattern meant to catch it.
   it('reads a path with accents as the path it is', () => {
-    const run = tier({ 'scripts/città.sh': body(1) })
+    const run = tier({ '.harness/bin/città.sh': body(1) })
     expect(run.tier).toBe(2)
-    expect(run.why).toMatch(/sensitive path scripts\/città\.sh/)
+    expect(run.why).toMatch(/sensitive path \.harness\/bin\/città\.sh/)
 
     const slice = tier(
       {
@@ -398,12 +398,12 @@ describe('tier.sh, who may merge', () => {
   // lines.
   it('sees a file moved out of a sensitive path under its old name', () => {
     const script = tier(
-      { 'scripts/foo.sh': null, 'notes/foo.txt': body(5) },
+      { '.harness/bin/foo.sh': null, 'notes/foo.txt': body(5) },
       {},
-      { base: { 'scripts/foo.sh': body(5) } },
+      { base: { '.harness/bin/foo.sh': body(5) } },
     )
     expect(script.tier).toBe(2)
-    expect(script.why).toMatch(/sensitive path scripts\/foo\.sh/)
+    expect(script.why).toMatch(/sensitive path \.harness\/bin\/foo\.sh/)
 
     const workflow = tier(
       { '.github/workflows/x.yml': null, 'docs/x.yml': body(5) },
@@ -417,7 +417,7 @@ describe('tier.sh, who may merge', () => {
   // a double quote, a backslash or a control character, and a quoted name
   // looks like no pattern at all. It closes, it does not open.
   it('reads a name git prints quoted anyway as sensitive', () => {
-    for (const file of ['scripts/a"b.sh', 'src/a\\b.ts']) {
+    for (const file of ['.harness/bin/a"b.sh', 'src/a\\b.ts']) {
       const run = tier({ [file]: body(1) })
       expect(run.tier, file).toBe(2)
       expect(run.why, file).toMatch(/quoted/)
@@ -556,12 +556,12 @@ describe('tier.sh, who may merge', () => {
     expect(gate.why).toMatch(/human-gate: docs\/inbox\.md/)
 
     const sensitive = tier(
-      { 'src/foo.sh': null, 'scripts/foo.sh': body(5) },
+      { 'src/foo.sh': null, '.harness/bin/foo.sh': body(5) },
       {},
       { base: { 'src/foo.sh': body(5) } },
     )
     expect(sensitive.tier).toBe(2)
-    expect(sensitive.why).toMatch(/sensitive path scripts\/foo\.sh/)
+    expect(sensitive.why).toMatch(/sensitive path \.harness\/bin\/foo\.sh/)
   })
 
   it('still reads a slice that exists only on the branch', () => {
@@ -589,15 +589,15 @@ describe('tier.sh, who may merge', () => {
   it('names the stage to run when the reading of the policy block is missing', () => {
     const dir = mkdtempSync(join(tmpdir(), 'tier-alone-'))
     git(dir, 'init', '-b', 'main', '-q')
-    mkdirSync(join(dir, 'scripts'))
-    copyFileSync(script, join(dir, 'scripts/tier.sh'))
-    const run = spawnSync(join(dir, 'scripts/tier.sh'), ['main'], {
+    mkdirSync(join(dir, '.harness/bin'), { recursive: true })
+    copyFileSync(script, join(dir, '.harness/bin/tier.sh'))
+    const run = spawnSync(join(dir, '.harness/bin/tier.sh'), ['main'], {
       cwd: dir,
       encoding: 'utf8',
     })
     expect(run.status).not.toBe(0)
     expect(run.stdout).toBe('')
-    expect(run.stderr).toContain('scripts/policy-lines.sh')
+    expect(run.stderr).toContain('.harness/bin/policy-lines.sh')
     expect(run.stderr).toContain('/harness-init local')
   })
 })
@@ -612,7 +612,7 @@ describe('tier.sh, a policy block it cannot read', () => {
     '$name: gives 3 and names the fault',
     ({ agents: broken, fault }) => {
       const run = tier(
-        { 'scripts/foo.sh': body(5) },
+        { '.harness/bin/foo.sh': body(5) },
         {},
         { base: { 'AGENTS.md': broken } },
       )
@@ -652,7 +652,7 @@ describe('tier.sh, a policy block it cannot read', () => {
       'jq is still reachable, the case would prove nothing',
     ).not.toBe(0)
 
-    const run = tier({ 'scripts/foo.sh': body(5) }, { PATH: bin })
+    const run = tier({ '.harness/bin/foo.sh': body(5) }, { PATH: bin })
     expect(run.tier).toBe(2)
     expect(run.why).toMatch(/jq is not installed/)
   })

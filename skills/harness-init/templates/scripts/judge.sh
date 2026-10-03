@@ -181,8 +181,8 @@ answered_shas() {
 cmd_required() {
   [ $# -ge 1 ] || usage
   local tier
-  if ! tier="$(scripts/tier.sh "$1" 2>/dev/null)"; then
-    echo "judge: scripts/tier.sh failed against $1, the tier is unknown" >&2
+  if ! tier="$(.harness/bin/tier.sh "$1" 2>/dev/null)"; then
+    echo "judge: .harness/bin/tier.sh failed against $1, the tier is unknown" >&2
     return 2
   fi
   printf '%s\n' "$tier"
@@ -236,7 +236,7 @@ cmd_bundle() {
   checks="$(cat)"
   sha="$(git rev-parse HEAD)"
   branch="$(git rev-parse --abbrev-ref HEAD)"
-  tier="$(scripts/tier.sh "$base" 2>/dev/null || echo '?')"
+  tier="$(.harness/bin/tier.sh "$base" 2>/dev/null || echo '?')"
   # The slice is the one the branch took charge of: slice/S04-<slug> owns
   # docs/backlog/S04-*.md. Deterministic, so the judge never picks the wrong one.
   slice=""
@@ -286,16 +286,16 @@ cmd_bundle() {
     # one per line. Its stderr line, the one a clean run prints, stays out. A
     # non-zero exit is a FAIL for both, whatever was printed.
     open_section 'gates run here (never verify these again)'
-    printf -- '- scripts/tier.sh %s: %s\n' "$base" "$tier"
+    printf -- '- .harness/bin/tier.sh %s: %s\n' "$base" "$tier"
     for g in prose test-weakening; do
-      if [ -x "scripts/$g.sh" ]; then
+      if [ -x ".harness/bin/$g.sh" ]; then
         found="" failed=0
-        found="$("scripts/$g.sh" "$base" 2>/dev/null)" || failed=1
+        found="$(".harness/bin/$g.sh" "$base" 2>/dev/null)" || failed=1
         [ "$g" = test-weakening ] || found=""
         if [ "$failed" -eq 0 ] && [ -z "$found" ]; then
-          printf -- '- scripts/%s.sh: pass\n' "$g"
+          printf -- '- .harness/bin/%s.sh: pass\n' "$g"
         else
-          printf -- '- scripts/%s.sh: FAIL\n' "$g"
+          printf -- '- .harness/bin/%s.sh: FAIL\n' "$g"
           if [ -n "$found" ]; then printf '%s\n' "$found" | sed 's/^/    /'; fi
         fi
       fi

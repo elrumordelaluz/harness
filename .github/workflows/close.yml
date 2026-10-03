@@ -10,7 +10,7 @@
 # back: that keeps the review log working today without blocking on the App,
 # and it starts using the App the moment the secrets are set.
 #
-# The verdicts come out of the PR comments through scripts/review-log.sh,
+# The verdicts come out of the PR comments through .harness/bin/review-log.sh,
 # which keeps only the comments the chain wrote (the App, or github-actions
 # without it) or an owner or member of the repo wrote: the marker says where
 # the JSON is, not who produced it.
@@ -69,6 +69,9 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           token: ${{ steps.app.outputs.token || github.token }}
 
+      - name: harness bootstrap
+        run: .harness/bootstrap.sh
+
       - name: slice to done, verdicts to the log
         env:
           GH_TOKEN: ${{ steps.app.outputs.token || github.token }}
@@ -102,7 +105,7 @@ jobs:
               gh pr comment "$PR" --body "$missing" || true
             fi
           fi
-          scripts/review-log.sh "$PR" docs/review-log/verdicts.jsonl
+          .harness/bin/review-log.sh "$PR" docs/review-log/verdicts.jsonl
           git config user.name "harness[bot]"
           git config user.email "harness[bot]@users.noreply.github.com"
           git add -A docs

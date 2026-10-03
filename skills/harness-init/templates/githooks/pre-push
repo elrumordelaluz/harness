@@ -28,8 +28,8 @@ while read -r _local_ref local_sha remote_ref remote_sha; do
     echo "$refused And this push does not sit on top of $target as the remote has it." >&2
     exit 1
   fi
-  if [ ! -f scripts/policy-lines.sh ]; then echo "$refused" >&2; exit 1; fi
-  . scripts/policy-lines.sh
+  if [ ! -f .harness/bin/policy-lines.sh ]; then echo "$refused" >&2; exit 1; fi
+  . .harness/bin/policy-lines.sh
   agents="$(git show "$remote_sha:AGENTS.md" 2>/dev/null || true)"
   # The four faults pre-commit stops on, read at the same ref as the rules:
   # a block nobody can read keeps the branch closed and says which fault it is.

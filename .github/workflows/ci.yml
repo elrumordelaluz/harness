@@ -34,10 +34,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: harness bootstrap
+        run: .harness/bootstrap.sh
+
       - name: commit lint on the range
         id: commitlint
         continue-on-error: true
-        run: scripts/commitlint.sh --range "origin/$BASE_REF..HEAD"
+        run: .harness/bin/commitlint.sh --range "origin/$BASE_REF..HEAD"
       # Both merge paths squash, so the subject that lands on the default
       # branch is the title of the PR and never one of the commits linted
       # above, and with more than one commit GitHub builds that title from the
@@ -48,21 +51,21 @@ jobs:
         id: title
         continue-on-error: true
         run: |
-          scripts/commitlint.sh --subject "$PR_TITLE (#$PR)" || {
+          .harness/bin/commitlint.sh --subject "$PR_TITLE (#$PR)" || {
             echo "the title of the PR is the subject that lands: both merges squash" >&2
             echo "  title: $PR_TITLE" >&2
             echo "  the \" (#$PR)\" suffix of the squash is counted in the 72 characters" >&2
             exit 1
           }
       # Style is a gate, not a judgement: the judge never reads for it.
-      - run: scripts/prose.sh "origin/$BASE_REF"
+      - run: .harness/bin/prose.sh "origin/$BASE_REF"
         id: prose
         continue-on-error: true
       - name: test-weakening detector
         id: weakening
         continue-on-error: true
         run: |
-          scripts/test-weakening.sh "origin/$BASE_REF" | tee weakening.txt
+          .harness/bin/test-weakening.sh "origin/$BASE_REF" | tee weakening.txt
           if [ -s weakening.txt ]; then
             { echo "## tests weakened"; echo; sed 's/^/- /' weakening.txt; } >> "$GITHUB_STEP_SUMMARY"
             gh pr edit "$PR" --add-label tests-weakened
@@ -114,7 +117,7 @@ jobs:
         if: always()
         run: |
           labels="$(gh pr view "$PR" --json labels -q '.labels[].name' | tr '\n' ',')"
-          tier="$(PR_LABELS="$labels" scripts/tier.sh "origin/$BASE_REF" 2>why.txt)"
+          tier="$(PR_LABELS="$labels" .harness/bin/tier.sh "origin/$BASE_REF" 2>why.txt)"
           cat why.txt >&2
           echo "tier=$tier" >> "$GITHUB_STEP_SUMMARY"
           for t in 0 1 2 3; do gh pr edit "$PR" --remove-label "tier:$t" 2>/dev/null || true; done

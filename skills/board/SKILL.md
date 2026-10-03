@@ -1,7 +1,7 @@
 ---
 name: board
 description: >
-  Open a cold session from the board of the repo: run scripts/board.sh, show
+  Open a cold session from the board of the repo: run .harness/bin/board.sh, show
   its screen as it is, repeat the next action it chose, then close every open
   line of docs/inbox.md with one word, intent, slice or via, one question per
   message and one commit on main per answer.
@@ -14,7 +14,7 @@ description: >
 # Board
 
 The step a cold session starts from, instead of a grep. The screen is not
-this skill's: `scripts/board.sh` computes it, the slices still open, the
+this skill's: `.harness/bin/board.sh` computes it, the slices still open, the
 inbox, the open PRs, what waits for a human, the plan in force and the next
 action, because from a terminal a script costs no token, gives the same
 screen every time, and is the only place where the rules of the board can be
@@ -27,12 +27,12 @@ in decision 6 of ADR-0002, the documents on main in ADR-0003.
 
 - **The screen is the script's.** Its output is shown as it is: no summary,
   no reordering, no table of the skill's own, nothing recomputed. The next
-  action is the last line of `scripts/board.sh`, and the skill repeats it,
+  action is the last line of `.harness/bin/board.sh`, and the skill repeats it,
   never a different one, not even when the screen seems to call for another:
   two sessions, the same answer.
 - **Four places are written, and nothing else.** `docs/inbox.md`, to take a
   line out; `docs/backlog/S<NN>-<slug>.md`, the slice a line becomes;
-  `docs/intent/<slug>.md`, the skeleton `scripts/intent.sh new` writes; and
+  `docs/intent/<slug>.md`, the skeleton `.harness/bin/intent.sh new` writes; and
   the file of a slice already written, for its `blocked_by` field and its
   `## Blocked` section alone, where 6 takes an ADR out with the human's yes.
   Never code, never a spec, never `AGENTS.md`, never anything else of a slice
@@ -68,7 +68,7 @@ in decision 6 of ADR-0002, the documents on main in ADR-0003.
 
 ## 1. Refuse early
 
-Stop and say why when `docs/` or `scripts/board.sh` is missing: the repo has
+Stop and say why when `docs/` or `.harness/bin/board.sh` is missing: the repo has
 no harness, or one from before the board. Say `/harness-init local`, the
 stage that brings the script, and stop.
 
@@ -90,7 +90,7 @@ On the default branch, `git pull --ff-only` first. On another branch the
 screen is that branch's working tree: say so in one line above it.
 
 ```
-scripts/board.sh
+.harness/bin/board.sh
 ```
 
 Print the output whole, in a code block so the columns hold, with nothing
@@ -110,10 +110,10 @@ The `Parked` section, after "Waiting on a human", lists the lines of
 `docs/parked.md`: an intent or a spec written and set aside on purpose, with
 its kind, its slug, the date and the why, and `missing` for a line whose file
 is gone. It is data the skill shows and never asks about: a parked document is
-never the next action, and it comes back with `scripts/park.sh resume <path>`,
+never the next action, and it comes back with `.harness/bin/park.sh resume <path>`,
 by the human's hand, not by a question of this skill.
 
-The rule that chose it, in the order `scripts/board.sh` applies it, where the
+The rule that chose it, in the order `.harness/bin/board.sh` applies it, where the
 first that fires wins. It is written here so that the reason on the screen
 can be read, not so that the skill applies it:
 
@@ -137,7 +137,7 @@ can be read, not so that the skill applies it:
    every id the plan names; the action is `step <n> of ADR-<nnnn>`.
 6. `no other rule`: the action is to read the inbox.
 
-The same rule is the comment above the computation in `scripts/board.sh`,
+The same rule is the comment above the computation in `.harness/bin/board.sh`,
 and in the harness repo `tests/architecture.test.ts` holds the names and the
 order of the two equal. Where the screen and this list disagree, the screen
 is right and the list is a line for the inbox, held for the hand-back of 7.
@@ -146,7 +146,7 @@ is right and the list is a line for the inbox, held for the hand-back of 7.
 
 Whether the inbox closes from here is the repo's choice: the `docs_mode` key
 of the policy block in `AGENTS.md`, read once here. Anything but `main` reads
-as `pr`, the way `scripts/policy-lines.sh` reads it for the git hooks, and the
+as `pr`, the way `.harness/bin/policy-lines.sh` reads it for the git hooks, and the
 value is the one in the json fence of the block, not a sentence in the prose
 that explains it.
 
@@ -163,7 +163,7 @@ committed: the commit of an answer carries its line and nothing else. The
 check holds because the skill has written nothing there yet: its own lines
 wait for 6.
 
-The lines are the `inbox` key of `scripts/board.sh --json`, in its order,
+The lines are the `inbox` key of `.harness/bin/board.sh --json`, in its order,
 with `date` and `text` whole: the screen cuts a line at its column, and on a
 board that would pass forty lines it cuts the inbox in number too, down to
 its oldest lines and a row that says how many more there are. The questions
@@ -292,7 +292,7 @@ letters, digits and dashes with a letter first, the only form `intent.sh`
 accepts:
 
 ```
-scripts/intent.sh new <slug>
+.harness/bin/intent.sh new <slug>
 ```
 
 It checks that the slug is free on the default branch and writes
@@ -313,13 +313,13 @@ git push
 `<why>` here is `becomes the intent <slug>`. Then the run stops, the only
 answer that does not close on its own: the ten lines of an intent are written
 by a human and by no agent. Say, in two lines, that the human writes
-`docs/intent/<slug>.md`, and that `scripts/intent.sh open <slug>` checks it,
+`docs/intent/<slug>.md`, and that `.harness/bin/intent.sh open <slug>` checks it,
 commits it on the default branch and names `/spec` as the step after. The
 lines after this one wait for the next `/board`.
 
 ## 6. The ADRs that hold a slice still
 
-The `blocked` key of `scripts/board.sh --json`, in its order, after the last
+The `blocked` key of `.harness/bin/board.sh --json`, in its order, after the last
 line of the inbox has had its commit: one entry per ADR that an open slice
 names in `blocked_by`, with the ids of those slices and the title of the ADR.
 The screen printed them under "Waiting on a human" and the next action did

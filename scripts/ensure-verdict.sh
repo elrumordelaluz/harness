@@ -1,1 +1,0 @@
-../skills/harness-init/templates/scripts/ensure-verdict.sh

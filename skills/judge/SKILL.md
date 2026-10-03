@@ -3,7 +3,7 @@ name: judge
 description: >
   Judge the current branch at clean context before the PR is opened, with the
   repo's own judge prompt and verdict schema, and store the verdict for this
-  head so `gh pr create` goes through and `scripts/policy.sh` can post it. Use
+  head so `gh pr create` goes through and `.harness/bin/policy.sh` can post it. Use
   when the user runs /judge, says "judge this branch", "pre-flight before the
   PR", "run the judge locally", or when a PR is about to be opened in a
   repo that has the harness. The judge never edits files, never merges, never
@@ -41,15 +41,15 @@ sees to that, and a head judged here is never judged again by anyone.
 - The judge **runs once per PR**, one pass per role, after the code
   (ADR-0003). It does not modify anything. A `high` or `medium` finding that
   is right is fixed by this session in a commit, and the commit answers it:
-  `scripts/judge.sh answer <id> <sha> <role>`. A `low` is declared in the PR
+  `.harness/bin/judge.sh answer <id> <sha> <role>`. A `low` is declared in the PR
   body. Nobody judges again, not even the fixes alone: the verdict stays the
   judged commit's, the answers carry it to the commits that close its
   findings, and whether they really close them is the audit's to say.
 - **A human reading the open PR is part of this judgement, never a second
   one.** What they find goes into the verdict that covers the head, with
-  `scripts/judge.sh finding <severity> <file>[:<line>] <claim> [role]`, marked
+  `.harness/bin/judge.sh finding <severity> <file>[:<line>] <claim> [role]`, marked
   `by: human`, and from there it is a finding like the others: fixed in a
-  commit and answered with `scripts/judge.sh answer`. Until a `high` or
+  commit and answered with `.harness/bin/judge.sh answer`. Until a `high` or
   `medium` of theirs has its answer the policy sends the PR to a human,
   whatever the judge said, because the judge spoke before that finding
   existed. The verdict lives in `.git/harness/` of the clone where this ran,
@@ -70,7 +70,7 @@ sees to that, and a head judged here is never judged again by anyone.
 
 Stop and say why, without spawning anything, when:
 
-- `.github/judge/prompt.md` or `scripts/judge.sh` is missing: the repo has no
+- `.github/judge/prompt.md` or `.harness/bin/judge.sh` is missing: the repo has no
   judge stage. Say `/harness-init judge` and stop.
 - the branch is the base branch, or has no commits against it: nothing to judge.
 - the working tree has uncommitted changes: the verdict is stored against
@@ -87,9 +87,9 @@ Run the repo's four single-run commands and the three local gates:
 
 ```
 <pm> format:check && <pm> typecheck && <pm> test && <pm> build
-scripts/tier.sh <base>
-scripts/prose.sh <base>
-scripts/test-weakening.sh <base>
+.harness/bin/tier.sh <base>
+.harness/bin/prose.sh <base>
+.harness/bin/test-weakening.sh <base>
 ```
 
 A red gate ends the run: the judge never opens on a branch the deterministic
@@ -100,13 +100,13 @@ scripts `judge.sh bundle` runs itself, and their result goes in a section this
 session cannot write, because an order not to re-verify a gate cannot rest on
 a line written by the branch under review.
 
-`scripts/judge.sh required <base>` answers three things, and they are not two:
+`.harness/bin/judge.sh required <base>` answers three things, and they are not two:
 exit 0 with the tier, judge it; exit 1, this tier never judges, so say so and
 stop, the PR opens without a verdict; exit 2, the tier could not be computed at
-all, which is not a green light. Stop on it, say what `scripts/tier.sh` said,
+all, which is not a green light. Stop on it, say what `.harness/bin/tier.sh` said,
 and fix that first: the hook denies the PR for the same reason.
 
-`scripts/judge.sh roles <tier>` says which roles the tier asks for, and it is
+`.harness/bin/judge.sh roles <tier>` says which roles the tier asks for, and it is
 the same answer the hook checks before letting the PR open. Do not shorten the
 list: at tier 2 a correctness verdict alone opens nothing, and nobody else
 will supply the security one.
@@ -114,7 +114,7 @@ will supply the security one.
 ## 3. The bundle
 
 ```
-printf '%s\n' "$checks" | scripts/judge.sh bundle <base> <role>
+printf '%s\n' "$checks" | .harness/bin/judge.sh bundle <base> <role>
 ```
 
 It prints the path of one file holding the protocol, the tier, the role, the
@@ -153,7 +153,7 @@ reply with one line: the verdict word and the number of findings. Nothing
 else.
 ```
 
-`<verdict path>` is a scratch file, not the store: `scripts/judge.sh check`
+`<verdict path>` is a scratch file, not the store: `.harness/bin/judge.sh check`
 decides what gets stored. One per role, and never the same file for both: two
 subagents writing at once would leave one verdict on top of the other, and
 `check` would either store the survivor under both roles or refuse it on the
@@ -162,7 +162,7 @@ role it does not match.
 ## 5. Check and store
 
 ```
-scripts/judge.sh check <verdict path> <role> <base>
+.harness/bin/judge.sh check <verdict path> <role> <base>
 ```
 
 It validates against `.github/judge/verdict.schema.json` (required fields,
@@ -186,13 +186,13 @@ One screen for the human:
 - the verdict line per role: role, verdict, confidence, one sentence of
   `reason`, and `human_reason` first when the judge asked for a decision;
 - every finding with its id, file, line and claim, `high` first, as
-  `scripts/judge.sh findings <role>` prints them: `F1` is the first finding
+  `.harness/bin/judge.sh findings <role>` prints them: `F1` is the first finding
   of the verdict, and it is the id the answer takes. No pass in prose: a
   criterion that holds is a row in the table, not a paragraph;
 - what it cost: nothing in dollars, this ran on the subscription, so say the
   number of roles and leave it there;
 - then one of two lines. With `high` or `medium` findings: what to change,
-  that each fix is a commit answered with `scripts/judge.sh answer <id> <sha>
+  that each fix is a commit answered with `.harness/bin/judge.sh answer <id> <sha>
 <role>`, that the `low` ones go in the PR body, and that the PR opens once
   every `high` and `medium` has its answer, with no second judgement. Clean:
   the command to open the PR, and the one that posts the verdict on it.
@@ -204,8 +204,8 @@ The verdict belongs on the PR, with the same marker the CI uses, so
 for ci on the PR head, `gh pr checks <pr> --watch`, then once per role:
 
 ```
-scripts/judge.sh have <role> <base> && \
-  scripts/policy.sh "$(scripts/judge.sh path <role>)" <pr> <tier> <role>
+.harness/bin/judge.sh have <role> <base> && \
+  .harness/bin/policy.sh "$(.harness/bin/judge.sh path <role>)" <pr> <tier> <role>
 ```
 
 `have` and not `path` alone: `path` prints where the verdict that covers this

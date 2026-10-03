@@ -1,4 +1,4 @@
-// Behaviour of scripts/board.sh, the screen someone reads when they open a
+// Behaviour of .harness/bin/board.sh, the screen someone reads when they open a
 // cold session: the slices of docs/backlog/ that are still open, the lines of
 // docs/inbox.md and the open PRs, and the same data as one object under
 // --json. Each case is a throwaway git repo whose docs/ the test writes, so
@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
-const script = join(root, 'scripts/board.sh')
+const script = join(root, '.harness/bin/board.sh')
 const bin = join(root, 'tests/fixtures/bin')
 
 // A PATH with everything the script needs and no `gh` at all, whatever the
