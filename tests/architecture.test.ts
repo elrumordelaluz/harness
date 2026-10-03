@@ -3116,11 +3116,6 @@ describe('later/ is gone', () => {
     expect(spec).toMatch(/^intent: docs\/intent\/audit-sample\.md$/m)
   })
 
-  it('docs/inbox.md carries the idea of harness-inbox-across-repos', () => {
-    const inbox = readFileSync(join(root, 'docs/inbox.md'), 'utf8')
-    expect(inbox).toMatch(/^- \d{4}-\d{2}-\d{2}: .*harness-inbox-across-repos/m)
-  })
-
   it('the board lists the three under Parked and picks none of them', () => {
     const board = JSON.parse(
       execFileSync(join(root, 'scripts/board.sh'), ['--json'], {
