@@ -1,7 +1,7 @@
 ---
 id: S84
 title: A clone with a pin fills `.harness/bin/` with one command
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false

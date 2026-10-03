@@ -212,9 +212,16 @@ describe('template scripts and hooks run on bash 3.2', () => {
     [/\[\[\s+-v\s/, '[[ -v'],
     [/;;&|;&\s*$/m, 'case fallthrough ;& ;;&'],
   ]
-  const files = ['githooks', 'scripts'].flatMap((dir) =>
-    walk(join(templates, dir)).map((file) => join(dir, file)),
-  )
+  const files = [
+    ...['githooks', 'scripts'].flatMap((dir) =>
+      walk(join(templates, dir)).map((file) => join(dir, file)),
+    ),
+    ...readdirSync(templates).filter((file) => file.endsWith('.sh')),
+  ]
+
+  it('reaches the scripts at the top of the templates', () => {
+    expect(files).toContain('bootstrap.sh')
+  })
 
   it.each(files)('%s', (file) => {
     const source = readFileSync(join(templates, file), 'utf8')

@@ -10,6 +10,7 @@
 | `scripts/intent.sh`                                                                                 | `scripts/`                                   | local            |
 | `scripts/board.sh`                                                                                  | `scripts/`                                   | local            |
 | `scripts/park.sh`                                                                                   | `scripts/`                                   | local            |
+| `bootstrap.sh`                                                                                      | `.harness/bootstrap.sh`                      | local            |
 | `scripts/policy-lines.sh`                                                                           | `scripts/`, sourced by the hooks and tier.sh | local            |
 | `docs/codebase-map.md`, `docs/*/README.md`                                                          | `docs/`                                      | local            |
 | `docs/inbox.md`                                                                                     | `docs/inbox.md`, created if missing          | local            |

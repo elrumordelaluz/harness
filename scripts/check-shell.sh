@@ -10,7 +10,7 @@ while IFS= read -r f; do
   [ -L "$f" ] && continue
   if ! bash -n "$f"; then echo "check-shell: $f does not parse" >&2; fail=1; fi
 done <<EOT
-$(find skills/*/templates/githooks skills/*/templates/scripts scripts .githooks -type f 2>/dev/null | sort)
+$(find skills/*/templates/githooks skills/*/templates/scripts skills/*/templates/bootstrap.sh scripts .githooks -type f 2>/dev/null | sort)
 EOT
 while IFS= read -r f; do
   if ! jq -e . "$f" >/dev/null 2>&1; then echo "check-shell: $f is not valid JSON" >&2; fail=1; fi
