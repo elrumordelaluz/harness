@@ -5,14 +5,22 @@
 # forty lines and without a grep. The screen is computed here and not by the
 # skill, because from a terminal it costs no tokens and a rule is only
 # testable when a program applies it.
-#   Harness    which commit of the harness each stage of /harness-init
-#              installed here, from .harness/stamp.json: the stage, the short
-#              sha and the date of that commit, and `-` for a stage never
-#              installed. A sha that is not to be trusted carries its mark
-#              here and not only in the file: `8f21c4d+` for a stage
-#              installed from a harness checkout with uncommitted changes,
-#              `?` in place of the sha of one installed where there was no
-#              git repo under the skill to read it from.
+#   Harness    which commit of the harness this repo runs on, from
+#              .harness/stamp.json. First the pin, `pin` and the short sha
+#              and the date of the one commit the machinery of .harness/bin/
+#              is fetched at, `pin -` for a stamp with none; then each stage
+#              of /harness-init, the short sha and the date of the commit
+#              that last wrote its tracked files, and `-` for a stage never
+#              installed. The line keeps to its hundred columns: when the pin
+#              and three dated stages pass them, the dates of the stages give
+#              way and the pin keeps its own, `Harness  pin b7c8d9e
+#              2026-09-25  local 8f21c4d  ci 3a2b1c0  judge 9d4e5f6` on one
+#              line. A sha that is not to be trusted carries its mark here
+#              and not only in the file: `8f21c4d+` for a stage installed
+#              from a harness checkout with uncommitted changes, `?` in place
+#              of the sha of one installed where there was no git repo under
+#              the skill to read it from. The pin carries no mark: a stage
+#              run from a dirty checkout leaves it as it was.
 #   Slices     the count of the done ones in the head, then one row per slice
 #              that is not done: id, status, blocked_by, tier, human, title.
 #              The done are not listed: they would eat the screen.
@@ -68,11 +76,12 @@
 # The board does not check that a parked document is one that can be parked:
 # scripts/park.sh does, and here any line is shown with its kind.
 # `harness` is never null and says which of four states the stamp is in:
-# `stamped`, with the `origin` the stage copied from and one entry of `stages`
-# per stage, null for a stage never installed; `self`, with the sha and the
+# `stamped`, with the `origin` the stage copied from, the `pin` with its
+# `origin`, full `sha` and `date`, null when the stamp has none, and one entry
+# of `stages` per stage, null for a stage never installed; `self`, with the sha and the
 # date of HEAD, in the harness repo, which never installs into itself; `none`
-# when there is no file; `unreadable` when jq refuses the file or an entry is
-# not a sha and a date. The screen says the four in as many lines, and `-` for
+# when there is no file; `unreadable` when jq refuses the file or an entry or
+# the pin is not a sha and a date. The screen says the four in as many lines, and `-` for
 # the stage that is null.
 # `prs` is null when `gh` could not answer and [] when there are none,
 # which are two different facts. `slices` keeps the done ones, which only the
@@ -115,7 +124,10 @@ cd "$(git rev-parse --show-toplevel)"
 # stage writes only when it is true and nothing else is read in its place, and
 # `sha` and `date` both null, which is no git repo under the skill at all. One
 # of the two null and the other not comes from nowhere the stage writes, and
-# is refused with the rest. In the harness repo itself, recognised by
+# is refused with the rest. The pin has one shape and no marks: an object
+# with the full sha and the date and nothing else beside its origin, or no
+# key at all, because a stage writes it whole or leaves it as it was. In the
+# harness repo itself, recognised by
 # its templates on disk, there is no stamp and there never will be, and the
 # line is its own HEAD,
 # read the way the stage reads the commit it stamps, the full sha and the
@@ -137,6 +149,18 @@ elif ! harness="$(jq '
   | { state: "stamped",
       origin: (if ($stamp.harness | type) == "string" then $stamp.harness
                else null end),
+      pin: ($stamp.pin
+        | if . == null then null
+          elif type == "object"
+            and (keys - ["date", "origin", "sha"]) == []
+            and (.sha | type) == "string"
+            and (.sha | test("\\A[0-9a-f]{40}\\z"))
+            and (.date | type) == "string"
+            and (.date | test("\\A[0-9]{4}-[0-9]{2}-[0-9]{2}\\z"))
+            then { origin: (if (.origin | type) == "string" then .origin
+                            else null end),
+                   sha: .sha, date: .date }
+          else error("pin") end),
       stages: (["local", "ci", "judge"] | map({ key: ., value: (
           $stamp.stages[.]
           | if . == null then null
@@ -636,8 +660,14 @@ printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels$eligible_de
            else ", " + $h.sha[0:7]
              + (if $h.date == null then "" else " " + $h.date end) end)
       elif $h.state == "stamped" then
-        (["local", "ci", "judge"] | map(. + " " + ($h.stages[.] | entry))
-          | join("  "))
+        ("pin " + ($h.pin | entry)) as $pin
+        | ([$pin] + (["local", "ci", "judge"] | map(. + " " + ($h.stages[.] | entry)))
+          | join("  ")) as $line
+        | if ("Harness  " + $line | length) <= 100 then $line
+          else [$pin] + (["local", "ci", "judge"]
+              | map(. + " " + ($h.stages[.] | if . == null then null
+                                              else del(.date) end | entry)))
+            | join("  ") end
       elif $h.state == "unreadable" then "stamp unreadable, run /harness-init"
       else "no stamp, run /harness-init" end;
   def blocked:

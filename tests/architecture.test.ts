@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process'
 import {
   existsSync,
   lstatSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -2143,6 +2144,50 @@ describe('the skills and the spec quote the board as it prints today', () => {
     const spec = body('docs/spec.md')
     for (const quote of ['`in progress`', '`gh not available`', '`beyond`']) {
       expect(spec, `docs/spec.md does not quote ${quote}`).toContain(quote)
+    }
+  })
+
+  // S91: the Harness line, with the pin before the stages, as board.sh prints
+  // it for a stamp with a pin and three stages. The line is run and not
+  // copied, so a change of its wording turns this red until the quotes follow.
+  it('skills/board/SKILL.md and docs/spec.md quote the Harness line as it prints', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'board-pin-'))
+    execFileSync('git', ['init', '-q'], { cwd: dir })
+    const stage = (sha: string, date: string) => ({
+      sha: sha.repeat(40 / sha.length),
+      date,
+    })
+    mkdirSync(join(dir, '.harness'))
+    writeFileSync(
+      join(dir, '.harness/stamp.json'),
+      JSON.stringify({
+        harness: 'https://github.com/lio/harness.git',
+        pin: {
+          origin: 'https://github.com/lio/harness.git',
+          sha: 'b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80',
+          date: '2026-09-25',
+        },
+        stages: {
+          local: stage('8f21c4d0', '2026-09-20'),
+          ci: stage('3a2b1c00', '2026-09-21'),
+          judge: stage('9d4e5f60', '2026-09-22'),
+        },
+      }),
+    )
+    const line = execFileSync(join(templates, 'scripts/board.sh'), [], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        PATH: `${join(root, 'tests/fixtures/bin')}:${process.env.PATH}`,
+        HOME: process.env.HOME ?? dir,
+        STUB_PRS: '[]',
+      },
+    }).split('\n')[0]!
+    expect(line).toMatch(/^Harness {2}pin b7c8d9e /)
+    for (const path of ['skills/board/SKILL.md', 'docs/spec.md']) {
+      expect(body(path), `${path} does not quote ${line}`).toContain(
+        `\`${line}\``,
+      )
     }
   })
 
