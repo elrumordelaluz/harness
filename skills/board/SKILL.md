@@ -97,6 +97,15 @@ Print the output whole, in a code block so the columns hold, with nothing
 before it. Under the block, one line that repeats the last one of the
 screen, the next action and its reason as the script wrote them.
 
+The first line says which commit of the harness the repo runs on, from
+`.harness/stamp.json`: the pin, the one commit the machinery of
+`.harness/bin/` is fetched at, then the commit that last wrote the tracked
+files of each stage, which can lag the pin. With a pin and three stages it
+prints `Harness  pin b7c8d9e 2026-09-25  local 8f21c4d  ci 3a2b1c0  judge 9d4e5f6`,
+the dates of the stages given up so the line fits its column; `pin -` is a
+stamp from before the pin, and a stage never installed is `-` too. The skill
+shows the line and never compares the pin with `.harness/bin/`: the hooks do.
+
 The `Parked` section, after "Waiting on a human", lists the lines of
 `docs/parked.md`: an intent or a spec written and set aside on purpose, with
 its kind, its slug, the date and the why, and `missing` for a line whose file

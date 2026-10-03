@@ -46,9 +46,11 @@ type Spec = { slug: string; status: string; intent: string }
 // written to the file as it is, for the case of a stamp jq refuses. S57: an
 // entry marks a sha that is not to be trusted, `dirty` when the harness
 // checkout had uncommitted changes, `sha` and `date` null when there was no
-// git repo under the skill to read them from.
+// git repo under the skill to read them from. S91: `pin` is the one commit of
+// the harness the machinery of the repo is fetched at.
 type Stamp = {
   harness?: string
+  pin?: { origin: string; sha: string; date: string }
   stages?: Record<
     string,
     { sha: string | null; date: string | null; dirty?: boolean }
@@ -304,9 +306,70 @@ describe('the Harness line says where the repo took the harness from', () => {
     const { lines, status } = board({ stamp: stamped })
     expect(status).toBe(0)
     expect(lines[0]).toBe(
-      'Harness  local 8f21c4d 2026-09-20  ci 3a2b1c0 2026-09-21' +
+      'Harness  pin -  local 8f21c4d 2026-09-20  ci 3a2b1c0 2026-09-21' +
         '  judge 9d4e5f6 2026-09-22',
     )
+  })
+
+  // S91: the pin is the one commit the machinery of `.harness/bin/` is
+  // fetched at, and it comes before the stages, which say which commit last
+  // wrote the tracked files of each. Pin and stages together pass the hundred
+  // columns of the screen, and the dates of the stages give way, never the pin.
+  const pin = {
+    origin: 'https://github.com/lio/harness.git',
+    sha: 'b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80',
+    date: '2026-09-25',
+  }
+
+  it('prints the pin before the stages, which give up their dates', () => {
+    const { lines, status } = board({ stamp: { ...stamped, pin } })
+    expect(status).toBe(0)
+    expect(lines[0]).toBe(
+      'Harness  pin b7c8d9e 2026-09-25  local 8f21c4d  ci 3a2b1c0  judge 9d4e5f6',
+    )
+    expect(lines[0]!.length).toBeLessThanOrEqual(100)
+  })
+
+  it('keeps the dates of the stages when the line fits with them', () => {
+    const { lines, status } = board({
+      stamp: { ...stamped, pin, stages: { local: stamped.stages!.local! } },
+    })
+    expect(status).toBe(0)
+    expect(lines[0]).toBe(
+      'Harness  pin b7c8d9e 2026-09-25  local 8f21c4d 2026-09-20  ci -  judge -',
+    )
+  })
+
+  it('prints the pin and the stages when they are the same commit', () => {
+    const same = { sha: pin.sha, date: pin.date }
+    const { lines, status } = board({
+      stamp: {
+        harness: pin.origin,
+        pin,
+        stages: { local: same, ci: same, judge: same },
+      },
+    })
+    expect(status).toBe(0)
+    expect(lines[0]).toBe(
+      'Harness  pin b7c8d9e 2026-09-25  local b7c8d9e  ci b7c8d9e  judge b7c8d9e',
+    )
+  })
+
+  // A stage writes the pin whole or leaves it as it was (S92), so a pin that
+  // is not an origin, a full sha and a date is a file edited by hand, read
+  // the way a stage entry of the wrong shape is read.
+  it.each([
+    ['a pin that is not an object', 'b7c8d9e'],
+    ['a short sha', { ...pin, sha: 'b7c8d9e' }],
+    ['a null sha', { ...pin, sha: null }],
+    ['a date carrying a line of its own', { ...pin, date: `${pin.date}\nx` }],
+    ['a dirty pin', { ...pin, dirty: true }],
+  ])('refuses %s', (_what, bad) => {
+    const { lines, status } = board({
+      stamp: JSON.stringify({ ...stamped, pin: bad }),
+    })
+    expect(status).toBe(0)
+    expect(lines[0]).toBe('Harness  stamp unreadable, run /harness-init')
   })
 
   it('is the first section, with a blank line before the slices', () => {
@@ -323,7 +386,9 @@ describe('the Harness line says where the repo took the harness from', () => {
       },
     })
     expect(status).toBe(0)
-    expect(lines[0]).toBe('Harness  local 8f21c4d 2026-09-20  ci -  judge -')
+    expect(lines[0]).toBe(
+      'Harness  pin -  local 8f21c4d 2026-09-20  ci -  judge -',
+    )
   })
 
   it('says there is no stamp when the file is not there', () => {
@@ -442,7 +507,24 @@ describe('the Harness line marks a sha that is not to be trusted', () => {
     })
     expect(status).toBe(0)
     expect(lines[0]).toBe(
-      'Harness  local 8f21c4d+ 2026-09-20  ci 3a2b1c0 2026-09-21  judge -',
+      'Harness  pin -  local 8f21c4d+ 2026-09-20  ci 3a2b1c0 2026-09-21  judge -',
+    )
+  })
+
+  // S91: the mark is of a stage and never of the pin, which a stage run from
+  // a dirty checkout leaves as it was.
+  it('marks the dirty stage and not the pin next to it', () => {
+    const { lines, status } = board({
+      stamp: {
+        harness: 'git@github.com:lio/harness.git',
+        pin: { origin: 'git@github.com:lio/harness.git', ...local },
+        stages: { local: { ...local, dirty: true }, ci },
+      },
+    })
+    expect(status).toBe(0)
+    expect(lines[0]).toBe(
+      'Harness  pin 8f21c4d 2026-09-20  local 8f21c4d+ 2026-09-20' +
+        '  ci 3a2b1c0 2026-09-21  judge -',
     )
   })
 
@@ -454,7 +536,9 @@ describe('the Harness line marks a sha that is not to be trusted', () => {
       },
     })
     expect(status).toBe(0)
-    expect(lines[0]).toBe('Harness  local 8f21c4d 2026-09-20  ci -  judge ?')
+    expect(lines[0]).toBe(
+      'Harness  pin -  local 8f21c4d 2026-09-20  ci -  judge ?',
+    )
   })
 
   // The entry is written by a machine and the key only when it is true, so
@@ -2302,6 +2386,7 @@ describe('--json is the data model behind the screen', () => {
     expect(JSON.parse(stdout).harness).toEqual({
       state: 'stamped',
       origin: 'git@github.com:lio/harness.git',
+      pin: null,
       stages: {
         local: {
           sha: '8f21c4d9a2b3c4d5e6f708192a3b4c5d6e7f8091',
@@ -2335,6 +2420,7 @@ describe('--json is the data model behind the screen', () => {
     expect(JSON.parse(stdout).harness).toEqual({
       state: 'stamped',
       origin: 'git@github.com:lio/harness.git',
+      pin: null,
       stages: {
         local: {
           sha: '8f21c4d9a2b3c4d5e6f708192a3b4c5d6e7f8091',
@@ -2344,6 +2430,32 @@ describe('--json is the data model behind the screen', () => {
         ci: null,
         judge: { sha: null, date: null },
       },
+    })
+  })
+
+  // S91: the pin under the same key, its origin, the full sha and the date,
+  // null when the stamp has none.
+  it('carries the pin whole next to the stages', () => {
+    const pin = {
+      origin: 'https://github.com/lio/harness.git',
+      sha: 'b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80',
+      date: '2026-09-25',
+    }
+    const stage = { sha: pin.sha, date: pin.date }
+    const { stdout, status } = board({
+      json: true,
+      stamp: {
+        harness: pin.origin,
+        pin,
+        stages: { local: stage, ci: stage, judge: stage },
+      },
+    })
+    expect(status).toBe(0)
+    expect(JSON.parse(stdout).harness).toEqual({
+      state: 'stamped',
+      origin: pin.origin,
+      pin,
+      stages: { local: stage, ci: stage, judge: stage },
     })
   })
 
