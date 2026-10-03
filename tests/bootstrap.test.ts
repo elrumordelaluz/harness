@@ -102,12 +102,53 @@ function recorder(): { bin: string; log: string } {
   return { bin, log }
 }
 
-function bootstrap(dir: string, path = process.env.PATH ?? '') {
+// GITHUB_ACTIONS is dropped from the inherited env, so a case run by the
+// suite inside CI sees a local commit unless it asks for CI.
+function bootstrap(
+  dir: string,
+  path = process.env.PATH ?? '',
+  extra: Record<string, string> = {},
+) {
+  const { GITHUB_ACTIONS: _, ...env } = process.env
   return spawnSync('bash', ['.harness/bootstrap.sh'], {
     cwd: dir,
     encoding: 'utf8',
-    env: { ...process.env, PATH: path },
+    env: { ...env, PATH: path, ...extra },
   })
+}
+
+// The local value only, so a global core.hooksPath on the machine does not
+// count: null when the repo has none.
+function hooksPath(dir: string): string | null {
+  const run = spawnSync(
+    'git',
+    ['config', '--local', '--get', 'core.hooksPath'],
+    {
+      cwd: dir,
+      encoding: 'utf8',
+    },
+  )
+  return run.status === 0 ? run.stdout.trim() : null
+}
+
+// The harness repo itself, in miniature: the template tracked, the link to
+// it as .harness/bootstrap.sh, a tracked .harness/bin and no stamp.
+function trackedHarness(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'bootstrap-tracked-'))
+  git(dir, 'init', '-b', 'main', '-q')
+  mkdirSync(join(dir, templates), { recursive: true })
+  copyFileSync(script, join(dir, templates, 'bootstrap.sh'))
+  chmodSync(join(dir, templates, 'bootstrap.sh'), 0o755)
+  mkdirSync(join(dir, '.harness/bin/hooks'), { recursive: true })
+  symlinkSync(
+    `../${templates}/bootstrap.sh`,
+    join(dir, '.harness/bootstrap.sh'),
+  )
+  writeFileSync(join(dir, '.harness/bin/tier.sh'), '#!/usr/bin/env bash\n')
+  writeFileSync(join(dir, '.harness/bin/hooks/pre-commit'), '#!/bin/sh\n')
+  git(dir, 'add', '-A')
+  git(dir, 'commit', '-q', '-m', 'chore: the harness, tracked')
+  return dir
 }
 
 function snapshot(dir: string, base = dir): Record<string, string> {
@@ -151,6 +192,27 @@ describe('bootstrap.sh fills .harness/bin/ from the pin', () => {
     expect(existsSync(join(bin, 'AGENTS.md'))).toBe(false)
     expect(readFileSync(join(bin, '.sha'), 'utf8')).toBe(`${first}\n`)
     expect(git(dir, 'config', 'core.hooksPath')).toBe('.harness/bin/hooks')
+  })
+
+  // In a workflow the gates are the jobs: a hook that calls pnpm on a runner
+  // with no pnpm stops the commit of close.yml.
+  it('lays the templates out in CI and leaves the hooks alone', () => {
+    const { origin, first } = harness()
+    const dir = project(origin, first)
+
+    const run = bootstrap(dir, undefined, { GITHUB_ACTIONS: 'true' })
+
+    expect(run.stderr).toBe('')
+    expect(run.status).toBe(0)
+    const bin = join(dir, '.harness/bin')
+    expect(readFileSync(join(bin, 'tier.sh'), 'utf8')).toBe(
+      readFileSync(join(root, templates, 'scripts/tier.sh'), 'utf8'),
+    )
+    expect(readFileSync(join(bin, 'hooks/pre-commit'), 'utf8')).toBe(
+      readFileSync(join(root, templates, 'githooks/pre-commit'), 'utf8'),
+    )
+    expect(readFileSync(join(bin, '.sha'), 'utf8')).toBe(`${first}\n`)
+    expect(hooksPath(dir)).toBeNull()
   })
 
   it('fetches by sha with git fetch', () => {
@@ -225,20 +287,7 @@ describe('bootstrap.sh fills .harness/bin/ from the pin', () => {
   // own templates, .harness/bootstrap.sh is a link to the template, and there
   // is no stamp to read a pin from.
   it('fetches nothing in the harness repo, and sets the hooks', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-tracked-'))
-    git(dir, 'init', '-b', 'main', '-q')
-    mkdirSync(join(dir, templates), { recursive: true })
-    copyFileSync(script, join(dir, templates, 'bootstrap.sh'))
-    chmodSync(join(dir, templates, 'bootstrap.sh'), 0o755)
-    mkdirSync(join(dir, '.harness/bin/hooks'), { recursive: true })
-    symlinkSync(
-      `../${templates}/bootstrap.sh`,
-      join(dir, '.harness/bootstrap.sh'),
-    )
-    writeFileSync(join(dir, '.harness/bin/tier.sh'), '#!/usr/bin/env bash\n')
-    writeFileSync(join(dir, '.harness/bin/hooks/pre-commit'), '#!/bin/sh\n')
-    git(dir, 'add', '-A')
-    git(dir, 'commit', '-q', '-m', 'chore: the harness, tracked')
+    const dir = trackedHarness()
     const before = snapshot(join(dir, '.harness/bin'))
     const { bin, log } = recorder()
 
@@ -249,6 +298,18 @@ describe('bootstrap.sh fills .harness/bin/ from the pin', () => {
     expect(readFileSync(log, 'utf8')).not.toMatch(/(^| )fetch /m)
     expect(snapshot(join(dir, '.harness/bin'))).toEqual(before)
     expect(git(dir, 'config', 'core.hooksPath')).toBe('.harness/bin/hooks')
+  })
+
+  it('leaves the hooks alone in the harness repo in CI', () => {
+    const dir = trackedHarness()
+    const before = snapshot(join(dir, '.harness/bin'))
+
+    const run = bootstrap(dir, undefined, { GITHUB_ACTIONS: 'true' })
+
+    expect(run.stderr).toBe('')
+    expect(run.status).toBe(0)
+    expect(snapshot(join(dir, '.harness/bin'))).toEqual(before)
+    expect(hooksPath(dir)).toBeNull()
   })
 
   // A project whose branch commits .harness/bin, marker included: CI would

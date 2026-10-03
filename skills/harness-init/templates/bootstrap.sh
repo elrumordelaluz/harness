@@ -11,6 +11,9 @@
 # the templates tracked, and .harness/bootstrap.sh a tracked link to them.
 # Anywhere else a tracked .harness/bin counts for nothing: the pin is fetched
 # over it, marker or not, so a branch cannot hand CI its own gates.
+# Under GITHUB_ACTIONS core.hooksPath is left as it was: the hooks guard whoever
+# commits by hand, in a workflow the gates are the jobs, and a hook that calls
+# pnpm on a runner with no pnpm would stop the commit of close.yml.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -18,12 +21,16 @@ stamp=.harness/stamp.json
 bin=.harness/bin
 templates=skills/harness-init/templates
 
+hooks() {
+  if [ "${GITHUB_ACTIONS:-}" != true ]; then git config core.hooksPath "$bin/hooks"; fi
+}
+
 tracked="$(git ls-files -- "$bin")"
 if [ ! -f "$stamp" ] && [ -n "$tracked" ] &&
   [ -n "$(git ls-files -- "$templates/bootstrap.sh")" ] &&
   [ "$(git ls-files -s -- .harness/bootstrap.sh | cut -c1-6)" = 120000 ] &&
   [ "$(readlink .harness/bootstrap.sh)" = "../$templates/bootstrap.sh" ]; then
-  git config core.hooksPath "$bin/hooks"
+  hooks
   exit 0
 fi
 if [ ! -f "$stamp" ]; then
@@ -76,4 +83,4 @@ if [ -n "$tracked" ] || [ ! -f "$bin/.sha" ] || [ "$(cat "$bin/.sha")" != "$sha"
     exit 1
   fi
 fi
-git config core.hooksPath "$bin/hooks"
+hooks
