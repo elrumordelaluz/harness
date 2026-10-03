@@ -23,12 +23,28 @@ if [ -z "$origin" ] || [ -z "$sha" ]; then
   echo "bootstrap: $stamp has no pin.origin and pin.sha, rerun /harness-init local" >&2
   exit 1
 fi
+# The stamp is tracked, so whoever pushes it chooses what reaches the git of
+# every teammate: a full sha and an origin that git cannot read as an option.
+case "$sha" in
+  *[!0-9a-f]*) sha_ok=0 ;;
+  *) [ "${#sha}" -eq 40 ] && sha_ok=1 || sha_ok=0 ;;
+esac
+if [ "$sha_ok" -ne 1 ]; then
+  echo "bootstrap: pin.sha in $stamp is not a full sha of 40 hex characters" >&2
+  exit 1
+fi
+case "$origin" in
+  -*)
+    echo "bootstrap: pin.origin in $stamp starts with -, git would read it as an option" >&2
+    exit 1
+    ;;
+esac
 
 if [ ! -f "$bin/.sha" ] || [ "$(cat "$bin/.sha")" != "$sha" ]; then
   scratch="$(mktemp -d "$(git rev-parse --absolute-git-dir)/harness-bootstrap.XXXXXX")"
   trap 'rm -rf "$scratch"' EXIT
   git init -q "$scratch/repo"
-  if ! git -C "$scratch/repo" fetch -q --depth 1 "$origin" "$sha" 2>"$scratch/err"; then
+  if ! git -C "$scratch/repo" fetch -q --depth 1 -- "$origin" "$sha" 2>"$scratch/err"; then
     echo "bootstrap: cannot fetch $sha from $origin: $(tail -n 1 "$scratch/err")" >&2
     exit 1
   fi

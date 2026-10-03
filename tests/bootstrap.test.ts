@@ -219,4 +219,29 @@ describe('bootstrap.sh fills .harness/bin/ from the pin', () => {
     expect(run.stderr.trim().split('\n')).toHaveLength(1)
     expect(existsSync(join(dir, '.harness/bin'))).toBe(false)
   })
+
+  // The stamp is tracked: whoever can push it chooses what every teammate's
+  // git runs, so a pin that git would read as an option never reaches git.
+  it.each([
+    ['a sha that is an option', 'origin', '--upload-pack=touch $PWNED'],
+    ['a sha that is not 40 hex', 'origin', 'main'],
+    ['an origin that is an option', '--upload-pack=touch $PWNED', 'sha'],
+  ])('refuses %s', (_, origin, sha) => {
+    const { origin: real, first } = harness()
+    const dir = project(real, first)
+    pin(dir, origin === 'origin' ? real : origin, sha === 'sha' ? first : sha)
+
+    const pwned = join(mkdtempSync(join(tmpdir(), 'bootstrap-pwned-')), 'ran')
+
+    const run = spawnSync('bash', ['.harness/bootstrap.sh'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, PWNED: pwned },
+    })
+
+    expect(run.status).not.toBe(0)
+    expect(run.stderr).toMatch(/^bootstrap: [^\n]*pin[^\n]*\n$/)
+    expect(existsSync(join(dir, '.harness/bin'))).toBe(false)
+    expect(existsSync(pwned), 'the pin ran a command').toBe(false)
+  })
 })
