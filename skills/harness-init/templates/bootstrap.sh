@@ -6,7 +6,11 @@
 # swapped in only when complete: a failed run leaves the old .harness/bin/ as
 # it was. .harness/bin/.sha holds the sha it was filled from, and when it is
 # already the pin nothing is fetched. In the harness repo itself .harness/bin
-# is tracked, links into its own templates, and there is nothing to fetch.
+# is tracked, links into its own templates, and there is nothing to fetch:
+# that repo is told by what a project cannot be at the same time, no stamp,
+# the templates tracked, and .harness/bootstrap.sh a tracked link to them.
+# Anywhere else a tracked .harness/bin counts for nothing: the pin is fetched
+# over it, marker or not, so a branch cannot hand CI its own gates.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -14,7 +18,11 @@ stamp=.harness/stamp.json
 bin=.harness/bin
 templates=skills/harness-init/templates
 
-if [ -n "$(git ls-files -- "$bin")" ]; then
+tracked="$(git ls-files -- "$bin")"
+if [ ! -f "$stamp" ] && [ -n "$tracked" ] &&
+  [ -n "$(git ls-files -- "$templates/bootstrap.sh")" ] &&
+  [ "$(git ls-files -s -- .harness/bootstrap.sh | cut -c1-6)" = 120000 ] &&
+  [ "$(readlink .harness/bootstrap.sh)" = "../$templates/bootstrap.sh" ]; then
   git config core.hooksPath "$bin/hooks"
   exit 0
 fi
@@ -45,7 +53,7 @@ case "$origin" in
     ;;
 esac
 
-if [ ! -f "$bin/.sha" ] || [ "$(cat "$bin/.sha")" != "$sha" ]; then
+if [ -n "$tracked" ] || [ ! -f "$bin/.sha" ] || [ "$(cat "$bin/.sha")" != "$sha" ]; then
   scratch="$(mktemp -d "$(git rev-parse --absolute-git-dir)/harness-bootstrap.XXXXXX")"
   trap 'rm -rf "$scratch"' EXIT
   git init -q "$scratch/repo"
