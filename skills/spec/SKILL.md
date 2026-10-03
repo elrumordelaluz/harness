@@ -65,7 +65,8 @@ The argument is the path of an intent, `docs/intent/<slug>.md`. The spec of
 that intent is `docs/specs/SPEC-<slug>.md`.
 
 How it travels is the repo's choice and not this skill's: the `docs_mode`
-key of the policy block in `AGENTS.md`, read once here and nowhere else.
+key of the policy block in `.harness/AGENTS.md`, read once here and nowhere
+else.
 
 - `main`: the spec is written in the working tree of the default branch,
   fetched and pulled first, and lands there with a single commit when the
@@ -172,7 +173,7 @@ what to write, because then the thesis would be the agent's.
 
 Before the first question, and without reporting it:
 
-- `AGENTS.md` and `docs/codebase-map.md`;
+- `AGENTS.md`, `.harness/AGENTS.md` and `docs/codebase-map.md`;
 - the modules the idea touches, found from the map, with Grep and Glob, read
   with Read; `git log` and `git show` on them when the history explains why
   they are the way they are;

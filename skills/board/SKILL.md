@@ -145,7 +145,7 @@ is right and the list is a line for the inbox, held for the hand-back of 7.
 ## 3. The docs_mode key
 
 Whether the inbox closes from here is the repo's choice: the `docs_mode` key
-of the policy block in `AGENTS.md`, read once here. Anything but `main` reads
+of the policy block in `.harness/AGENTS.md`, read once here. Anything but `main` reads
 as `pr`, the way `.harness/bin/policy-lines.sh` reads it for the git hooks, and the
 value is the one in the json fence of the block, not a sentence in the prose
 that explains it.

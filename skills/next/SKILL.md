@@ -252,7 +252,7 @@ Nothing about how you reasoned, and no retelling of the code.
 ```
 
 The backlog is out of bounds for a slice branch, and that is the point.
-`docs/backlog/**` is in "Merge umano per path" of `AGENTS.md`, so `tier.sh`
+`docs/backlog/**` is in `human_gate_paths` of `.harness/AGENTS.md`, so `tier.sh`
 prints `human-gate` for any PR that touches it and the CI puts the label on:
 neither `automerge.yml` nor `policy.sh` merges a PR that carries it, not even
 at tier 1 with zero findings. The commit that used to mark the slice

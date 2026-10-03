@@ -87,7 +87,7 @@ ADR-0003 rereads it.
 The argument is the path of a spec, `docs/specs/SPEC-<slug>.md`.
 
 How the slices travel is the repo's choice and not this skill's: the
-`docs_mode` key of the policy block in `AGENTS.md`, read once here and
+`docs_mode` key of the policy block in `.harness/AGENTS.md`, read once here and
 nowhere else. Anything but `main` reads as `pr`, the way
 `.harness/bin/policy-lines.sh` reads it for the git hooks, and the value is the one
 in the json fence of the block, not a sentence in the prose that explains
@@ -225,7 +225,7 @@ Before cutting, and without reporting it:
 
 - the spec, whole, and the intent it names, for its "Out of scope" and its
   verifiable sentence;
-- `AGENTS.md`: the policy block the tier is read against, the conventions,
+- `.harness/AGENTS.md`: the policy block the tier is read against, the conventions,
   the "Do not" lines a slice must not break;
 - `docs/codebase-map.md`, and how the repo tests: the runner, where the tests
   live, an existing test next to each module the spec touches, so that the
@@ -278,7 +278,7 @@ For each slice:
 - **blocked_by**: `none`, or the ids, comma separated.
 - **human**: as in the ground rules.
 - **tier**: the tier to expect, read off the touchpoints against the policy
-  lines of `AGENTS.md`. 3 with `human: true`; 2 when a touchpoint is under
+  lines of `.harness/AGENTS.md`. 3 with `human: true`; 2 when a touchpoint is under
   `Sensitive paths`, or the slice adds a dependency, touches `.github/**`, a
   migration or a schema, or will change more lines or files than the Tier 1
   line allows; 1 otherwise, and 0 only for a slice of prose. The CI
