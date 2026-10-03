@@ -34,8 +34,8 @@ die() {
 
 # The mode is read the way the git hooks read it, from the file they share
 # with tier.sh.
-[ -f scripts/policy-lines.sh ] || die "no scripts/policy-lines.sh: run /harness-init local"
-. scripts/policy-lines.sh
+[ -f .harness/bin/policy-lines.sh ] || die "no .harness/bin/policy-lines.sh: run /harness-init local"
+. .harness/bin/policy-lines.sh
 
 # main or pr, from AGENTS.md as the default branch has it on the remote: the
 # rule the hooks will hold the push to, not a copy edited here. A block this
@@ -155,7 +155,7 @@ $dirty"
   if [ "$flow" = main ]; then
     on_default "$base"
     write_skeleton "$file" "on $base"
-    echo "intent: then scripts/intent.sh open $slug"
+    echo "intent: then .harness/bin/intent.sh open $slug"
     edit "$file"
     return 0
   fi
@@ -166,7 +166,7 @@ $dirty"
   fi
   git switch -q --no-track -c "intent/$slug" "origin/$base"
   write_skeleton "$file" "on intent/$slug"
-  echo "intent: then scripts/intent.sh open"
+  echo "intent: then .harness/bin/intent.sh open"
   edit "$file"
 }
 
@@ -222,9 +222,9 @@ open_main() {
   if [ -z "$slug" ]; then
     found="$(pending "$base")"
     case "$(printf '%s' "$found" | grep -c . || true)" in
-      0) die "no intent to open here: scripts/intent.sh new <slug> writes one" ;;
+      0) die "no intent to open here: .harness/bin/intent.sh new <slug> writes one" ;;
       1) slug="$(basename "$found" .md)" ;;
-      *) die "more than one intent is waiting, name the one to open with scripts/intent.sh open <slug>:
+      *) die "more than one intent is waiting, name the one to open with .harness/bin/intent.sh open <slug>:
 $found" ;;
     esac
   fi

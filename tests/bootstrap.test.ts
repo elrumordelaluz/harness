@@ -15,6 +15,7 @@ import {
   readdirSync,
   readFileSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -218,6 +219,80 @@ describe('bootstrap.sh fills .harness/bin/ from the pin', () => {
     expect(run.status).not.toBe(0)
     expect(run.stderr.trim().split('\n')).toHaveLength(1)
     expect(existsSync(join(dir, '.harness/bin'))).toBe(false)
+  })
+
+  // The harness repo itself: .harness/bin is tracked there, links into its
+  // own templates, .harness/bootstrap.sh is a link to the template, and there
+  // is no stamp to read a pin from.
+  it('fetches nothing in the harness repo, and sets the hooks', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-tracked-'))
+    git(dir, 'init', '-b', 'main', '-q')
+    mkdirSync(join(dir, templates), { recursive: true })
+    copyFileSync(script, join(dir, templates, 'bootstrap.sh'))
+    chmodSync(join(dir, templates, 'bootstrap.sh'), 0o755)
+    mkdirSync(join(dir, '.harness/bin/hooks'), { recursive: true })
+    symlinkSync(
+      `../${templates}/bootstrap.sh`,
+      join(dir, '.harness/bootstrap.sh'),
+    )
+    writeFileSync(join(dir, '.harness/bin/tier.sh'), '#!/usr/bin/env bash\n')
+    writeFileSync(join(dir, '.harness/bin/hooks/pre-commit'), '#!/bin/sh\n')
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-q', '-m', 'chore: the harness, tracked')
+    const before = snapshot(join(dir, '.harness/bin'))
+    const { bin, log } = recorder()
+
+    const run = bootstrap(dir, `${bin}:${process.env.PATH ?? ''}`)
+
+    expect(run.stderr).toBe('')
+    expect(run.status).toBe(0)
+    expect(readFileSync(log, 'utf8')).not.toMatch(/(^| )fetch /m)
+    expect(snapshot(join(dir, '.harness/bin'))).toEqual(before)
+    expect(git(dir, 'config', 'core.hooksPath')).toBe('.harness/bin/hooks')
+  })
+
+  // A project whose branch commits .harness/bin, marker included: CI would
+  // run the branch's own gates in place of the pinned ones. The pin wins,
+  // whatever is tracked.
+  it('fetches the pin in a project that tracks .harness/bin', () => {
+    const { origin, first } = harness()
+    const dir = project(origin, first)
+    mkdirSync(join(dir, '.harness/bin/hooks'), { recursive: true })
+    writeFileSync(
+      join(dir, '.harness/bin/tier.sh'),
+      '#!/usr/bin/env bash\necho 0\n',
+    )
+    writeFileSync(join(dir, '.harness/bin/.sha'), `${first}\n`)
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-q', '-m', 'chore: my own gates')
+    const { bin, log } = recorder()
+
+    const run = bootstrap(dir, `${bin}:${process.env.PATH ?? ''}`)
+
+    expect(run.status).toBe(0)
+    expect(readFileSync(log, 'utf8')).toMatch(
+      new RegExp(`(^| )fetch .*${first}$`, 'm'),
+    )
+    expect(readFileSync(join(dir, '.harness/bin/tier.sh'), 'utf8')).toBe(
+      readFileSync(join(root, templates, 'scripts/tier.sh'), 'utf8'),
+    )
+  })
+
+  // Tracked links and no stamp, but no templates beside them: not the
+  // harness repo, so no pin to trust and nothing to run.
+  it('refuses tracked .harness/bin with no stamp outside the harness repo', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-fake-'))
+    git(dir, 'init', '-b', 'main', '-q')
+    mkdirSync(join(dir, '.harness/bin/hooks'), { recursive: true })
+    copyFileSync(script, join(dir, '.harness/bootstrap.sh'))
+    writeFileSync(join(dir, '.harness/bin/tier.sh'), '#!/usr/bin/env bash\n')
+    git(dir, 'add', '-A')
+    git(dir, 'commit', '-q', '-m', 'chore: my own gates')
+
+    const run = bootstrap(dir)
+
+    expect(run.status).not.toBe(0)
+    expect(run.stderr).toMatch(/no \.harness\/stamp\.json/)
   })
 
   // The stamp is tracked: whoever can push it chooses what every teammate's

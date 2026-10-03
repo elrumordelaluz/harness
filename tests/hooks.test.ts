@@ -79,7 +79,7 @@ function repo(
   git(dir, 'config', 'user.name', 'hooks')
   write(dir, { 'AGENTS.md': text, ...base })
   for (const script of ['prose.sh', 'commitlint.sh', 'policy-lines.sh']) {
-    const path = join(dir, 'scripts', script)
+    const path = join(dir, '.harness/bin', script)
     mkdirSync(dirname(path), { recursive: true })
     copyFileSync(join(templates, 'scripts', script), path)
     chmodSync(path, 0o755)

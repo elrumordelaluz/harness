@@ -17,10 +17,10 @@
 # get around it can; a session that lost the thread cannot.
 #
 # It bites only where the judge stage is installed and only where the judge
-# would run anyway: no scripts/tier.sh or no .github/judge/ means the repo does
-# not have the chain yet, and tier 0 and tier 3 never judge, on the server or
-# here. A tier that cannot be computed is a deny, not a pass: a broken gate
-# that lets everything through is worse than one that says so.
+# would run anyway: no .harness/bin/tier.sh or no .github/judge/ means the
+# repo does not have the chain yet, and tier 0 and tier 3 never judge, on the
+# server or here. A tier that cannot be computed is a deny, not a pass: a
+# broken gate that lets everything through is worse than one that says so.
 set -euo pipefail
 input="$(cat)"
 # Without jq the command cannot be read out of the call, and denying every
@@ -77,8 +77,8 @@ deny() {
 
 root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "${CLAUDE_PROJECT_DIR:-.}")"
 cd "$root"
-[ -x scripts/tier.sh ] || exit 0
-[ -x scripts/judge.sh ] || exit 0
+[ -x .harness/bin/tier.sh ] || exit 0
+[ -x .harness/bin/judge.sh ] || exit 0
 [ -d .github/judge ] || exit 0
 
 # The head of the PR that is about to open: what --head or -H says, or HEAD.
@@ -149,12 +149,12 @@ fi
 # 1 this tier never judges, 2 the tier could not be computed. A gate that
 # cannot tell has to stop.
 set +e
-tier="$(scripts/judge.sh required "$base" 2>/dev/null)"
+tier="$(.harness/bin/judge.sh required "$base" 2>/dev/null)"
 asks=$?
 set -e
 if [ "$asks" -eq 1 ]; then exit 0; fi
 if [ "$asks" -ne 0 ]; then
-  deny "scripts/tier.sh failed against $base, so the harness cannot tell whether this PR needs a verdict. Run scripts/tier.sh $base and read the error."
+  deny ".harness/bin/tier.sh failed against $base, so the harness cannot tell whether this PR needs a verdict. Run .harness/bin/tier.sh $base and read the error."
 fi
 
 # Every role the tier asks for, not just the first: at tier 2 the chain judges
@@ -175,9 +175,9 @@ stale=""
 open=""
 past=""
 head="$(git rev-parse --short HEAD)"
-for role in $(scripts/judge.sh roles "$tier"); do
+for role in $(.harness/bin/judge.sh roles "$tier"); do
   set +e
-  said="$(scripts/judge.sh have "$role" "$base" 2>/dev/null)"
+  said="$(.harness/bin/judge.sh have "$role" "$base" 2>/dev/null)"
   answer=$?
   set -e
   case "$answer" in
@@ -197,7 +197,7 @@ for role in $(scripts/judge.sh roles "$tier"); do
 done
 [ -n "$missing$stale$open$past" ] || exit 0
 if [ -n "$open" ] && [ -z "$missing$stale$past" ]; then
-  deny "this PR is tier $tier and $open. Fix each of them in a commit and answer it with scripts/judge.sh answer <id> <sha> <role>: the judge runs once per PR, and the answer is what carries its verdict to the fix."
+  deny "this PR is tier $tier and $open. Fix each of them in a commit and answer it with .harness/bin/judge.sh answer <id> <sha> <role>: the judge runs once per PR, and the answer is what carries its verdict to the fix."
 fi
 what=""
 [ -z "$missing" ] || what="$head has no $missing verdict"
@@ -205,6 +205,6 @@ what=""
 [ -z "$open" ] || what="${what:+$what, and }$open"
 [ -z "$past" ] || what="${what:+$what, and }$past"
 if [ -z "$missing$stale" ]; then
-  deny "this PR is tier $tier and $what. Answer the finding each commit closes with scripts/judge.sh answer <id> <sha> <role>; a commit that closes none is work nobody judged, and it wants /judge --base $base on its own."
+  deny "this PR is tier $tier and $what. Answer the finding each commit closes with .harness/bin/judge.sh answer <id> <sha> <role>; a commit that closes none is work nobody judged, and it wants /judge --base $base on its own."
 fi
-deny "this PR is tier $tier and $what. Run /judge --base $base first: it judges this branch at clean context and stores one verdict per role the tier asks for, then this command goes through and scripts/policy.sh posts them on the PR."
+deny "this PR is tier $tier and $what. Run /judge --base $base first: it judges this branch at clean context and stores one verdict per role the tier asks for, then this command goes through and .harness/bin/policy.sh posts them on the PR."

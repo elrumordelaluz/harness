@@ -13,9 +13,9 @@ fi
 case "$cmd" in
   *"git commit"*)
     root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "${CLAUDE_PROJECT_DIR:-.}")"
-    if [ -d "$root/.githooks" ] && [ "$(git -C "$root" config core.hooksPath || true)" != ".githooks" ]; then
-      git -C "$root" config core.hooksPath .githooks
-      echo "harness: git hooks installed (core.hooksPath=.githooks)" >&2
+    if [ -d "$root/.harness/bin/hooks" ] && [ "$(git -C "$root" config core.hooksPath || true)" != ".harness/bin/hooks" ]; then
+      git -C "$root" config core.hooksPath .harness/bin/hooks
+      echo "harness: git hooks installed (core.hooksPath=.harness/bin/hooks)" >&2
     fi
     ;;
 esac

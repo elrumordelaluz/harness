@@ -16,8 +16,8 @@ if [ "${HARNESS_ALLOW_MAIN:-}" != 1 ] && { [ "$branch" = main ] || [ "$branch" =
   # commit could rewrite AGENTS.md, and then the rules it is held to would be
   # its own. A commit that touches AGENTS.md is not a document anyway, so the
   # copy at HEAD is the one that counts.
-  if [ ! -f scripts/policy-lines.sh ]; then echo "$refused" >&2; exit 1; fi
-  . scripts/policy-lines.sh
+  if [ ! -f .harness/bin/policy-lines.sh ]; then echo "$refused" >&2; exit 1; fi
+  . .harness/bin/policy-lines.sh
   agents="$(git show HEAD:AGENTS.md 2>/dev/null || true)"
   # No fence, a fence jq refuses, a key missing, a version this harness has
   # never read: four faults, and main stays closed on all four instead of
@@ -41,5 +41,5 @@ fi
 staged="$(git diff --cached --name-only --diff-filter=ACMR | while IFS= read -r f; do [ -L "$f" ] || printf '%s\n' "$f"; done)"
 [ -z "$staged" ] && exit 0
 printf '%s\n' "$staged" | tr '\n' '\0' | xargs -0 pnpm exec prettier --check --ignore-unknown
-scripts/prose.sh --staged
+.harness/bin/prose.sh --staged
 pnpm typecheck

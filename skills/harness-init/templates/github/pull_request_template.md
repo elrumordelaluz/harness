@@ -17,4 +17,4 @@
 
 ## Declared findings
 
-<!-- the `low` ones of the judgement, one per line: id, file, the sentence of the finding. "None" when there are none. The `high` and the `medium` do not belong here: they are fixed before the PR and each one is answered with the sha of the commit that closes it, `scripts/judge.sh answer`. The judge runs once per PR -->
+<!-- the `low` ones of the judgement, one per line: id, file, the sentence of the finding. "None" when there are none. The `high` and the `medium` do not belong here: they are fixed before the PR and each one is answered with the sha of the commit that closes it, `.harness/bin/judge.sh answer`. The judge runs once per PR -->

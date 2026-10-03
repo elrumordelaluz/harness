@@ -1,4 +1,4 @@
-// Behaviour of scripts/commitlint.sh, the commit-msg hook of every repo that
+// Behaviour of .harness/bin/commitlint.sh, the commit-msg hook of every repo that
 // runs the harness. The script is run as a process on a message file, the way
 // git runs it, so the test covers the shell, not a port of its regex.
 import { execFileSync } from 'node:child_process'
@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const script = resolve(import.meta.dirname, '../scripts/commitlint.sh')
+const script = resolve(import.meta.dirname, '../.harness/bin/commitlint.sh')
 
 function lint(message: string): { ok: boolean; stderr: string } {
   const file = join(

@@ -1,4 +1,4 @@
-// Behaviour of scripts/intent.sh, the typing around an intent that nobody but
+// Behaviour of .harness/bin/intent.sh, the typing around an intent that nobody but
 // the human writes: `new` cuts intent/<slug> from the default branch and
 // writes the three empty sections, `open` refuses an empty one, formats the
 // file, commits it alone, pushes it and opens the PR. Each case is a clone of
@@ -77,10 +77,13 @@ function repo(base: Files = {}): { dir: string; origin: string } {
   git(seed, 'init', '-q', '-b', 'main')
   identity(seed)
   write(seed, { 'AGENTS.md': suPr, 'docs/intent/README.md': readme, ...base })
-  mkdirSync(join(seed, 'scripts'))
+  mkdirSync(join(seed, '.harness/bin'), { recursive: true })
   for (const script of ['intent.sh', 'policy-lines.sh']) {
-    copyFileSync(join(root, 'scripts', script), join(seed, 'scripts', script))
-    chmodSync(join(seed, 'scripts', script), 0o755)
+    copyFileSync(
+      join(root, '.harness/bin', script),
+      join(seed, '.harness/bin', script),
+    )
+    chmodSync(join(seed, '.harness/bin', script), 0o755)
   }
   git(seed, 'add', '-A')
   git(seed, 'commit', '-q', '-m', 'base')
@@ -111,7 +114,7 @@ function run(
   for (const log of ['gh.log', 'pnpm.log']) {
     if (!existsSync(join(top, log))) writeFileSync(join(top, log), '')
   }
-  const result = spawnSync(join(dir, 'scripts/intent.sh'), args, {
+  const result = spawnSync(join(dir, '.harness/bin/intent.sh'), args, {
     cwd: dir,
     encoding: 'utf8',
     env: {
@@ -168,7 +171,7 @@ describe('intent.sh new', () => {
       git(dir, 'rev-parse', 'origin/main'),
     )
     expect(read(dir, 'docs/intent/export-pdf.md')).toBe(skeleton)
-    expect(result.stdout).toContain('scripts/intent.sh open')
+    expect(result.stdout).toContain('.harness/bin/intent.sh open')
   })
 
   // The skeleton is the README's contract written out: if the two drift, an
@@ -497,7 +500,7 @@ describe('intent.sh new, with docs_mode main', () => {
     expect(read(dir, 'docs/intent/export-pdf.md')).toBe(skeleton)
     expect(git(dir, 'branch', '--list', 'intent/*')).toBe('')
     expect(git(origin, 'branch', '--list', 'intent/*')).toBe('')
-    expect(result.stdout).toContain('scripts/intent.sh open export-pdf')
+    expect(result.stdout).toContain('.harness/bin/intent.sh open export-pdf')
   })
 
   it('moves to the default branch, brought up to date, from wherever it runs', () => {

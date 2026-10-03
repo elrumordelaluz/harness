@@ -1,4 +1,4 @@
-// Behaviour of scripts/test-weakening.sh on a real range. Each case is a
+// Behaviour of .harness/bin/test-weakening.sh on a real range. Each case is a
 // throwaway git repo with a base commit and a work commit, built the way
 // tests/tier.test.ts builds its own. Stdout is what ci.yml reads as "tests
 // weakened", so a clean run keeps it empty and says what it read on stderr.
@@ -9,7 +9,7 @@ import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
-const script = join(root, 'scripts/test-weakening.sh')
+const script = join(root, '.harness/bin/test-weakening.sh')
 
 type Files = Record<string, string>
 

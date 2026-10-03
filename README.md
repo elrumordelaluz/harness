@@ -13,7 +13,7 @@ harness is an agent production chain for [Claude Code]. You write ten lines abou
 - **Solo or team.** One developer commits documents straight to main. A team routes them through PRs merged by the role that owns them. One key in the policy block switches between the two.
 
 <p align="center">
-  <img src="docs/assets/board.png" alt="scripts/board.sh: the state of the repo on one screen and the next action" width="720">
+  <img src="docs/assets/board.png" alt=".harness/bin/board.sh: the state of the repo on one screen and the next action" width="720">
 </p>
 
 `/board` opens a session. It prints the state of the repo on one screen: which stage of the harness each part came from, the slices, the inbox, the open PRs, what waits on a human. Then it picks the next action by a rule, and says which rule.
@@ -48,12 +48,12 @@ The harness makes most of that decision mechanical. The size and the paths of a 
     L0  Documents       ~/.claude/CLAUDE.md · AGENTS.md · docs/
     L1  Specification   intent  ->  spec  ->  slices (DAG, expected tier, human flag)
     L2  Execution       branch per slice  ->  subagent, tests first  ->  PR from the template
-    L3  Gates           git hooks (.githooks/)  ->  deterministic CI  ->  label tier:N
+    L3  Gates           git hooks (.harness/bin/hooks/)  ->  deterministic CI  ->  label tier:N
     L4  Judgement       /judge at clean context  ->  verdict  ->  policy.sh  ->  merge | needs-human
     L5  Human           writes the intent · approves spec and board · merges what the policy won't · audits
     L6  Observability   docs/review-log/verdicts.jsonl  ->  audit  ->  threshold tuning
 
-Git hooks refuse code on the default branch and malformed commit messages. CI runs format, typecheck, test, build, a secret scan and a weakened-test check in one job, then computes the tier with `scripts/tier.sh`. The rules it reads are the policy block of `AGENTS.md` **at the base ref**, so a PR cannot widen the rules it is judged by.
+Git hooks refuse code on the default branch and malformed commit messages. CI runs format, typecheck, test, build, a secret scan and a weakened-test check in one job, then computes the tier with `.harness/bin/tier.sh`. The rules it reads are the policy block of `AGENTS.md` **at the base ref**, so a PR cannot widen the rules it is judged by.
 
 | Tier | Means                                                   | Judge     | Merge                                               |
 | ---- | ------------------------------------------------------- | --------- | --------------------------------------------------- |
@@ -96,8 +96,8 @@ One developer, Claude Code, a GitHub repo. This is how the harness has run every
 
 **A feature, top to bottom:**
 
-    scripts/intent.sh new <slug>    you write ten lines: problem, what success means, out of scope
-    scripts/intent.sh open          checks no section is empty, commits on main
+    .harness/bin/intent.sh new <slug>    you write ten lines: problem, what success means, out of scope
+    .harness/bin/intent.sh open          checks no section is empty, commits on main
     /spec                           one question per message, each with a recommendation, then the spec
     /slice                          slice files in docs/backlog/ and the board, after one yes
     /next                           one subagent per slice, tests first, judged once, one PR each
@@ -138,27 +138,27 @@ Several people on one repo, not all of them on Claude Code. The design principle
 
 ## Commands
 
-| Command                        | Use it when                                     | What you get                                                        |
-| ------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------- |
-| `/board`                       | you open a session and don't know what is next  | repo state on one screen, the next action, inbox lines triaged      |
-| `scripts/intent.sh new <slug>` | you have an idea                                | an intent skeleton; you write the ten lines, then `intent.sh open`  |
-| `/spec`                        | an intent is approved                           | an interview, one question per message, then the approved spec      |
-| `/slice`                       | a spec is approved                              | slice files in `docs/backlog/` and the board, after one yes         |
-| `/next`                        | slices are ready                                | one judged PR per slice; `/next S12` runs one, no argument runs all |
-| `/judge`                       | you open a PR by hand                           | a verdict for the head; `/next` runs it for you                     |
-| `/harness-init`                | the repo has no harness, or the templates moved | stages `local`, `ci`, `judge`; one PR, merged by hand               |
+| Command                             | Use it when                                     | What you get                                                        |
+| ----------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------- |
+| `/board`                            | you open a session and don't know what is next  | repo state on one screen, the next action, inbox lines triaged      |
+| `.harness/bin/intent.sh new <slug>` | you have an idea                                | an intent skeleton; you write the ten lines, then `intent.sh open`  |
+| `/spec`                             | an intent is approved                           | an interview, one question per message, then the approved spec      |
+| `/slice`                            | a spec is approved                              | slice files in `docs/backlog/` and the board, after one yes         |
+| `/next`                             | slices are ready                                | one judged PR per slice; `/next S12` runs one, no argument runs all |
+| `/judge`                            | you open a PR by hand                           | a verdict for the head; `/next` runs it for you                     |
+| `/harness-init`                     | the repo has no harness, or the templates moved | stages `local`, `ci`, `judge`; one PR, merged by hand               |
 
 **`/next` or `/board`?** `/board` looks and tells you what to do. `/next` does it. If you know a slice is ready, `/next`. Otherwise `/board`.
 
-**Do I run `/judge`?** Only if you open the PR yourself. At tier 1 and 2 a Claude Code hook blocks `gh pr create` until the head has a verdict. Answer findings with a commit (`scripts/judge.sh answer <id> <sha>`), never with a second judgement.
+**Do I run `/judge`?** Only if you open the PR yourself. At tier 1 and 2 a Claude Code hook blocks `gh pr create` until the head has a verdict. Answer findings with a commit (`.harness/bin/judge.sh answer <id> <sha>`), never with a second judgement.
 
-**The templates changed. How does my repo get them?** Each stage leaves its entry in `.harness/stamp.json`, the commit of the harness it copied from. `scripts/since.sh <sha>` says what moved; rerun the stage that owns it. That is the only way updates reach a project.
+**The templates changed. How does my repo get them?** Each stage leaves its entry in `.harness/stamp.json`, the commit of the harness it copied from. `.harness/bin/since.sh <sha>` says what moved; rerun the stage that owns it. That is the only way updates reach a project.
 
 ## Why not a plugin on the marketplace?
 
 Because a plugin ships skills, and the skills are the least important part of the harness.
 
-What makes the chain hold is what `/harness-init` copies into your repo: git hooks, CI workflows, a ruleset, `scripts/tier.sh` and `scripts/policy.sh`, the policy block in `AGENTS.md`, the judge's prompt and verdict schema. A plugin cannot install a ruleset on your default branch, and it should not be what decides whether a PR merges. Those rules belong to the repo, versioned with the code they guard, readable in a diff, and enforced by CI for people and bots that have never heard of Claude Code. That is the whole team story. A chain distributed as a plugin would hold only for whoever has the plugin installed, at whatever version they happen to have.
+What makes the chain hold is what `/harness-init` copies into your repo: git hooks, CI workflows, a ruleset, `.harness/bin/tier.sh` and `.harness/bin/policy.sh`, the policy block in `AGENTS.md`, the judge's prompt and verdict schema. A plugin cannot install a ruleset on your default branch, and it should not be what decides whether a PR merges. Those rules belong to the repo, versioned with the code they guard, readable in a diff, and enforced by CI for people and bots that have never heard of Claude Code. That is the whole team story. A chain distributed as a plugin would hold only for whoever has the plugin installed, at whatever version they happen to have.
 
 The copy is deliberate, too. A plugin updates in place and silently. A harness template reaches a project only when someone reruns a stage of `/harness-init` and merges the PR it opens, with `.harness/stamp.json` saying which commit of the harness each stage came from. The rules that judge your code change through review, like the code.
 
@@ -180,12 +180,12 @@ The six skills could be packaged as a plugin on top of this, as a nicer install 
     skills/slice/            approved spec to slices and board
     skills/next/             orchestrator: waves, one subagent and worktree per slice, judge, PR
     skills/judge/            clean-context judgement before the PR
-    skills/board/            session opener: the screen of scripts/board.sh, inbox triage
+    skills/board/            session opener: the screen of .harness/bin/board.sh, inbox triage
     docs/spec.md             the spec; version and date in its header, changes listed in section 0
     docs/codebase-map.md     modules, entry points, how to test, pitfalls
     docs/                    this repo's own harness: intent, specs, backlog, decisions, review-log, inbox
     AGENTS.md, CLAUDE.md     the map for agents, with the policy block the scripts read
-    .githooks/, scripts/     symlinks to the templates: the repo runs on its own hooks
+    .harness/bin/            symlinks to the templates: the repo runs on its own hooks
     .github/                 copies of the workflow templates, kept equal to them by a test
     tests/                   Vitest suites that run the template scripts as processes
 
@@ -199,7 +199,7 @@ The repo eats its own food: the slices in `docs/backlog/` are how it was built, 
     pnpm format:check
     pnpm build          declared no-op
 
-Change a script or hook in `skills/harness-init/templates/`, never through the symlink. Workflows under `.github/` are copies, and a test fails until the copy matches the template. The scripts stay on bash 3.2 and `jq`: no `mapfile`, no associative arrays, no `${var,,}`, and a structural test looks for them because `bash -n` on CI's bash 5 does not. No em dash anywhere: `scripts/prose.sh` fails on one, in the hooks and in CI. Test a skill on a project repo, not here, and read `docs/codebase-map.md` before touching code; its "Dragons" section holds what went wrong before.
+Change a script or hook in `skills/harness-init/templates/`, never through the symlink. Workflows under `.github/` are copies, and a test fails until the copy matches the template. The scripts stay on bash 3.2 and `jq`: no `mapfile`, no associative arrays, no `${var,,}`, and a structural test looks for them because `bash -n` on CI's bash 5 does not. No em dash anywhere: `.harness/bin/prose.sh` fails on one, in the hooks and in CI. Test a skill on a project repo, not here, and read `docs/codebase-map.md` before touching code; its "Dragons" section holds what went wrong before.
 
 Issues and pull requests are welcome. A PR from a fork gets the gates and the tier label but not the automerge: a human reads it and merges it.
 

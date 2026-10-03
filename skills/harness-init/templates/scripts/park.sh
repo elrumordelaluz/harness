@@ -32,8 +32,8 @@ usage() {
   exit 2
 }
 
-[ -f scripts/policy-lines.sh ] || die "no scripts/policy-lines.sh: run /harness-init local"
-. scripts/policy-lines.sh
+[ -f .harness/bin/policy-lines.sh ] || die "no .harness/bin/policy-lines.sh: run /harness-init local"
+. .harness/bin/policy-lines.sh
 
 # main or pr, from AGENTS.md as the default branch has it on the remote. A
 # block that cannot be read stops the script: there is no flow to fall back

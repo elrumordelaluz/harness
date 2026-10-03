@@ -1,4 +1,4 @@
-// Behaviour of scripts/park.sh, the only way a line of docs/parked.md is
+// Behaviour of .harness/bin/park.sh, the only way a line of docs/parked.md is
 // written or taken out: `park.sh <path> "<why>"` checks that the document is
 // one the board would pick, an intent no spec names, a draft spec or an
 // approved spec no slice names, and adds the dated line; `park.sh resume
@@ -150,10 +150,13 @@ function repo(
     'docs/parked.md': parkedTemplate,
     ...base,
   })
-  mkdirSync(join(seed, 'scripts'))
+  mkdirSync(join(seed, '.harness/bin'), { recursive: true })
   for (const script of ['park.sh', 'policy-lines.sh', 'board.sh']) {
-    copyFileSync(join(root, 'scripts', script), join(seed, 'scripts', script))
-    chmodSync(join(seed, 'scripts', script), 0o755)
+    copyFileSync(
+      join(root, '.harness/bin', script),
+      join(seed, '.harness/bin', script),
+    )
+    chmodSync(join(seed, '.harness/bin', script), 0o755)
   }
   git(seed, 'add', '-A')
   git(seed, 'commit', '-q', '-m', 'base')
@@ -189,7 +192,7 @@ function run(
   dir: string,
   args: string[],
 ): { status: number | null; stdout: string; stderr: string } {
-  const result = spawnSync(join(dir, 'scripts/park.sh'), args, {
+  const result = spawnSync(join(dir, '.harness/bin/park.sh'), args, {
     cwd: dir,
     encoding: 'utf8',
     env: env(dir),
@@ -202,7 +205,7 @@ function run(
 }
 
 function board(dir: string): { next: { action: string } } {
-  const out = execFileSync(join(dir, 'scripts/board.sh'), ['--json'], {
+  const out = execFileSync(join(dir, '.harness/bin/board.sh'), ['--json'], {
     cwd: dir,
     encoding: 'utf8',
     env: env(dir),
@@ -476,7 +479,7 @@ describe('the subjects of park.sh pass commitlint', () => {
       const file = join(top, 'msg')
       writeFileSync(file, `${subject}\n`)
       const result = spawnSync(
-        join(root, 'scripts/commitlint.sh'),
+        join(root, '.harness/bin/commitlint.sh'),
         ['--file', file],
         { encoding: 'utf8' },
       )
@@ -485,7 +488,7 @@ describe('the subjects of park.sh pass commitlint', () => {
   )
 
   it('the script writes exactly those subjects', () => {
-    const script = readFileSync(join(root, 'scripts/park.sh'), 'utf8')
+    const script = readFileSync(join(root, '.harness/bin/park.sh'), 'utf8')
     expect(script).toContain('docs(parked): $slug')
     expect(script).toContain('docs(parked): resume $slug')
   })
