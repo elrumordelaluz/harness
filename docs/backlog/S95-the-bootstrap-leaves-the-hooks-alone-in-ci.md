@@ -1,7 +1,7 @@
 ---
 id: S95
 title: The bootstrap leaves the git hooks alone in CI, so close.yml can commit again
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
