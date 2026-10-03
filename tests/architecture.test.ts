@@ -295,26 +295,42 @@ describe('the repo runs on its own templates', () => {
   })
 })
 
-// The machinery of a project lives in .harness/bin/, and the templates call
-// it there: a script, a hook, a workflow or the settings that still named
-// scripts/<name>.sh or .githooks would call a path no repo has any more.
-describe('the templates call the machinery under .harness/bin/', () => {
+// The machinery of a project lives in .harness/bin/, and the templates and
+// the skills that run a script call it there: a script, a hook, a workflow,
+// the settings or a SKILL.md that still named scripts/<name>.sh or .githooks
+// would call a path no repo has any more. A path that runs through the
+// templates, `skills/harness-init/templates/scripts/board.sh`, is where a
+// template lives and not a call, so the match wants `scripts/` at the start
+// of a path.
+describe('the templates and the skills call the machinery under .harness/bin/', () => {
   const names = readdirSync(join(templates, 'scripts')).map((file) =>
     file.replace(/[.]/g, '\\.'),
   )
-  const old = new RegExp(`scripts/(${names.join('|')})|\\.githooks`)
+  const old = new RegExp(`(?<![\\w/.])scripts/(${names.join('|')})|\\.githooks`)
   const files = [
     ...['scripts', 'githooks', 'github'].flatMap((dir) =>
-      walk(join(templates, dir)).map((file) => `${dir}/${file}`),
+      walk(join(templates, dir)).map((file) =>
+        join(templates, dir, file).slice(root.length + 1),
+      ),
     ),
-    'settings.json',
+    join(templates, 'settings.json').slice(root.length + 1),
+    ...['board', 'spec', 'slice', 'next', 'judge'].map(
+      (skill) => `skills/${skill}/SKILL.md`,
+    ),
   ]
 
   it.each(files)('%s', (file) => {
-    const hit = readFileSync(join(templates, file), 'utf8')
+    const hit = readFileSync(join(root, file), 'utf8')
       .split('\n')
       .find((line) => old.test(line))
     expect(hit, `${file} still names the old path`).toBeUndefined()
+  })
+
+  it('catches a call and leaves the path of a template alone', () => {
+    expect(old.test('run `scripts/board.sh --json`')).toBe(true)
+    expect(old.test('skills/harness-init/templates/scripts/board.sh')).toBe(
+      false,
+    )
   })
 })
 
