@@ -1,7 +1,7 @@
 ---
 id: S89
 title: "`.harness/docs/` has one README with a section per folder"
-status: todo
+status: done
 blocked_by: S88
 tier: 2
 human: false
