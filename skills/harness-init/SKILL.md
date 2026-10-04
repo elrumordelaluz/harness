@@ -5,8 +5,8 @@ description: >
   stages: `local` (.harness/ with its AGENTS.md, docs and bootstrap, one
   block each in AGENTS.md, CLAUDE.md and the tracked .claude/settings.json,
   the git hooks fetched), `ci` (deterministic gates in GitHub Actions, tier
-  label, PR template, main ruleset), `judge` (the judge's prompt and schema,
-  policy, automerge and escalation: the judgement itself is `/judge`). Use when the user runs
+  label, PR template, main ruleset), `judge` (.harness/judge.md, automerge,
+  escalation and close: the judgement itself is `/judge`). Use when the user runs
   /harness-init [local|ci|judge], says "set up the harness", "prepare the repo
   for the chain", or wants to adopt the intent, spec, slices, PR, judge chain
   in a repo, new or existing. Also the entry point for a brand
@@ -145,15 +145,15 @@ this skill is its step 0.
 
 Print a one-screen state table before doing anything:
 
-| What                            | How                                                                                                                                                                                                                                                                            |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Stack, package manager, scripts | `package.json` or `pyproject.toml`; presence of `typecheck`, `test`, `format:check`, `build`                                                                                                                                                                                   |
-| Layout                          | top-level dirs; which dir is the server, the domain, the state or sync layer, the tests                                                                                                                                                                                        |
-| Existing harness                | `.harness/`, `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `core.hooksPath`, `.github/workflows/`, labels (`gh label list`), ruleset (`gh api repos/{owner}/{repo}/rulesets`)                                                                                             |
-| Ignore rules                    | `.gitignore` lines matching `.harness`, `CLAUDE.md`, `.claude`                                                                                                                                                                                                                 |
-| Plan                            | `gh repo view --json isPrivate` and a probe of `gh api repos/{owner}/{repo}/rulesets`. A 403 "Upgrade to GitHub Pro" means no rulesets, no branch protection, no auto-merge on this repo: say it once, skip the ruleset; the hooks protect main and the policy merges directly |
-| Remote and mode                 | `git remote -v`; solo or team (ask if not obvious: more than one collaborator, an org repo, a CODEOWNERS)                                                                                                                                                                      |
-| Stage                           | `local` done if `.harness/AGENTS.md` and `.harness/stamp.json` exist; `ci` done if `.github/workflows/ci.yml`; `judge` done if `.github/workflows/automerge.yml`                                                                                                               |
+| What                            | How                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stack, package manager, scripts | `package.json` or `pyproject.toml`; presence of `typecheck`, `test`, `format:check`, `build`                                                                                                                                                                                                                                                                      |
+| Layout                          | top-level dirs; which dir is the server, the domain, the state or sync layer, the tests                                                                                                                                                                                                                                                                           |
+| Existing harness                | `.harness/`, `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `core.hooksPath`, `.github/workflows/`, labels (`gh label list`), ruleset (`gh api repos/{owner}/{repo}/rulesets`)                                                                                                                                                                                |
+| Ignore rules                    | `.gitignore` lines matching `.harness`, `CLAUDE.md`, `.claude`                                                                                                                                                                                                                                                                                                    |
+| Plan                            | `gh repo view --json isPrivate` and a probe of `gh api repos/{owner}/{repo}/rulesets`. A 403 "Upgrade to GitHub Pro" means no rulesets, no branch protection, no auto-merge on this repo: say it once, skip the ruleset; the hooks protect main and the policy merges directly                                                                                    |
+| Remote and mode                 | `git remote -v`; solo or team (ask if not obvious: more than one collaborator, an org repo, a CODEOWNERS)                                                                                                                                                                                                                                                         |
+| Stage                           | `local` done if `.harness/AGENTS.md` and `.harness/stamp.json` exist; `ci` done if the harness's ci workflow is under `.github/workflows/`, as `ci.yml` or `harness-ci.yml`, told by its first line (stage `ci`, step 2); `judge` done if `.harness/judge.md` exists and the harness's automerge workflow is there, as `automerge.yml` or `harness-automerge.yml` |
 
 With no argument, run the first stage not done. With an argument, run that
 stage even if done (update mode: rewrite what the stage owns, keep the user's
@@ -326,7 +326,13 @@ hook is copied: the bootstrap fetches them into `.harness/bin/`, ignored.
 
 ## 3. Stage `ci`
 
-Deterministic gates on the server. No LLM in this stage.
+Deterministic gates on the server. No LLM in this stage. Outside `.harness/`
+it writes the workflow and the PR template, and rewrites no line of a file
+the project wrote. The one file of the project it adds to is a PR template
+already there, which keeps its text and gets two sections appended under a
+marker (step 3), because `tier.sh` reads the boxes only there. The scripts it
+needs, `tier.sh` and `test-weakening.sh`, come with the fetch into
+`.harness/bin/`, as do the hooks of stage `local`.
 
 1. **Labels**, idempotent with `gh label create --force`: `tier:0` to `tier:3`,
    `human-gate`, `tests-weakened`, `needs-human`, and one per judge and
@@ -337,46 +343,62 @@ Deterministic gates on the server. No LLM in this stage.
    before ADR-0004 still has `fix-round:1` and `fix-round:2`: delete them
    with `gh label delete --yes`, they belonged to a fixer that no longer
    exists.
-2. **`.github/workflows/ci.yml`** from `templates/github/ci.yml`: one
-   workflow, one job named `ci`, the single required status check, with the
-   gates as its steps (secret scan with gitleaks; conventions: commit lint on
-   the PR range and on the title of the PR, which is the subject the squash
-   lands, `scripts/prose.sh` on the range and the test-weakening detector;
+2. **The ci workflow** from `templates/github/ci.yml`: one workflow, one job
+   named `ci`, the single required status check, with the gates as its steps
+   (secret scan with gitleaks; conventions: commit lint on the PR range and
+   on the title of the PR, which is the subject the squash lands,
+   `.harness/bin/prose.sh` on the range and the test-weakening detector;
    dependency audit; checks: format, typecheck, test, build; tier; a last
    step red if any gate is). One job and not six because GitHub bills each
    one rounded up to the whole minute. Adapt package manager and Node version.
-3. **Scripts** from `templates/scripts/`: `tier.sh` (reads the sensitive
-   paths, the human gate and the two thresholds from the policy block of
-   AGENTS.md at the base ref, never from the PR's own copy, plus the PR body checklist, the labels and the slice
-   flags; prints the tier on stdout and the reasons on stderr, `human-gate:`
-   lines included, which the tier step of `ci.yml` turns into the label; it sources
-   `scripts/policy-lines.sh`, the reading of the policy block it shares with
-   the hooks: a file of stage `local`, copied here too when the repo does not
-   have it yet, because without it `tier.sh` stops and names the stage),
-   `test-weakening.sh` (diff of test files only: removed assertions, added
-   skips, widened matchers, deleted test files, added suppressions). Both
-   run locally with the same output as in CI.
-4. **PR template** from `templates/github/pull_request_template.md`. The
-   checklist is declarative: `tier.sh` reads the boxes.
-5. **First structural test** from `templates/architecture.test.ts`: one rule
-   taken from the "Do not" section of AGENTS.md, written as a normal Vitest
-   test in the project's test dir. If it fails on the current code, leave the
-   test in and report the violation: it is the finding.
-6. **Repo settings and ruleset.** Run `gh repo edit` for squash-only and
-   branch deletion on merge (every plan), and auto-merge where the plan
-   allows it. Write `.github/ruleset.json` and apply it with
-   `gh api ... /rulesets --input` only when Detect found rulesets available;
-   otherwise one line in the hand-back: main is protected by the hooks alone
-   and the policy merges directly after green ci. The required check is
-   `ci`. Solo: zero required reviews. Team: one required review,
-   `CODEOWNERS` on the sensitive paths (write it from the AGENTS.md list),
-   merge queue above two people.
 
-   `.github/ruleset.json` is `templates/github/ruleset.json` with
-   `bypass_actors` filled, and the file written is the file applied: the
-   ruleset on GitHub and the one in the repo are never two. The template
-   ships the list empty because neither actor can be known before the repo
-   is, and two writers of the chain push to main without a PR. The first is
+   Where it goes. The same rule holds for the four workflows of the harness,
+   `ci.yml` here and `automerge.yml`, `escalate.yml` and `close.yml` in stage
+   `judge`. A file under `.github/workflows/` is the harness's when its first
+   line is the first line of the template: every workflow template opens
+   with a comment of its own, and the copy keeps it, while the rest of the
+   file is adapted and never byte for byte the template. With no file of that
+   name, the workflow goes in as `<name>.yml`. With a file of that name that
+   is the project's, the project's file is not edited, not a byte, and the
+   harness's goes in next to it as `harness-<name>.yml`. On a rerun the
+   harness's file is the one of the two whose first line is the template's,
+   and that is the file rewritten.
+
+   The harness's workflows find each other by the `name:` inside the file,
+   not by the file name: `automerge.yml` listens to `workflow_run` of the
+   workflow named `ci`, and the required check is the job `ci`. So the name
+   of the file changes nothing for them, and a workflow of the project with
+   `name: ci`, in whatever file, makes both ambiguous: the stage stops before
+   writing, names the file, and the human renames one of the two.
+
+3. **PR template** from `templates/github/pull_request_template.md`. The
+   checklist is declarative: `tier.sh` reads the boxes. With no
+   `.github/pull_request_template.md`, the file is the template. One that
+   is there keeps its text, and the template's "Slice" and "Declarations"
+   sections are appended at the end under this marker, alone on its line:
+
+   ```markdown
+   <!-- harness: slice and declarations -->
+   ```
+
+   Once: a rerun that finds the marker appends nothing.
+
+4. **Repo settings and ruleset.** Run `gh repo edit` for squash-only and
+   branch deletion on merge (every plan), and auto-merge where the plan
+   allows it. Apply the ruleset with `gh api` only when Detect found
+   rulesets available; otherwise one line in the hand-back: main is
+   protected by the hooks alone and the policy merges directly after green
+   ci. The required check is `ci`. Solo: zero required reviews. Team: one
+   required review, `CODEOWNERS` on the sensitive paths (write it from the
+   AGENTS.md list), merge queue above two people.
+
+   The ruleset is `.harness/bin/ruleset.json` with `bypass_actors` filled on
+   the way to `gh api`, and nothing is written in the tree: the json is
+   filled with `jq` and handed over on stdin, `--input -`. The file is
+   machinery, the same in every repo, and the ruleset as applied is what
+   `gh api repos/{owner}/{repo}/rulesets` returns. The template ships the
+   list empty because neither actor can be known before the repo is, and two
+   writers of the chain push to main without a PR. The first is
    `close.yml`, with the token of the GitHub App: the App goes in as an
    `Integration` actor whose id is the value of the `HARNESS_APP_ID` variable
    of the repo, read with `gh variable get`. With the variable unset the
@@ -394,38 +416,55 @@ Deterministic gates on the server. No LLM in this stage.
    List the rulesets of the repo first: a ruleset already on the repo with
    this name is updated and not created twice. A rerun changes
    `bypass_actors` only by adding what is missing: an actor a human put
-   there stays, in the file and on GitHub, so the list on GitHub is read
-   before the file is written.
+   there stays, so the list on GitHub is read before the json is sent.
 
-7. **Stamp**: `.harness/stamp.json` as "Ground rules" says: it sets `pin` to
+5. **Stamp**: `.harness/stamp.json` as "Ground rules" says: it sets `pin` to
    the commit it runs from, and its own entry `ci` under `stages`.
    The entry of `local` stays as that stage left it, whatever it says: the two
    stages can come from two different commits of the harness, and the board
    prints them one next to the other for that reason.
-8. **Verify**: push is the user's call. `ci.yml` runs on the install PR from
-   its own branch (`pull_request` reads the workflow from the head): once
-   that PR is open, read the run with `gh run view` and report which jobs
-   passed and which tier label it got. `automerge.yml` and `close.yml`
+6. **Verify**: push is the user's call. The ci workflow runs on the install
+   PR from its own branch (`pull_request` reads the workflow from the head):
+   once that PR is open, read the run with `gh run view` and report which
+   jobs passed and which tier label it got. `automerge.yml` and `close.yml`
    cannot run before they are on the default branch: `workflow_run` only
    fires from there.
-9. **Hand back**: branch `harness/ci`, diff summary, "next: `/harness-init judge`".
+7. **Hand back**: branch `harness/ci`, diff summary,
+   "next: `/harness-init judge`". Then the offer of the structural test,
+   which the stage does not write by itself: a test runner does not look
+   inside `.harness/`, so the file would go in the project's own test dir,
+   the one place where the harness writes into the source tree. One line
+   names the rule it would enforce and the path it would write: the rule
+   taken from the "Do not" of `.harness/AGENTS.md`, the path
+   `architecture.test.ts` in that test dir, from
+   `templates/architecture.test.ts` and written as a normal test of the
+   project's runner. The file is written only after a yes. If it fails on
+   the current code, it stays in and the violation is reported: it is the
+   finding.
 
 ## 4. Stage `judge`
 
 The judgement itself is `/judge`, in the terminal, before the PR (ADR-0001,
 ADR-0004): no workflow calls a model, no token of Claude lives on the server.
-This stage installs what the judge reads and what acts on its verdict.
+This stage installs what acts on the verdict and the lines of the repo for
+its judge.
 
-1. **Judge prompt and schema** from `templates/judge/`: `.github/judge/prompt.md`
-   and `.github/judge/verdict.schema.json`. They live in the repo so every
-   judgement on it runs the same prompt against the same schema, and a repo
-   that tunes its judge tunes them here. The judge receives only artifacts
-   (diff, slice file, AGENTS.md, codebase map, the result of the gates),
-   never the coder's conversation, and its only output is the verdict
-   object, checked against the schema by `scripts/judge.sh check`.
-2. **`scripts/judge.sh` and `scripts/policy.sh`**: `judge.sh` is what `/judge`
-   runs before the PR, the bundle in and the verdict checked against the schema
-   and stored per commit out; `policy.sh` is what `/judge` and `/next` run once
+1. **`.harness/judge.md` from `templates/judge.md`**, only if it is not
+   there: its lines belong to the repo, and a rerun that overwrote them would
+   take away what a human told the judge. Fill it from `.harness/AGENTS.md`
+   and `.harness/docs/codebase-map.md`: two or three short paragraphs on
+   what weighs more here than its line count, or one line that says there is
+   nothing. The stage copies no prompt and no schema: they are machinery,
+   fetched into `.harness/bin/judge/` at the pin, the same in every repo,
+   and `.harness/bin/judge.sh bundle` puts `.harness/judge.md` right after
+   the prompt. The judge receives only artifacts (diff, slice file,
+   AGENTS.md, codebase map, the result of the gates), never the coder's
+   conversation, and its only output is the verdict object, checked against
+   the schema by `.harness/bin/judge.sh check`.
+2. **`judge.sh` and `policy.sh`**, in `.harness/bin/` with the fetch, as
+   `review-log.sh`: nothing to copy. `judge.sh` is what `/judge` runs before
+   the PR, the bundle in and the verdict checked against the schema and
+   stored per commit out; `policy.sh` is what `/judge` and `/next` run once
    `gh pr create` has given the verdict a PR to land on. It reads the verdict,
    stamps `head_sha` (the commit the judge saw, read back from the verdict
    `judge.sh` stored) and `judge.where`, always `local`, posts ONE comment per
@@ -451,7 +490,10 @@ This stage installs what the judge reads and what acts on its verdict.
    and the notification, never silence and never `needs-human`: `tier.sh`
    ignores the crash label, so the next `/judge` replaces it instead of
    parking the PR at tier 3.
-3. **`automerge.yml`, `escalate.yml`, `close.yml`** from the templates: tier
+3. **`automerge.yml`, `escalate.yml`, `close.yml`** from the templates, each
+   under the name step 2 of stage `ci` gives it: `<name>.yml`, or
+   `harness-<name>.yml` next to a file of the project with that name, which
+   stays as it is. Tier
    0 merge on the green ci run (not on the label, which lands before the `ci`
    job ends) and never with `human-gate`; the ntfy notification with the
    verdict inside when a human puts `needs-human` on by hand; on a merge
@@ -481,10 +523,13 @@ delete`, and say so in the hand-back. Nothing in the chain reads them
    this repo can say where each of its three stages came from.
 6. **Verify**: with the user, open a docs-only PR and a small code PR judged
    with `/judge`; report what the judge said and what the policy would have
-   done.
+   done. `git status --porcelain` outside `.harness/` lists only `AGENTS.md`,
+   `CLAUDE.md`, `.claude/settings.json`, the four workflows under
+   `.github/workflows/`, `.github/pull_request_template.md` and `.gitignore`,
+   and the structural test if the human said yes to it.
 7. **Hand back**: branch `harness/judge`, diff summary, the human checklist
    (section 6), "next: open one PR from this branch with the three stages,
-   merge it by hand, then the first intent with `scripts/intent.sh new <slug>`,
+   merge it by hand, then the first intent with `.harness/bin/intent.sh new <slug>`,
    and `/spec`".
 
 ## 5. Team mode
@@ -498,9 +543,9 @@ Claude Code. Escalation goes to the team channel, not to a personal ntfy topic.
 ## 6. Hand-back format
 
 One screen, always the same shape: the state table (before); what changed,
-files grouped by concern, one line each; findings (a red structural test, an
-ignored `docs/`, a missing script, a pin the stamp did not move and why); the
-next stage. Stages `local` and `ci`
+files grouped by concern, one line each; findings (a red structural test, a missing script, a workflow or a PR
+template of the project left as it was and what went next to it, a pin the
+stamp did not move and why); the next stage. Stages `local` and `ci`
 end there. Stage `judge` adds the one human checklist of the whole install:
 two numbered items, the only things that need a browser (the GitHub App,
 when the user does not have one yet; opening and merging the install PR),
