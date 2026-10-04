@@ -17,9 +17,10 @@
 # get around it can; a session that lost the thread cannot.
 #
 # It bites only where the judge stage is installed and only where the judge
-# would run anyway: no .harness/bin/tier.sh or no .github/judge/ means the
-# repo does not have the chain yet, and tier 0 and tier 3 never judge, on the
-# server or here. A tier that cannot be computed is a deny, not a pass: a
+# would run anyway: no .harness/bin/tier.sh, or no .harness/judge.md, the file
+# stage judge writes, means the repo does not have the chain yet (the prompt
+# under .harness/bin/judge/ comes with every fetch and says nothing about the
+# stage), and tier 0 and tier 3 never judge, on the server or here. A tier that cannot be computed is a deny, not a pass: a
 # broken gate that lets everything through is worse than one that says so.
 set -euo pipefail
 input="$(cat)"
@@ -79,7 +80,7 @@ root="$(git rev-parse --show-toplevel 2>/dev/null || printf '%s' "${CLAUDE_PROJE
 cd "$root"
 [ -x .harness/bin/tier.sh ] || exit 0
 [ -x .harness/bin/judge.sh ] || exit 0
-[ -d .github/judge ] || exit 0
+[ -f .harness/judge.md ] || exit 0
 
 # The head of the PR that is about to open: what --head or -H says, or HEAD.
 # /next works each slice in a worktree of its own and opens the PR from the

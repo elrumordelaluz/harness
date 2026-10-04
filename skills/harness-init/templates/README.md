@@ -23,7 +23,8 @@
 | `github/ruleset.json`                                                                               | `.github/ruleset.json` (input for `gh api`)               | ci               |
 | `scripts/tier.sh`, `scripts/test-weakening.sh`                                                      | `scripts/`                                                | ci               |
 | `architecture.test.ts`                                                                              | the project's test dir                                    | ci               |
-| `judge/prompt.md`, `judge/verdict.schema.json`                                                      | `.github/judge/`                                          | judge            |
+| `judge/prompt.md`, `judge/verdict.schema.json`                                                      | `.harness/bin/judge/`, fetched                            | judge            |
+| `judge.md`                                                                                          | `.harness/judge.md` (tracked), written if missing         | judge            |
 | `github/automerge.yml`, `github/escalate.yml`, `github/close.yml`                                   | `.github/workflows/`                                      | judge            |
 | `scripts/policy.sh`, `scripts/review-log.sh`, `scripts/judge.sh`                                    | `scripts/`                                                | judge            |
 

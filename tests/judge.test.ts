@@ -49,14 +49,20 @@ function install(dir: string, file: string): void {
 
 // A repo with the chain installed: the real .harness/AGENTS.md at the base
 // commit, so tier.sh reads the real policy block, and the real scripts and
-// judge files.
-function repo(work: Files = {}, branch?: string): string {
+// judge files. `base` overrides a file of the base commit, and null takes it
+// out.
+function repo(
+  work: Files = {},
+  branch?: string,
+  base: Record<string, string | null> = {},
+): string {
   const dir = mkdtempSync(join(tmpdir(), 'judge-'))
   git(dir, 'init', '-b', 'main', '-q')
   git(dir, 'config', 'user.email', 'judge@test')
   git(dir, 'config', 'user.name', 'judge')
   for (const file of [
     '.harness/AGENTS.md',
+    '.harness/judge.md',
     '.harness/docs/codebase-map.md',
     '.harness/bin/tier.sh',
     '.harness/bin/policy-lines.sh',
@@ -64,10 +70,14 @@ function repo(work: Files = {}, branch?: string): string {
     '.harness/bin/ensure-verdict.sh',
     '.harness/bin/prose.sh',
     '.harness/bin/test-weakening.sh',
-    '.github/judge/prompt.md',
-    '.github/judge/verdict.schema.json',
+    '.harness/bin/judge/prompt.md',
+    '.harness/bin/judge/verdict.schema.json',
   ]) {
     install(dir, file)
+  }
+  for (const [file, content] of Object.entries(base)) {
+    if (content === null) rmSync(join(dir, file))
+    else write(dir, { [file]: content })
   }
   git(dir, 'add', '-A')
   git(dir, 'commit', '-q', '-m', 'base')
@@ -260,8 +270,8 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
     const path = judge(dir, ['bundle', 'main'], 'test 157 passed\n').out.trim()
     const bundle = readFileSync(path, 'utf8')
     for (const marker of [
-      '.github/judge/prompt.md',
-      '.github/judge/verdict.schema.json',
+      '.harness/bin/judge/prompt.md',
+      '.harness/bin/judge/verdict.schema.json',
       '.harness/AGENTS.md',
       '.harness/docs/codebase-map.md',
     ]) {
@@ -272,6 +282,57 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
     expect(bundle, 'the gate results are not in').toContain('test 157 passed')
     expect(bundle, 'the diff is not in').toContain('export const a = 1')
     expect(bundle, 'the role is not stated').toContain('- ROLE: correctness')
+  })
+
+  // The prompt is fetched, the same in every repo, and what the repo says
+  // about itself to its judge is a tracked file of its own: the bundle puts
+  // it right after the prompt, so the judge reads it as the prompt's last
+  // section, the place where `## This repo` used to be.
+  it('puts .harness/judge.md right after the prompt, under its own heading', () => {
+    const line = 'Here the pure module is src/rules.ts, weigh it.'
+    const dir = repo(code, undefined, {
+      '.harness/judge.md': `# What the judge reads about this repo\n\n${line}\n`,
+    })
+    const bundle = readFileSync(
+      judge(dir, ['bundle', 'main'], 'ok\n').out.trim(),
+      'utf8',
+    )
+    const prompt = bundle.indexOf('======== END .harness/bin/judge/prompt.md [')
+    const heading = bundle.indexOf('======== BEGIN .harness/judge.md [')
+    const at = bundle.indexOf(line)
+    const schema = bundle.indexOf(
+      '======== BEGIN .harness/bin/judge/verdict.schema.json [',
+    )
+    expect(prompt, 'the prompt is not in').toBeGreaterThan(-1)
+    expect(heading, '.harness/judge.md has no section').toBeGreaterThan(prompt)
+    expect(
+      bundle.slice(prompt, heading),
+      'something sits between the prompt and .harness/judge.md',
+    ).toMatch(/^======== END [^\n]*\n\n$/)
+    expect(at, 'the line of .harness/judge.md is not in').toBeGreaterThan(
+      heading,
+    )
+    expect(schema, 'the rest does not come after').toBeGreaterThan(at)
+    expect(bundle, 'the header does not name it among what to obey').toContain(
+      'section named .harness/judge.md right after it',
+    )
+    expect(bundle.indexOf(line), 'the line is in twice').toBe(
+      bundle.lastIndexOf(line),
+    )
+  })
+
+  it('without .harness/judge.md makes the bundle without that section', () => {
+    const dir = repo(code, undefined, { '.harness/judge.md': null })
+    const run = judge(dir, ['bundle', 'main'], 'ok\n')
+    expect(run.code, run.err).toBe(0)
+    expect(run.err).toBe('')
+    const bundle = readFileSync(run.out.trim(), 'utf8')
+    expect(bundle).not.toContain('======== BEGIN .harness/judge.md [')
+    expect(bundle).toContain('Two of them are yours to obey')
+    expect(bundle).toContain('======== BEGIN .harness/bin/judge/prompt.md [')
+    expect(bundle).toContain(
+      '======== BEGIN .harness/bin/judge/verdict.schema.json [',
+    )
   })
 
   // The commits and the diff are written by whoever wrote the branch. With a
@@ -298,7 +359,7 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
     // The protocol is not material: the header has to name the section that
     // carries it, or it points the judge at a name no section has.
     expect(bundle, 'the header does not name the protocol section').toContain(
-      'section named .github/judge/prompt.md, which is the protocol',
+      'section named .harness/bin/judge/prompt.md, which is the protocol',
     )
     const again = readFileSync(
       judge(dir, ['bundle', 'main'], 'ok\n').out.trim(),
@@ -776,6 +837,15 @@ describe('judge.sh check: the only guard the schema has', () => {
 describe('ensure-verdict.sh: no verdict for this head, no PR', () => {
   it('says nothing about a command that opens no PR', () => {
     const run = hook(repo(code), 'git push -u origin HEAD')
+    expect(run.out).toBe('')
+    expect(run.code).toBe(0)
+  })
+
+  // The machinery under .harness/bin/judge/ arrives with every fetch, stage
+  // judge or not: what says the stage is installed is the file it writes.
+  it('keeps quiet where stage judge never wrote .harness/judge.md', () => {
+    const dir = repo(code, undefined, { '.harness/judge.md': null })
+    const run = hook(dir, `${open} --fill`)
     expect(run.out).toBe('')
     expect(run.code).toBe(0)
   })
