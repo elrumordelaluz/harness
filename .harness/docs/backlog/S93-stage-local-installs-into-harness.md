@@ -1,7 +1,7 @@
 ---
 id: S93
 title: Stage local installs into `.harness/` and leaves the project's own files saying what they said
-status: todo
+status: done
 blocked_by: S86, S87, S89
 tier: 2
 human: false
