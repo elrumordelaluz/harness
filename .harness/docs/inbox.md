@@ -17,3 +17,6 @@ Lines written by hand or by a skill when something shows up that does not deserv
 - 2026-10-04: the "From" headings of section 0 of docs/spec.md lag one version behind the header (0.49's heading carries 0.50's change), and tests/architecture.test.ts requires that.
 - 2026-10-04: a project repo on the old layout that reruns /harness-init local keeps docs/** in human_gate_paths, so its slices under .harness/docs/backlog/ lose the human-gate label; the spec decided on no migration, open whether stage local should at least warn.
 - 2026-10-04: S89 raised `docs/spec.md` to 0.52; other slices in this wave that also add a spec version will conflict on the header and section 0 when they land, so whichever lands later needs to take the next number.
+- 2026-10-04: `.harness/AGENTS.md` policy block: add `.harness/judge.md` to `sensitive_paths` and `never_tier_0`, as the template already has it (S90 security F2).
+- 2026-10-04: `.harness/judge.md` holds the old paragraphs word for word, so they still name `scripts/tier.sh`, `.githooks/` and "`judge/` run with secrets", all from the old layout.
+- 2026-10-04: `.harness/docs/README.md` is in no list of the policy block, so an edit to it can land at tier 0; add it to `human_gate_paths`, as the five folder READMEs it replaced were (S89).
