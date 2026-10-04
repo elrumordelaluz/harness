@@ -187,9 +187,10 @@ hook is copied: the bootstrap fetches them into `.harness/bin/`, ignored.
    into another hook manager is not built, and taking the setting over would
    switch off the project's hooks. A line of `.gitignore` that ignores
    `.harness/` or `.claude/` stops it the same way, naming the line, except
-   `.claude/settings.local.json` and `.claude/worktrees/`: an ignored harness
-   does not exist in CI, and removing a line the project wrote is not the
-   harness's call. A repo set up before this layout, `.githooks/`,
+   `.harness/bin/`, `.claude/settings.local.json` and `.claude/worktrees/`,
+   the first and the last the lines step 5 appends, so a rerun does not stop
+   on its own work: an ignored harness does not exist in CI, and removing a
+   line the project wrote is not the harness's call. A repo set up before this layout, `.githooks/`,
    `scripts/policy-lines.sh` or a policy block in the root `AGENTS.md`, is not
    migrated: say so in one line and install the new layout next to it.
 2. **`.harness/AGENTS.md`** from `templates/AGENTS.md`. Fill: project name and the two

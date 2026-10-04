@@ -3419,6 +3419,12 @@ describe('stage local of /harness-init writes inside .harness/', () => {
     expect(first).toContain('`.harness/bin/hooks`')
     expect(first).toContain('stop')
     expect(first).toContain('names the value')
+    // F1 of the judgement of S93: step 5 appends .harness/bin/, and a rerun
+    // that stopped on its own line would never be idempotent.
+    expect(
+      first,
+      `${file}: the stop on .gitignore does not spare .harness/bin/, the line step 5 writes`,
+    ).toMatch(/except [^:]*`\.harness\/bin\/`/)
   })
 
   it('runs the bootstrap and adds no prepare script', () => {
