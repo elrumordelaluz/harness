@@ -50,12 +50,8 @@ this skill is its step 0.
   included: a checkout cloned over https carries them in the url of its
   origin, `https://<token>@github.com/...`, and this file is tracked in every
   repo the skill installs into. What names the harness is the host and the
-  path, and `git@github.com:...` has no scheme and stays as it is.
-
-  ```sh
-  origin="$(git -C <checkout> remote get-url origin \
-    | sed -E 's#^([a-z+]+://)[^/@]*@#\1#')"
-  ```
+  path, and `git@github.com:...` has no scheme and stays as it is: the first
+  line of the snippet below.
 
   Under `stages`, the name of the stage with the full sha of that checkout,
   `git -C <checkout> rev-parse HEAD`, and the committer date of that commit,
@@ -78,11 +74,37 @@ this skill is its step 0.
   `?`, so a sha nobody should date a bug against is visible as one on the
   screen and not only in the file.
 
+  Next to them, `pin`: `origin`, `sha` and `date`, the one commit
+  `.harness/bootstrap.sh` and every workflow fetch `.harness/bin/` at, and
+  the line whoever reviews an upgrade of the harness reads. Every stage moves
+  it to the commit it runs from, so the pin can be ahead of the entry of a
+  stage that was not run again: that entry says which commit last wrote the
+  tracked files of its stage, the pin says which machinery runs. `pin.origin`
+  is the same url read once more, in its `https://` form, so that a teammate
+  and a CI runner fetch it with no key: `git@github.com:owner/repo.git` and
+  `ssh://git@github.com/owner/repo.git` both become
+  `https://github.com/owner/repo.git`. `harness` keeps the form the checkout
+  has, which `board.sh` reads. `pin.date` is the committer date of the entry.
+
+  The pin is the one thing a sha that is not to be trusted does not get: a
+  sha every clone will fetch has to exist on the remote. From a dirty
+  checkout, or from no git repo, the snippet leaves `pin` byte for byte as it
+  was, and the entry of the stage keeps its `dirty` mark or its nulls. The
+  install goes on, and the hand-back names the pin that was not moved and
+  why: the sha it stayed at, or that there is none yet, which is what a first
+  install from a dirty checkout leaves, and then the bootstrap refuses until
+  the stage runs again from a clean one. A clean checkout whose commit was
+  never pushed passes the snippet: push the commit of the harness before the
+  install is pushed.
+
   The file is merged with `jq` and never rewritten whole, so that a repo
-  standing at three different points of the harness says all three:
+  standing at three different points of the harness says all three, and a
+  key the snippet does not write stays as it is:
 
   ```sh
   stamp=.harness/stamp.json
+  origin="$(git -C <checkout> remote get-url origin 2>/dev/null \
+    | sed -E 's#^([a-z+]+://)[^/@]*@#\1#')"
   dirty=false
   if git -C <checkout> rev-parse --git-dir >/dev/null 2>&1; then
     sha="$(git -C <checkout> rev-parse HEAD)"
@@ -91,14 +113,21 @@ this skill is its step 0.
   else
     origin=""; sha=""; date=""
   fi
+  pin="$(printf '%s' "$origin" | sed -E \
+    -e 's#^[^/@:]+@([^/:]+):#https://\1/#' \
+    -e 's#^[a-z+]+://#https://#' \
+    -e 's#^(https://[^/:]+):[0-9]+/#\1/#')"
+  case "$pin" in https://*) ;; *) pin="" ;; esac
+  [ "$dirty" = false ] && [ -n "$sha" ] || pin=""
   mkdir -p .harness
   [ -f "$stamp" ] || echo '{}' > "$stamp"
   jq --arg origin "$origin" --arg sha "$sha" --arg date "$date" \
-    --argjson dirty "$dirty" \
+    --argjson dirty "$dirty" --arg pin "$pin" \
     'def orNull: if . == "" then null else . end;
      .harness = ($origin | orNull)
      | .stages.<stage> = ({ sha: ($sha | orNull), date: ($date | orNull) }
-         + (if $dirty then { dirty: true } else {} end))' \
+         + (if $dirty then { dirty: true } else {} end))
+     | if $pin == "" then . else .pin = { origin: $pin, sha: $sha, date: $date } end' \
     "$stamp" > "$stamp.tmp" && mv "$stamp.tmp" "$stamp"
   ```
 
@@ -231,8 +260,9 @@ Documents and rules that work without a server.
    verdict; it lands in this stage so the settings file never points at a
    script that is not there, and stays inert until the `ci` and `judge` stages
    give it a tier and a judge to ask. Do not touch `settings.local.json`.
-7. **Stamp**: the entry `local` of `.harness/stamp.json`, as "Ground rules"
-   says, and `.gitignore` must not ignore `.harness/`. It is the first stage,
+7. **Stamp**: `.harness/stamp.json` as "Ground rules" says: it sets `pin` to
+   the commit it runs from, and its own entry `local` under `stages`. And
+   `.gitignore` must not ignore `.harness/`. It is the first stage,
    so the file is usually the one this step creates.
 8. **Verify**: run the four commands; run
    `scripts/commitlint.sh --file <(echo "Bad message.")` and expect a
@@ -315,7 +345,8 @@ Deterministic gates on the server. No LLM in this stage.
    there stays, in the file and on GitHub, so the list on GitHub is read
    before the file is written.
 
-7. **Stamp**: the entry `ci` of `.harness/stamp.json`, as "Ground rules" says.
+7. **Stamp**: `.harness/stamp.json` as "Ground rules" says: it sets `pin` to
+   the commit it runs from, and its own entry `ci` under `stages`.
    The entry of `local` stays as that stage left it, whatever it says: the two
    stages can come from two different commits of the harness, and the board
    prints them one next to the other for that reason.
@@ -392,8 +423,9 @@ write`, `pull-requests: write`): events raised by `GITHUB_TOKEN` start no
    and `HARNESS_FIXER_MODEL` with `gh secret delete` and `gh variable
 delete`, and say so in the hand-back. Nothing in the chain reads them
    any more, and a token of Claude on the server is a thing to not have.
-5. **Stamp**: the entry `judge` of `.harness/stamp.json`, as "Ground rules"
-   says, and the three entries are the whole stamp: from here the board of
+5. **Stamp**: `.harness/stamp.json` as "Ground rules" says: it sets `pin` to
+   the commit it runs from, and its own entry `judge` under `stages`. The three
+   entries are the whole stamp: from here the board of
    this repo can say where each of its three stages came from.
 6. **Verify**: with the user, open a docs-only PR and a small code PR judged
    with `/judge`; report what the judge said and what the policy would have
@@ -415,7 +447,8 @@ Claude Code. Escalation goes to the team channel, not to a personal ntfy topic.
 
 One screen, always the same shape: the state table (before); what changed,
 files grouped by concern, one line each; findings (a red structural test, an
-ignored `docs/`, a missing script); the next stage. Stages `local` and `ci`
+ignored `docs/`, a missing script, a pin the stamp did not move and why); the
+next stage. Stages `local` and `ci`
 end there. Stage `judge` adds the one human checklist of the whole install:
 two numbered items, the only things that need a browser (the GitHub App,
 when the user does not have one yet; opening and merging the install PR),

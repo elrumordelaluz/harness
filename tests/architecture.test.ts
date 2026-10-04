@@ -97,6 +97,11 @@ describe('templates/README.md has the row of the stamp', () => {
   it('names the three stages that write it', () => {
     expect((row ?? '').split('|').at(-2)?.trim()).toBe('local, ci, judge')
   })
+
+  // S92: the pin is in the stamp, and the three stages write it.
+  it('says the three stages write the pin', () => {
+    expect((row ?? '').split('|')[1]).toContain('`pin`')
+  })
 })
 
 // S56: each stage of /harness-init leaves its own entry in
@@ -168,6 +173,169 @@ describe('skills/harness-init/SKILL.md stamps every stage', () => {
       rule,
       'the stamp rule does not say that neither case stops the install',
     ).toContain('neither case stops the install')
+  })
+
+  // S92: every stage moves the pin, the one commit every clone and every CI
+  // run fetches, to the commit it runs from, and leaves it alone from a
+  // checkout nobody can fetch. The snippet of "Ground rules" is run as the
+  // skill writes it, on a disposable checkout and a disposable repo.
+  const groundRules = skill.slice(
+    skill.indexOf('## Ground rules'),
+    skill.indexOf('## 0. Detect'),
+  )
+  const fences = [...groundRules.matchAll(/```sh\n([\s\S]*?)\n\s*```/g)].map(
+    (match) => match[1] ?? '',
+  )
+
+  function checkout(origin: string): string {
+    const dir = mkdtempSync(join(tmpdir(), 'stamp-checkout-'))
+    const git = (...args: string[]): string =>
+      execFileSync(
+        'git',
+        [
+          '-c',
+          'user.email=stamp@example.invalid',
+          '-c',
+          'user.name=Stamp',
+          ...args,
+        ],
+        {
+          cwd: dir,
+          encoding: 'utf8',
+          env: { ...process.env, GIT_COMMITTER_DATE: '2026-09-25T10:00:00Z' },
+        },
+      ).trim()
+    git('init', '-q')
+    writeFileSync(join(dir, 'README.md'), 'harness\n')
+    git('add', '-A')
+    git('commit', '-q', '-m', 'chore: the templates')
+    git('remote', 'add', 'origin', origin)
+    return dir
+  }
+
+  function stampFrom(
+    from: string,
+    stage: string,
+    before?: unknown,
+  ): Record<string, unknown> {
+    const repo = mkdtempSync(join(tmpdir(), 'stamp-repo-'))
+    if (before !== undefined) {
+      mkdirSync(join(repo, '.harness'))
+      writeFileSync(
+        join(repo, '.harness/stamp.json'),
+        JSON.stringify(before, null, 2),
+      )
+    }
+    const snippet = (fences[0] ?? '')
+      .replaceAll('<checkout>', from)
+      .replaceAll('<stage>', stage)
+    execFileSync('bash', ['-c', snippet], { cwd: repo, encoding: 'utf8' })
+    return JSON.parse(
+      readFileSync(join(repo, '.harness/stamp.json'), 'utf8'),
+    ) as Record<string, unknown>
+  }
+
+  const headOf = (dir: string): string =>
+    execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: dir,
+      encoding: 'utf8',
+    }).trim()
+
+  const oldPin = {
+    origin: 'https://github.com/owner/repo.git',
+    sha: 'b7c8d9e0b7c8d9e0b7c8d9e0b7c8d9e0b7c8d9e0',
+    date: '2026-09-01',
+  }
+
+  it('has one snippet in "Ground rules", the one that is run', () => {
+    expect(fences).toHaveLength(1)
+  })
+
+  it.each([
+    'git@github.com:owner/repo.git',
+    'ssh://git@github.com/owner/repo.git',
+    'https://x-access-token:ghp_secret@github.com/owner/repo.git',
+    'https://github.com/owner/repo.git',
+  ])('writes the pin from a clean checkout whose origin is %s', (origin) => {
+    const from = checkout(origin)
+    const stamp = stampFrom(from, 'local')
+    expect(stamp.pin).toEqual({
+      origin: 'https://github.com/owner/repo.git',
+      sha: headOf(from),
+      date: '2026-09-25',
+    })
+    expect(stamp.stages).toEqual({
+      local: { sha: headOf(from), date: '2026-09-25' },
+    })
+  })
+
+  it('moves the pin of a stamp that has one, and keeps the other keys', () => {
+    const from = checkout('git@github.com:owner/repo.git')
+    const before = {
+      harness: 'git@github.com:owner/old.git',
+      pin: oldPin,
+      stages: { local: { sha: oldPin.sha, date: oldPin.date } },
+      other: { kept: true },
+    }
+    const stamp = stampFrom(from, 'ci', before)
+    expect(stamp.pin).toEqual({
+      origin: 'https://github.com/owner/repo.git',
+      sha: headOf(from),
+      date: '2026-09-25',
+    })
+    expect(stamp.harness).toBe('git@github.com:owner/repo.git')
+    expect(stamp.other).toEqual({ kept: true })
+    expect(stamp.stages).toEqual({
+      local: { sha: oldPin.sha, date: oldPin.date },
+      ci: { sha: headOf(from), date: '2026-09-25' },
+    })
+  })
+
+  it('leaves the pin as it was from a dirty checkout, and marks the stage', () => {
+    const from = checkout('git@github.com:owner/repo.git')
+    writeFileSync(join(from, 'draft.sh'), 'echo half written\n')
+    const stamp = stampFrom(from, 'judge', { pin: oldPin })
+    expect(stamp.pin).toEqual(oldPin)
+    expect(stamp.stages).toEqual({
+      judge: { sha: headOf(from), date: '2026-09-25', dirty: true },
+    })
+  })
+
+  it('writes no pin from a dirty checkout on a first install', () => {
+    const from = checkout('git@github.com:owner/repo.git')
+    writeFileSync(join(from, 'draft.sh'), 'echo half written\n')
+    expect(stampFrom(from, 'local')).not.toHaveProperty('pin')
+  })
+
+  it('leaves the pin as it was with no git repo, and the stage gets nulls', () => {
+    const from = mkdtempSync(join(tmpdir(), 'stamp-nogit-'))
+    const stamp = stampFrom(from, 'local', { pin: oldPin })
+    expect(stamp.pin).toEqual(oldPin)
+    expect(stamp.harness).toBeNull()
+    expect(stamp.stages).toEqual({ local: { sha: null, date: null } })
+  })
+
+  it.each([
+    ['local', '## 2. Stage `local`'],
+    ['ci', '## 3. Stage `ci`'],
+    ['judge', '## 4. Stage `judge`'],
+  ])('stage %s names the pin in its Stamp step', (stage, heading) => {
+    const rest = skill.slice(skill.indexOf(heading) + heading.length)
+    const section = rest.slice(0, rest.indexOf('\n## '))
+    const step = /\*\*Stamp\*\*:[\s\S]*?(?=\n\d+\. \*\*)/.exec(section)?.[0]
+    expect(step, `stage ${stage} has no Stamp step`).toBeDefined()
+    expect(
+      (step ?? '').replace(/\s+/g, ' '),
+      `the Stamp step of ${stage} does not move the pin`,
+    ).toContain('`pin` to the commit it runs from')
+  })
+
+  it('says the hand-back names a pin it did not move, and why', () => {
+    const rule = groundRules.replace(/\s+/g, ' ')
+    expect(rule).toContain('the hand-back names the pin that was not moved')
+    expect(rule).toContain(
+      'a sha every clone will fetch has to exist on the remote',
+    )
   })
 })
 
@@ -3442,6 +3610,16 @@ describe('the last entry of section 0 starts from the version before the header'
       last(spec),
       `the last "From" heading of section 0 should be ${previous(spec)}, the version the change starts from`,
     ).toBe(previous(spec))
+  })
+
+  // F1 of the judgement of S92: an entry put after section 0 still passed
+  // the check above, which reads the last heading wherever it stands.
+  it('every "From" heading stands in section 0', () => {
+    const rest = spec.slice(spec.indexOf('\n## 1. '))
+    expect(
+      [...rest.matchAll(/^From (0\.\d+),/gm)].map((match) => match[1]),
+      'a "From" entry stands after section 0 of docs/spec.md',
+    ).toEqual([])
   })
 
   it('the check bites on a heading named after the new version', () => {
