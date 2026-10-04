@@ -1,7 +1,7 @@
 ---
 id: S96
 title: /spec --fast asks every question that matters in one message and lists what it assumed
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
