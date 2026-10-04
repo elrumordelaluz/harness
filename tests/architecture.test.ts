@@ -739,14 +739,11 @@ describe('the judge reads what the repo says about itself from .harness/judge.md
     ).not.toContain('{{')
   })
 
-  // The skill of stage judge still says .github/judge/ in its section 4: S94
-  // rewrites that stage, and until then it is the one file left out.
   const named = [
     ...walk(templates).map((file) => `skills/harness-init/templates/${file}`),
     ...readdirSync(join(root, 'skills'))
       .map((skill) => `skills/${skill}/SKILL.md`)
-      .filter((file) => existsSync(join(root, file)))
-      .filter((file) => file !== 'skills/harness-init/SKILL.md'),
+      .filter((file) => existsSync(join(root, file))),
   ]
 
   it.each(named)('%s does not name .github/judge', (file) => {
@@ -3579,26 +3576,45 @@ describe('stage ci of /harness-init fills the bypass actors of the ruleset', () 
   }
 
   const stage = between(skill, '\n## 3. Stage `ci`', '\n## ')
-  const step = squash(between(stage, '\n6. **', '\n7. **'))
+  // S94: the step is found by its title, not by its number: the stage lost
+  // the step of the scripts, which the bootstrap fetches.
+  const step = squash(
+    stage
+      .split(/\n(?=\d+\. \*\*)/)
+      .find((item) => item.includes('**Repo settings and ruleset.**')) ?? '',
+  )
 
-  it('has step 6 of the stage, the one of the ruleset', () => {
+  it('has the step of the ruleset in the stage', () => {
     expect(
       step,
-      `${file} has no step 6 in "## 3. Stage \`ci\`": the step that applies the ruleset has moved somewhere this test does not read`,
+      `${file} has no step "Repo settings and ruleset." in "## 3. Stage \`ci\`": the step that applies the ruleset has moved somewhere this test does not read`,
     ).toContain('**Repo settings and ruleset.**')
   })
 
-  it('says the file is the template with `bypass_actors` filled, and that it is the file applied', () => {
+  // S94: `.github/ruleset.json` is gone. The ruleset is machinery, fetched
+  // into `.harness/bin/`, and the actors are filled on the way to `gh api`:
+  // the ruleset as applied is the one GitHub returns, not a file of the repo.
+  it('reads `.harness/bin/ruleset.json`, fills `bypass_actors` on the way to `gh api` and writes nothing in the tree', () => {
     expect(
       step,
-      `${file}: step 6 does not say \`.github/ruleset.json\` is the template with \`bypass_actors\` filled, and the session applies the empty list`,
+      `${file}: the step does not say the ruleset is read from \`.harness/bin/ruleset.json\` with \`bypass_actors\` filled on the way to \`gh api\``,
     ).toContain(
-      '`.github/ruleset.json` is `templates/github/ruleset.json` with `bypass_actors` filled',
+      '`.harness/bin/ruleset.json` with `bypass_actors` filled on the way to `gh api`',
     )
     expect(
       step,
-      `${file}: step 6 does not say the file written is the file applied, and the ruleset on GitHub and the one in the repo become two`,
-    ).toContain('the file written is the file applied')
+      `${file}: the step does not say nothing is written in the tree`,
+    ).toContain('nothing is written in the tree')
+    expect(
+      step,
+      `${file}: the step does not say where the ruleset as applied is read`,
+    ).toContain(
+      'the ruleset as applied is what `gh api repos/{owner}/{repo}/rulesets` returns',
+    )
+    expect(
+      step,
+      `${file}: the step still says the file written is the file applied, and there is no file written any more`,
+    ).not.toContain('the file written is the file applied')
   })
 
   it('puts the App in as an `Integration` actor, from `HARNESS_APP_ID`', () => {
@@ -3668,6 +3684,273 @@ describe('stage ci of /harness-init fills the bypass actors of the ruleset', () 
       step,
       `${file}: step 6 does not say an actor a human put there stays`,
     ).toContain('an actor a human put there stays')
+  })
+})
+
+// S94. With stages ci and judge on the new layout the install is whole: a
+// teammate who does not use the harness finds, outside `.harness/`, two
+// instruction files, one settings file, four workflows, the PR template and
+// one ignore line, each forced by a tool that reads it only there. A file the
+// project already had is still the project's. The skill is prose: what is
+// proved here is that the rows and the steps say so, and the "How to check by
+// hand" of the PR is where the install itself is run.
+describe('a full install writes a closed list outside .harness/', () => {
+  const file = 'skills/harness-init/SKILL.md'
+  const skill = readFileSync(join(root, file), 'utf8')
+  const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+  function between(text: string, from: string, to: string): string {
+    const at = text.indexOf(from)
+    if (at === -1) return ''
+    const rest = text.slice(at)
+    const end = rest.indexOf(to, from.length)
+    return end === -1 ? rest : rest.slice(0, end)
+  }
+
+  const workflows = ['ci', 'automerge', 'escalate', 'close']
+  const outside = [
+    'AGENTS.md',
+    'CLAUDE.md',
+    '.claude/settings.json',
+    '.github/workflows/',
+    '.github/workflows/harness-<name>.yml',
+    ...workflows.flatMap((name) => [
+      `.github/workflows/${name}.yml`,
+      `.github/workflows/harness-${name}.yml`,
+    ]),
+    '.github/pull_request_template.md',
+    '.gitignore',
+  ]
+
+  const allRows = readFileSync(join(templates, 'README.md'), 'utf8')
+    .split('\n')
+    .filter((line) => line.startsWith('| '))
+    .slice(2)
+
+  it.each(allRows.map((row) => [row.split('|')[1]?.trim() ?? '', row]))(
+    'the row of %s lands under .harness/ or on the closed list, or only on a yes',
+    (_, row) => {
+      const column = row.split('|')[2] ?? ''
+      const destinations = [...column.matchAll(/`([^`]+)`/g)].map(
+        (match) => match[1] ?? '',
+      )
+      if (destinations.length === 0) {
+        expect(
+          column,
+          `templates/README.md: a row with no destination between backticks is a file the install does not write, and it says "on a yes"`,
+        ).toContain('on a yes')
+        return
+      }
+      for (const destination of destinations) {
+        expect(
+          destination.startsWith('.harness/') || outside.includes(destination),
+          `templates/README.md: ${destination} is a destination outside .harness/ and outside the closed list`,
+        ).toBe(true)
+      }
+    },
+  )
+
+  it('the row of architecture.test.ts says "on a yes"', () => {
+    const row = allRows.find((line) =>
+      line.startsWith('| `architecture.test.ts`'),
+    )
+    expect(
+      row,
+      'templates/README.md has no row of architecture.test.ts',
+    ).toBeDefined()
+    expect((row ?? '').split('|')[2]).toContain('on a yes')
+  })
+
+  const stageCi = between(skill, '\n## 3. Stage `ci`', '\n## ')
+  const stageJudge = between(skill, '\n## 4. Stage `judge`', '\n## ')
+  const detect = between(skill, '\n## 0. Detect', '\n## ')
+  const steps = (stage: string): string[] =>
+    stage.split(/\n(?=\d+\. \*\*)/).slice(1)
+  const frontmatter = skill.slice(0, skill.indexOf('\n---', 4))
+
+  it('has the two stages and Detect', () => {
+    expect(stageCi).not.toBe('')
+    expect(stageJudge).not.toBe('')
+    expect(detect).not.toBe('')
+  })
+
+  it('names neither .github/judge nor .github/ruleset.json', () => {
+    for (const path of ['.github/judge', '.github/ruleset.json'])
+      expect(
+        skill,
+        `${file} names ${path}: the prompt and the schema are in .harness/bin/judge/, the ruleset in .harness/bin/ruleset.json`,
+      ).not.toContain(path)
+  })
+
+  // The path of a template, `templates/scripts/`, is where a file lives and
+  // not where the install writes, and the lookbehind lets it through.
+  const old = /(?<![\w/.-])(scripts\/|\.githooks|docs\/)/
+  it.each([
+    ['the frontmatter', frontmatter],
+    ['Detect', detect],
+    ['stage ci', stageCi],
+    ['stage judge', stageJudge],
+    ['Team mode', between(skill, '\n## 5. Team mode', '\n## ')],
+    ['the hand-back', between(skill, '\n## 6. Hand-back format', '\n## ')],
+  ])('%s writes under no scripts/, .githooks/ or docs/', (_, text) => {
+    const hit = text.split('\n').find((line) => old.test(line))
+    expect(hit, `${file} still names a path outside .harness/`).toBeUndefined()
+  })
+
+  it('catches scripts/ and docs/ and leaves a template and .harness/ alone', () => {
+    expect(old.test('`scripts/tier.sh`')).toBe(true)
+    expect(old.test('an ignored `docs/`')).toBe(true)
+    expect(old.test('`.githooks/`')).toBe(true)
+    expect(old.test('`templates/scripts/`')).toBe(false)
+    expect(old.test('`.harness/docs/`')).toBe(false)
+  })
+
+  it('installs its workflow as harness-<name>.yml next to a file of the project, and does not edit the project file', () => {
+    const text = squash(stageCi)
+    expect(
+      text,
+      `${file}: stage ci does not name \`harness-<name>.yml\``,
+    ).toContain('`harness-<name>.yml`')
+    expect(
+      text,
+      `${file}: stage ci does not say the project's file is not edited`,
+    ).toContain("the project's file is not edited")
+    for (const name of workflows)
+      expect(text, `${file}: stage ci does not name ${name}.yml`).toContain(
+        `\`${name}.yml\``,
+      )
+  })
+
+  it('tells its own workflow from the project one by the first line of the template', () => {
+    expect(
+      squash(stageCi),
+      `${file}: stage ci does not say how a rerun tells the harness's workflow from the project's`,
+    ).toContain('its first line is the first line of the template')
+  })
+
+  // The first line is how a rerun recognises the file it installed. A
+  // template that changed it would make the rerun take the harness's own
+  // workflow for the project's and install a second one next to it: the line
+  // is fixed here, and changing it is a decision, not an edit.
+  const firstLines: Record<string, string> = {
+    ci: '# Deterministic gates. No LLM here. One job, `ci`: the single required status',
+    automerge:
+      '# Tier 0 (the prose nobody executes) merges on green ci without a judge, when',
+    escalate:
+      "# A human put a label on by hand: tell them it took. The chain's own",
+    close:
+      '# On merge into the default branch: the slice goes to done and the verdicts land',
+  }
+  it.each(workflows)(
+    'templates/github/%s.yml opens with the line a rerun recognises it by',
+    (name) => {
+      const first = readFileSync(
+        join(templates, 'github', `${name}.yml`),
+        'utf8',
+      ).split('\n')[0]
+      expect(
+        first,
+        `the first line of templates/github/${name}.yml changed: a rerun of /harness-init would no longer recognise the installed file as the harness's`,
+      ).toBe(firstLines[name])
+    },
+  )
+
+  it('stops on a workflow of the project named ci', () => {
+    expect(
+      squash(stageCi),
+      `${file}: stage ci does not stop on a workflow of the project named ci`,
+    ).toContain('a workflow of the project with `name: ci`')
+  })
+
+  it('appends the sections of the PR template under a marker, once', () => {
+    const fences = [...stageCi.matchAll(/```\w*\n([\s\S]*?)\n\s*```/g)].map(
+      (match) => (match[1] ?? '').trim(),
+    )
+    const marker = fences.find((fence) => fence.startsWith('<!-- harness'))
+    expect(
+      marker,
+      `${file}: stage ci has no fence with the marker of the PR template`,
+    ).toBeDefined()
+    expect(
+      readFileSync(join(templates, 'github/pull_request_template.md'), 'utf8'),
+      'the template of the PR template carries the marker: the marker is what the skill adds to a file of the project',
+    ).not.toContain(marker ?? '<!-- harness')
+    expect(
+      squash(stageCi),
+      `${file}: stage ci does not say a rerun that finds the marker appends nothing`,
+    ).toContain('a rerun that finds the marker appends nothing')
+  })
+
+  it('offers the structural test in the hand-back and writes it only after a yes', () => {
+    const items = steps(stageCi)
+    const handBack = squash(
+      items.find((item) => item.includes('**Hand back**')) ?? '',
+    )
+    expect(handBack, `${file}: stage ci has no hand-back step`).not.toBe('')
+    expect(
+      handBack,
+      `${file}: the hand-back of stage ci does not offer the structural test`,
+    ).toContain('`architecture.test.ts`')
+    expect(
+      handBack,
+      `${file}: the hand-back of stage ci does not name the rule and the path of the structural test`,
+    ).toContain('the rule it would enforce and the path it would write')
+    expect(handBack).toContain('only after a yes')
+    for (const item of items.filter((item) => !item.includes('**Hand back**')))
+      expect(
+        item,
+        `${file}: a step of stage ci before the hand-back names the structural test`,
+      ).not.toContain('architecture.test.ts')
+  })
+
+  it('stage judge writes .harness/judge.md if it is not there and copies no prompt and no schema', () => {
+    const text = squash(stageJudge)
+    expect(text).toContain('`.harness/judge.md` from `templates/judge.md`')
+    expect(text).toContain('only if it is not there')
+    expect(text).toContain('copies no prompt and no schema')
+    expect(
+      text,
+      `${file}: stage judge still copies from templates/judge/`,
+    ).not.toContain('templates/judge/')
+  })
+
+  it('Detect reads ci and judge under either file name', () => {
+    const row = detect.split('\n').find((line) => line.startsWith('| Stage'))
+    expect(row, `${file}: Detect has no Stage row`).toBeDefined()
+    for (const name of [
+      '`ci.yml`',
+      '`harness-ci.yml`',
+      '`automerge.yml`',
+      '`harness-automerge.yml`',
+      '`.harness/judge.md`',
+    ])
+      expect(
+        row,
+        `${file}: the Stage row of Detect does not read ${name}`,
+      ).toContain(name)
+  })
+
+  // 5.1 and 6.2 of the spec say the two stages as they are now.
+  const spec = readFileSync(join(root, 'docs/spec.md'), 'utf8')
+  const section = (heading: string): string =>
+    between(spec, `\n### ${heading}`, '\n### ')
+  it.each(['5.1', '6.2'])('docs/spec.md %s says the new layout', (heading) => {
+    const text = section(`${heading} `)
+    expect(text).not.toBe('')
+    for (const path of [
+      '.github/ruleset.json',
+      '.github/judge',
+      'the file written is the file applied',
+    ])
+      expect(text, `docs/spec.md ${heading} still says ${path}`).not.toContain(
+        path,
+      )
+  })
+
+  it('docs/spec.md 5.1 names harness-<name>.yml and .harness/judge.md', () => {
+    const text = section('5.1 ')
+    expect(text).toContain('`harness-<name>.yml`')
+    expect(text).toContain('`.harness/judge.md`')
   })
 })
 
