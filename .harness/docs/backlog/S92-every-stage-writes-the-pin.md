@@ -1,7 +1,7 @@
 ---
 id: S92
 title: Every stage of /harness-init writes the pin, and an upgrade is one line to review
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
