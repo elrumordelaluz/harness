@@ -1,7 +1,7 @@
 ---
 id: S90
 title: The judge reads what the repo says about itself from `.harness/judge.md`
-status: todo
+status: done
 blocked_by: S85
 tier: 2
 human: false
