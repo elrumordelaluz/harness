@@ -9,8 +9,9 @@ description: >
   when the user runs /spec [docs/intent/<slug>.md], says "write the spec",
   "make the spec of this intent", "interview me on the intent", "spec this
   intent", or when an intent is written and its spec is the next step of the
-  chain. Writes one file, its own spec: never code, never the intent, never
-  slices. Not for editing an approved spec or the harness's own docs/spec.md.
+  chain. With --fast, every question that matters goes in one message instead,
+  one line each with the recommended answer. Writes one file, its own spec:
+  never code, never the intent, never slices. Not for editing an approved spec or the harness's own docs/spec.md.
 ---
 
 # Spec
@@ -26,7 +27,8 @@ the harness repo.
 
 - **One question per message**, never a batch. Each carries its
   recommendation and why, so that "sì" is a complete answer and pushing back
-  costs one sentence. A plain message, not a form.
+  costs one sentence. A plain message, not a form. The one exception is a run
+  with `--fast`, whose questions travel in a single message (9).
 - **Read-only on everything but one file.** Read, Grep, Glob, `git log`,
   `git show` to read; the only file written is `docs/specs/SPEC-<slug>.md`.
   Never code, never the intent, never a slice, never another spec.
@@ -63,6 +65,12 @@ the harness repo.
 
 The argument is the path of an intent, `docs/intent/<slug>.md`. The spec of
 that intent is `docs/specs/SPEC-<slug>.md`.
+
+`--fast` before the path, `/spec --fast docs/intent/<slug>.md`, takes the
+fast lane of section 9 for this run: one message with every question in place
+of the interview of 4 and the checkpoint of 6. Only the human asks for it; the
+skill never offers it and never picks it on its own. Without the flag the run
+is the full interview.
 
 How it travels is the repo's choice and not this skill's: the `docs_mode`
 key of the policy block in `.harness/AGENTS.md`, read once here and nowhere
@@ -272,6 +280,14 @@ What each section holds:
   heading.
 - **Decisions to confirm**: filled at the close, in 7.
 
+A run with `--fast` adds one thing to "Locked decisions": every item of the
+coverage list of 4 that the run did not ask, and that the intent, the code or
+an ADR does not answer, is one line under a `### Assumed` heading at the
+bottom of that section, the default taken and why. The heading sits inside
+"Locked decisions" because `/slice` carries that section into every slice,
+and the template keeps its sections. A full interview writes no
+`### Assumed`.
+
 No em dash anywhere in the file: the harness pre-commit hook runs
 `.harness/bin/prose.sh --staged` and refuses the commit.
 
@@ -399,6 +415,10 @@ Decisioni confermate:
 
 Alternativa strutturale: <the one chosen, or the one rejected and why>.
 
+Assumed:
+- <a line of ### Assumed, as the file has it>
+...
+
 <what changed on the way, when something did>
 SPEC_MSG
 git push
@@ -408,7 +428,11 @@ The body is the minutes, and it is the only minutes there is: no PR holds
 this record, so `git log -- docs/specs/` has to answer "who said yes to what"
 on its own. The body opens with `Decisioni confermate:` on its own line and
 carries one numbered line per decision, in the order they were confirmed,
-then the line about the structural alternative.
+then the line about the structural alternative. A spec written with `--fast`
+carries, after the confirmed decisions and that line, an `Assumed:` block with
+the lines of `### Assumed` as the file has them, so that the log says what was
+assumed as well as what was decided; a full interview has no such block. With
+`pr` the approval commit carries the same block in the same place.
 
 One file is staged and no other: `pre-commit` lets a commit land on main only
 when every file in it is a document of the block, and a stray file
@@ -441,3 +465,39 @@ Hand back three lines: the file, the PR link, `/slice` once the PR is merged.
 
 In either mode: never merge, never close the PR, never cut slices. Slicing is
 `/slice`, on the approved spec once it is on the default branch.
+
+## 9. The fast lane, `--fast`
+
+For a small intent, where most questions would only confirm the default the
+skill already recommends. This section stands in for section 4, the
+interview, and section 6, the checkpoint, for this run and no other. Sections
+1, 2, 3, 5, 7 and 8 hold as they are: a `--fast` run goes through the
+refusals of section 2, reads as in 3, writes the file as in 5, closes as in 7
+and lands with the `docs(spec): <slug>` commit of section 8, in either mode.
+
+**The one message.** After the reading of 3, the first message of the run is
+the only question message. It holds every question whose answer changes what
+gets built, taken from the coverage list of 4 in its order, the structural
+alternative included, and nothing else: no recap, no preview. One line per
+question, `*question*: [recommended] short reason`, with the path when the
+answer depends on the code. An item the intent, the code or an ADR answers is
+not asked, as in 4.
+
+With more than four questions the same message says how many there are and
+that the full interview, plain `/spec`, may fit better, and the human
+chooses: answer the list, or start again without the flag. All the questions
+are listed all the same, and nothing is cut, because a question parked in
+"Open questions" would stop the spec at `/slice`.
+
+**The reply.** A line the reply does not mention takes its recommendation and
+goes in "Locked decisions" as confirmed: the human saw it. A bare "sì"
+confirms every line. A line answered in its verifiable form goes in its
+section as answered.
+
+A vague answer gets one follow-up message with the vague lines alone, in the
+same short form, the ground rule on vague answers applied to the batch. After
+that reply, or after the first one when nothing was vague, the draft is
+written as in 5, with the items not asked under `### Assumed`, and the run
+goes to "Decisions to confirm" in 7. There is no checkpoint and no second
+round of questions: a change of a decision at 8 that opens a new question is
+asked in the same short form.
