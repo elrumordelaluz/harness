@@ -722,14 +722,14 @@ describe('docs/*/README.md matches the templates it was copied from', () => {
   })
 })
 
-// S39. The contract leaves the prose: under a fixed heading the two AGENTS.md
-// carry a `json` fence with the eight keys the programs of the chain read,
+// S39. The contract leaves the prose: under a fixed heading the
+// .harness/AGENTS.md of this repo and its template carry a `json` fence with the eight keys the programs of the chain read,
 // and scripts/policy-lines.sh extracts it and passes it to jq. The heading,
 // the fence and the names of the keys are the contract: translating the prose
 // around them does not touch them. Here the block is read with jq and not
 // with JSON.parse, because a block only the test parses would be green and
 // dead.
-describe('the policy block of AGENTS.md', () => {
+describe('the policy block of .harness/AGENTS.md', () => {
   const heading = 'Policy block'
   const keys = [
     'version',
@@ -748,7 +748,7 @@ describe('the policy block of AGENTS.md', () => {
     'docs_extra_paths',
   ]
   const agentsFiles: Array<[string, string]> = [
-    ['AGENTS.md', join(root, 'AGENTS.md')],
+    ['.harness/AGENTS.md', join(root, '.harness/AGENTS.md')],
     ['skills/harness-init/templates/AGENTS.md', join(templates, 'AGENTS.md')],
   ]
   const tracked = execFileSync('git', ['ls-files'], {
@@ -865,7 +865,9 @@ describe('the policy block of AGENTS.md', () => {
   it.each(
     lists.flatMap((key) =>
       (
-        block(readFileSync(join(root, 'AGENTS.md'), 'utf8'))[key] as string[]
+        block(readFileSync(join(root, '.harness/AGENTS.md'), 'utf8'))[
+          key
+        ] as string[]
       ).map((pattern) => [key, pattern] as [string, string]),
     ),
   )('%s: %s matches a tracked file', (_key, pattern) => {
@@ -886,21 +888,72 @@ describe('the policy block of AGENTS.md', () => {
   // of package.json are what the gates run, and tier.sh compares only their
   // dependencies. S56 adds the stamp: a hand edit of it would say the repo is
   // at a commit of the harness it never installed, and a lie about that is
-  // read by whoever opens a cold session.
+  // read by whoever opens a cold session. S86 names the stamp, the bootstrap,
+  // the file of the block and the prompt of the judge one by one: .harness/
+  // also holds the documents, and .harness/bin/ is ignored in a project repo
+  // and never in a diff, so the pin is the path that says the machinery
+  // changed.
   it.each([
-    'AGENTS.md',
+    '.harness/stamp.json',
+    '.harness/bootstrap.sh',
+    '.harness/AGENTS.md',
+    '.harness/judge.md',
     '.claude/settings.json',
     '.github/**',
-    '.githooks/**',
-    '.harness/**',
-    'scripts/**',
     'package.json',
+    'pnpm-lock.yaml',
     'tsconfig*.json',
   ])('templates/AGENTS.md always names %s as sensitive', (path) => {
     expect(
       block(readFileSync(join(templates, 'AGENTS.md'), 'utf8'))
         .sensitive_paths as string[],
     ).toContain(path)
+  })
+
+  // The paths that left with S86: no project repo has scripts/ or .githooks/
+  // of the harness any more, and .harness/** whole would put every document
+  // under .harness/docs/ at tier 2.
+  it.each(['.githooks/**', 'scripts/**', '.harness/**'])(
+    'templates/AGENTS.md no longer names %s as sensitive',
+    (path) => {
+      expect(
+        block(readFileSync(join(templates, 'AGENTS.md'), 'utf8'))
+          .sensitive_paths as string[],
+      ).not.toContain(path)
+    },
+  )
+
+  it.each([
+    'AGENTS.md',
+    'CLAUDE.md',
+    '.claude/**',
+    '.harness/AGENTS.md',
+    '.harness/judge.md',
+  ])('templates/AGENTS.md names %s in never_tier_0', (path) => {
+    expect(
+      block(readFileSync(join(templates, 'AGENTS.md'), 'utf8'))
+        .never_tier_0 as string[],
+    ).toContain(path)
+  })
+
+  // The prose lines say the lists of the block, placeholders included, so
+  // whoever reads the template reads the rule the scripts apply.
+  it.each([
+    ['- Sensitive paths:', 'sensitive_paths'],
+    ['- Never tier 0:', 'never_tier_0'],
+  ])('templates/AGENTS.md: the line "%s" says the list of %s', (start, key) => {
+    const text = readFileSync(join(templates, 'AGENTS.md'), 'utf8')
+    const line = text
+      .split('\n')
+      .find((candidate) => candidate.startsWith(start))
+    expect(line, `templates/AGENTS.md has no "${start}" line`).toBeDefined()
+    const said = [...(line ?? '').matchAll(/`([^`]+)`/g)].map(
+      (match) => match[1] ?? '',
+    )
+    const listed = (block(text)[key] as string[]).map((path) =>
+      path.replace(/^\{\{(.*)\}\}$/, '$1'),
+    )
+    expect([...said].sort()).toEqual([...listed].sort())
   })
 
   // Without docs_mode on main in the template, every repo installed from
@@ -1007,7 +1060,7 @@ describe('the policy block of AGENTS.md', () => {
 // a PR the policy is about to merge if that sentence is behind. The sentence
 // is compared and not the whole line: the other sentences drift for reasons
 // of their own, the audit in Docket belongs to this repo.
-describe('AGENTS.md and its template say the same tier gate', () => {
+describe('.harness/AGENTS.md and its template say the same tier gate', () => {
   const template = readFileSync(join(templates, 'AGENTS.md'), 'utf8')
 
   function tierGate(source: string): string | undefined {
@@ -1025,7 +1078,9 @@ describe('AGENTS.md and its template say the same tier gate', () => {
   }
 
   it('templates/AGENTS.md says which tier 2 waits for a human, as this repo does', () => {
-    const here = tierGate(readFileSync(join(root, 'AGENTS.md'), 'utf8'))
+    const here = tierGate(
+      readFileSync(join(root, '.harness/AGENTS.md'), 'utf8'),
+    )
     const there = tierGate(template)
 
     // The case died once already, by passing on two undefined: the heading was
@@ -1033,7 +1088,7 @@ describe('AGENTS.md and its template say the same tier gate', () => {
     // so the comparison below had nothing to tell apart. Each side says it
     // found its sentence before the two are compared.
     for (const [name, sentence] of [
-      ['AGENTS.md', here],
+      ['.harness/AGENTS.md', here],
       ['skills/harness-init/templates/AGENTS.md', there],
     ] as const) {
       expect(
@@ -1044,7 +1099,7 @@ describe('AGENTS.md and its template say the same tier gate', () => {
 
     expect(
       there,
-      'the tier sentence in "Human gates" drifted from the one in AGENTS.md of this repo: every repo installed from the template would read a rule policy.sh does not follow',
+      'the tier sentence in "Human gates" drifted from the one in .harness/AGENTS.md of this repo: every repo installed from the template would read a rule policy.sh does not follow',
     ).toBe(here)
     expect(
       there,
@@ -1530,14 +1585,14 @@ describe('every description keeps its command and the English triggers', () => {
   })
 })
 
-// A session at clean context starts from AGENTS.md and from CLAUDE.md: the
-// "Map" says which skills exist, the line about the symlinks says the one
+// A session at clean context starts from AGENTS.md and from CLAUDE.md, which
+// import .harness/AGENTS.md: its "Map" says which skills exist, the line about the symlinks says the one
 // that runs is the folder of the working tree. A skill missing from one of
 // the two lines is a skill whoever reads believes is not there, and whoever
 // adds the next one has nothing to remind them of the two lines. The test
 // compares names, not sentences: the description of each skill stays the
 // prose of whoever writes it.
-describe('AGENTS.md and CLAUDE.md name every skill of skills/', () => {
+describe('.harness/AGENTS.md and CLAUDE.md name every skill of skills/', () => {
   const skills = readdirSync(join(root, 'skills')).filter((name) =>
     statSync(join(root, 'skills', name)).isDirectory(),
   )
@@ -1545,7 +1600,7 @@ describe('AGENTS.md and CLAUDE.md name every skill of skills/', () => {
   const symlinkLine = readFileSync(join(root, 'CLAUDE.md'), 'utf8')
     .split('\n')
     .find((line) => line.includes('~/.claude/skills/'))
-  const map = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+  const map = readFileSync(join(root, '.harness/AGENTS.md'), 'utf8')
     .split(/^## /m)
     .find((section) => section.startsWith('Map\n'))
 
@@ -1560,12 +1615,48 @@ describe('AGENTS.md and CLAUDE.md name every skill of skills/', () => {
     ).toContain(`\`${skill}\``)
   })
 
-  it.each(skills)('the Map of AGENTS.md names skills/%s/SKILL.md', (skill) => {
-    expect(map, 'AGENTS.md has no ## Map section').toBeDefined()
-    expect(
-      map,
-      `the "Map" of AGENTS.md does not name skills/${skill}/SKILL.md`,
-    ).toContain(`skills/${skill}/SKILL.md`)
+  it.each(skills)(
+    'the Map of .harness/AGENTS.md names skills/%s/SKILL.md',
+    (skill) => {
+      expect(map, '.harness/AGENTS.md has no ## Map section').toBeDefined()
+      expect(
+        map,
+        `the "Map" of .harness/AGENTS.md does not name skills/${skill}/SKILL.md`,
+      ).toContain(`skills/${skill}/SKILL.md`)
+    },
+  )
+})
+
+// S86. The harness is the tool and not the subject: the root AGENTS.md says
+// what the project is and sends the agent to .harness/AGENTS.md in one short
+// section, and CLAUDE.md imports both. A policy block left at the root would
+// be a second copy nobody reads.
+describe('the root AGENTS.md sends the agent to .harness/AGENTS.md', () => {
+  const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+
+  it('has no policy block', () => {
+    expect(agents).not.toMatch(/^## Policy block/m)
+    expect(agents).not.toContain('```json')
+  })
+
+  it('has a ## Harness section of at most three lines that names .harness/AGENTS.md', () => {
+    const section = agents
+      .split(/^## /m)
+      .find((part) => part.startsWith('Harness\n'))
+    expect(section, 'AGENTS.md has no ## Harness section').toBeDefined()
+    const lines = (section ?? '')
+      .split('\n')
+      .slice(1)
+      .filter((line) => line.trim() !== '')
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.length).toBeLessThanOrEqual(3)
+    expect(lines.join('\n')).toContain('`.harness/AGENTS.md`')
+  })
+
+  it('CLAUDE.md has the line @.harness/AGENTS.md', () => {
+    expect(readFileSync(join(root, 'CLAUDE.md'), 'utf8').split('\n')).toContain(
+      '@.harness/AGENTS.md',
+    )
   })
 })
 
@@ -1814,9 +1905,9 @@ describe('docs/parked.md is a template plus the entries of this repo', () => {
 // A line of inbox is written by a skill in the middle of a run: if the path
 // is not among those, the hook stops it and the skill jams exactly where it
 // was supposed to carry on.
-describe('AGENTS.md lets a line of inbox land', () => {
+describe('.harness/AGENTS.md lets a line of inbox land', () => {
   it.each([
-    ['AGENTS.md', join(root, 'AGENTS.md')],
+    ['.harness/AGENTS.md', join(root, '.harness/AGENTS.md')],
     ['skills/harness-init/templates/AGENTS.md', join(templates, 'AGENTS.md')],
   ])('%s names docs/inbox.md in human_gate_paths', (_name, path) => {
     expect(
@@ -1828,9 +1919,9 @@ describe('AGENTS.md lets a line of inbox land', () => {
 
 // S74: the line of docs/parked.md lands on main the way a line of inbox does,
 // or the pre-commit hook refuses the commit of park.sh.
-describe('AGENTS.md lets a line of parked land', () => {
+describe('.harness/AGENTS.md lets a line of parked land', () => {
   it.each([
-    ['AGENTS.md', join(root, 'AGENTS.md')],
+    ['.harness/AGENTS.md', join(root, '.harness/AGENTS.md')],
     ['skills/harness-init/templates/AGENTS.md', join(templates, 'AGENTS.md')],
   ])('%s names docs/parked.md in human_gate_paths', (_name, path) => {
     const text = readFileSync(path, 'utf8')
@@ -2959,7 +3050,7 @@ describe('no template names an Italian section of AGENTS.md', () => {
   })
 })
 
-// S79. The policy of a repo is the json block of AGENTS.md, under the headings
+// S79. The policy of a repo is the json block of .harness/AGENTS.md, under the headings
 // "Review policy" and "Human gates": the prose lines the spec used to name,
 // `Documenti: su main`, "Gate umani", `Path sensibili`, `Mai tier 0`, "Merge
 // umano per path", are gone, and a reader who looks for them in an AGENTS.md
@@ -3039,10 +3130,12 @@ describe('the body of docs/spec.md names the keys of the policy block', () => {
   })
 
   it.each(keys)('the body names `%s`, a key of the policy block', (key) => {
-    const block = policyBlock(readFileSync(join(root, 'AGENTS.md'), 'utf8'))
+    const block = policyBlock(
+      readFileSync(join(root, '.harness/AGENTS.md'), 'utf8'),
+    )
     expect(
       Object.keys(block),
-      `${key} is not a key of the block of AGENTS.md`,
+      `${key} is not a key of the block of .harness/AGENTS.md`,
     ).toContain(key)
     expect(
       specBody(spec)?.includes(`\`${key}\``),

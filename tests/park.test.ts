@@ -131,11 +131,14 @@ const states: Files = {
   'docs/parked.md': `${parkedTemplate}\n- 2026-09-24: docs/intent/taken.md: not now\n`,
 }
 
-// A bare origin whose main carries AGENTS.md, the scripts and `base`, and a
-// clone of it to work in, next to a bin with a pnpm that runs Prettier.
+// A bare origin whose main carries .harness/AGENTS.md, the scripts and
+// `base`, and a clone of it to work in, next to a bin with a pnpm that runs
+// Prettier. `file` is where the block goes, so a case can put it where the
+// script must not look.
 function repo(
   base: Files = states,
   agents: string = onMain,
+  file = '.harness/AGENTS.md',
 ): { dir: string; origin: string } {
   const top = mkdtempSync(join(tmpdir(), 'park-'))
   const origin = join(top, 'origin.git')
@@ -146,7 +149,7 @@ function repo(
   git(seed, 'init', '-q', '-b', 'main')
   identity(seed)
   write(seed, {
-    'AGENTS.md': agents,
+    [file]: agents,
     'docs/parked.md': parkedTemplate,
     ...base,
   })
@@ -337,6 +340,18 @@ describe('park.sh refuses, says why and writes nothing', () => {
       expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(before)
     },
   )
+
+  // S86. A valid block in the root AGENTS.md alone is no block.
+  it('a block in the root AGENTS.md alone stops it and names .harness/AGENTS.md', () => {
+    const { dir, origin } = repo(states, onMain, 'AGENTS.md')
+    const before = git(origin, 'rev-parse', 'refs/heads/main')
+    const result = run(dir, ['docs/intent/alpha.md', 'later'])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('.harness/AGENTS.md')
+    expect(result.stderr).toMatch(/no policy block/)
+    expect(git(dir, 'status', '--porcelain')).toBe('')
+    expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(before)
+  })
 
   it('refuses to run off the default branch with docs_mode main', () => {
     const { dir, origin } = repo()

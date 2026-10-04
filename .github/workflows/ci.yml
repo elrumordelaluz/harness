@@ -123,9 +123,10 @@ jobs:
           for t in 0 1 2 3; do gh pr edit "$PR" --remove-label "tier:$t" 2>/dev/null || true; done
           gh pr edit "$PR" --add-label "tier:$tier"
           # How much scrutiny is the tier; who may merge is this label. A path
-          # named in the "Human gates" line of AGENTS.md never merges on its own,
-          # tier 0 included. The label is only ever added here: tier.sh keeps
-          # one it finds on the PR, so a brake comes off by a human hand only.
+          # named in the "Human gates" line of .harness/AGENTS.md never merges
+          # on its own, tier 0 included. The label is only ever added here:
+          # tier.sh keeps one it finds on the PR, so a brake comes off by a
+          # human hand only.
           if grep -q '^human-gate:' why.txt; then
             { echo "human-gate"; grep '^human-gate:' why.txt | sed 's/^/- /'; } >> "$GITHUB_STEP_SUMMARY"
             gh pr edit "$PR" --add-label human-gate

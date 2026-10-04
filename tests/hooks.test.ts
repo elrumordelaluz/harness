@@ -1,9 +1,10 @@
 // Behaviour of the git hooks that guard main, pre-commit and pre-push, and of
 // the one exception ADR-0003 gives them: a commit made only of documents goes
-// on main when the policy block of AGENTS.md says `"docs_mode": "main"`. Each
-// case is a clone of a throwaway bare origin, with core.hooksPath on the hooks
-// of the template, the real AGENTS.md of this repo (or its docs_mode turned to
-// pr, or taken out) and the scripts the hooks call.
+// on main when the policy block of .harness/AGENTS.md says
+// `"docs_mode": "main"`. Each case is a clone of a throwaway bare origin, with
+// core.hooksPath on the hooks of the template, the real .harness/AGENTS.md of
+// this repo (or its docs_mode turned to pr, or taken out) and the scripts the
+// hooks call.
 // `pnpm` is a stub that logs and passes: Prettier and typecheck have their own
 // gates, here only the rule on main is under test.
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -24,7 +25,7 @@ import { brokenPolicies, withPolicy } from './agents.js'
 const root = resolve(import.meta.dirname, '..')
 const templates = join(root, 'skills/harness-init/templates')
 const hooks = join(templates, 'githooks')
-const agents = readFileSync(join(root, 'AGENTS.md'), 'utf8')
+const agents = readFileSync(join(root, '.harness/AGENTS.md'), 'utf8')
 const template = readFileSync(join(templates, 'AGENTS.md'), 'utf8')
 
 // null deletes the file.
@@ -65,9 +66,12 @@ const base: Files = {
   'src/app.ts': 'export const app = 1\n',
 }
 
+// `file` is where the text of the policy goes: .harness/AGENTS.md, the one
+// file the hooks read it from, unless a case puts it where they must not look.
 function repo(
   text = agents,
   branch = 'main',
+  file = '.harness/AGENTS.md',
 ): { dir: string; origin: string; top: string } {
   const top = mkdtempSync(join(tmpdir(), 'hooks-'))
   const origin = join(top, 'origin.git')
@@ -77,7 +81,7 @@ function repo(
   git(dir, 'init', '-q', '-b', branch)
   git(dir, 'config', 'user.email', 'hooks@test')
   git(dir, 'config', 'user.name', 'hooks')
-  write(dir, { 'AGENTS.md': text, ...base })
+  write(dir, { [file]: text, ...base })
   for (const script of ['prose.sh', 'commitlint.sh', 'policy-lines.sh']) {
     const path = join(dir, '.harness/bin', script)
     mkdirSync(dirname(path), { recursive: true })
@@ -218,13 +222,16 @@ describe('pre-commit on main, with docs_mode main', () => {
       ]
     })
     const staged = commit(dir, {
-      'AGENTS.md': widened,
+      '.harness/AGENTS.md': widened,
       'src/app.ts': 'export const app = 2\n',
     })
     expect(staged.status).not.toBe(0)
-    expect(staged.stderr).toContain('AGENTS.md')
+    expect(staged.stderr).toContain('.harness/AGENTS.md')
     git(dir, 'reset', '-q', '--hard')
-    write(dir, { 'AGENTS.md': widened, 'src/app.ts': 'export const app = 3\n' })
+    write(dir, {
+      '.harness/AGENTS.md': widened,
+      'src/app.ts': 'export const app = 3\n',
+    })
     git(dir, 'add', 'src/app.ts')
     const unstaged = run(dir, ['commit', '-q', '-m', 'fix(app): tre'])
     expect(unstaged.status).not.toBe(0)
@@ -313,6 +320,19 @@ describe('pre-commit on main, without docs_mode main', () => {
       expect(git(dir, 'rev-parse', 'HEAD')).toBe(before)
     },
   )
+
+  // S86. The block lives in .harness/AGENTS.md and nowhere else: a valid one
+  // left in the root AGENTS.md is a block that cannot be read, not a fallback.
+  it('a block in the root AGENTS.md alone keeps main closed and names .harness/AGENTS.md', () => {
+    const { dir } = repo(agents, 'main', 'AGENTS.md')
+    const before = git(dir, 'rev-parse', 'HEAD')
+    const result = commit(dir, intent)
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('no commits on main')
+    expect(result.stderr).toContain('.harness/AGENTS.md')
+    expect(result.stderr).toContain('/harness-init local')
+    expect(git(dir, 'rev-parse', 'HEAD')).toBe(before)
+  })
 })
 
 describe('pre-commit: what it always did', () => {
@@ -419,8 +439,12 @@ describe('pre-push to main', () => {
       ]
     })
     expect(
-      commit(dir, { 'AGENTS.md': widened }, 'docs(harness): allarga', allow)
-        .status,
+      commit(
+        dir,
+        { '.harness/AGENTS.md': widened },
+        'docs(harness): allarga',
+        allow,
+      ).status,
     ).toBe(0)
     expect(
       commit(dir, { 'src/app.ts': 'export const app = 2\n' }, 'fix(app): due')
@@ -428,7 +452,7 @@ describe('pre-push to main', () => {
     ).toBe(0)
     const result = run(dir, ['push', '-q', 'origin', 'main'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('AGENTS.md')
+    expect(result.stderr).toContain('.harness/AGENTS.md')
     expect(pushed(origin)).toBe(before)
   })
 
@@ -509,6 +533,18 @@ describe('pre-push to main', () => {
       expect(pushed(origin)).toBe(before)
     },
   )
+
+  it('a block in the root AGENTS.md alone keeps main closed and names .harness/AGENTS.md', () => {
+    const { dir, origin } = repo(agents, 'main', 'AGENTS.md')
+    const before = pushed(origin)
+    expect(commit(dir, intent, 'docs(intent): nuova', allow).status).toBe(0)
+    const result = run(dir, ['push', '-q', 'origin', 'main'])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('no direct push to main')
+    expect(result.stderr).toContain('.harness/AGENTS.md')
+    expect(result.stderr).toContain('/harness-init local')
+    expect(pushed(origin)).toBe(before)
+  })
 
   it('lets code through with HARNESS_ALLOW_MAIN=1', () => {
     const { dir, origin } = repo()

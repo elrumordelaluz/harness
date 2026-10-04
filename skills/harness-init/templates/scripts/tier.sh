@@ -16,8 +16,8 @@
 # automerge.yml nor policy.sh merges that PR, tier 0 included. A label already
 # on the PR is kept: a brake stays until a human takes it off, whatever the
 # next push touches.
-# The lists and the two thresholds come from the policy block of AGENTS.md
-# read at the base ref, never from the working tree: on `pull_request` the
+# The lists and the two thresholds come from the policy block of
+# .harness/AGENTS.md read at the base ref, never from the working tree: on `pull_request` the
 # tree is the PR's own copy, and a PR does not get to widen the rules it is
 # judged by. No block at the base ref means no lists, and the script fails
 # closed at tier 3 instead of open at 0 or 1: a repo that cannot say how a
@@ -58,14 +58,16 @@ docs/review-log/**'
 # First pattern of $2 (one per line) that matches $1, empty when none does.
 match() { policy_match "$@"; }
 
-# The policy block of AGENTS.md as it is at the base ref, one key at a time.
-agents="$(git show "$base:AGENTS.md" 2>/dev/null || true)"
+# The policy block of .harness/AGENTS.md as it is at the base ref, one key at
+# a time. Only there: the root AGENTS.md is the project's, and a block left in
+# it reads as no block at all.
+agents="$(git show "$base:.harness/AGENTS.md" 2>/dev/null || true)"
 policy() { policy_json "$agents" "$1"; }
 sensitive="$(policy '.sensitive_paths[]')"
 gate="$(policy '.human_gate_paths[]')"
-# The two thresholds of tier 1. A repo widens them in its own AGENTS.md, which
-# is sensitive and never tier 0, so the change comes out tier 2 with the judge
-# on it. Read as text and checked before use: without the block they arrive
+# The two thresholds of tier 1. A repo widens them in its .harness/AGENTS.md,
+# which is sensitive and never tier 0, so the change comes out tier 2 with the
+# judge on it. Read as text and checked before use: without the block they arrive
 # empty, the tier is already 2 for that, and a comparison against nothing
 # would be a bash error.
 max_lines="$(policy '.max_lines')"
@@ -170,7 +172,7 @@ fi
 # repo answers the same way wherever the chain reads its rules. The floor
 # above does not come from the block and holds through all four.
 if [ -z "$agents" ]; then
-  up 3 "no AGENTS.md at $base, the path lists are empty: run /harness-init local"
+  up 3 "no .harness/AGENTS.md at $base, the path lists are empty: run /harness-init local"
 elif tool_why="$(policy_tool_missing)"; then
   # Without jq the lists arrive empty as well, so the tier fails closed here
   # too, but at 2: the repo said how it wants to be judged and this machine
@@ -179,7 +181,7 @@ elif tool_why="$(policy_tool_missing)"; then
   up 2 "$tool_why"
 else
   block_why="$(policy_why "$agents")"
-  if [ -n "$block_why" ]; then up 3 "AGENTS.md at $base: $block_why"; fi
+  if [ -n "$block_why" ]; then up 3 ".harness/AGENTS.md at $base: $block_why"; fi
 fi
 
 while IFS= read -r f; do
