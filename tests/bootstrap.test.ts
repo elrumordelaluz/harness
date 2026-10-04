@@ -381,3 +381,68 @@ describe('bootstrap.sh fills .harness/bin/ from the pin', () => {
     expect(existsSync(pwned), 'the pin ran a command').toBe(false)
   })
 })
+
+// S87. The SessionStart hook of the template runs the bootstrap, so a clone
+// has its machinery with no step by hand. Claude Code adds the stdout of a
+// SessionStart hook to the context and lets the session start whatever the
+// exit code: the reason of a failed bootstrap has to reach stdout, and the
+// hook exits 0 so nothing reads a failure as a stop.
+describe('the SessionStart hook of the template runs the bootstrap', () => {
+  const settings = join(root, templates, 'settings.json')
+  const command = execFileSync(
+    'jq',
+    ['-r', '.hooks.SessionStart[]?.hooks[]?.command', settings],
+    { encoding: 'utf8' },
+  ).trim()
+
+  function session(dir: string) {
+    const { GITHUB_ACTIONS: _, ...env } = process.env
+    return spawnSync('bash', ['-c', command], {
+      cwd: tmpdir(),
+      encoding: 'utf8',
+      env: { ...env, CLAUDE_PROJECT_DIR: dir },
+    })
+  }
+
+  it('names .harness/bootstrap.sh under CLAUDE_PROJECT_DIR', () => {
+    expect(command).toContain('"$CLAUDE_PROJECT_DIR"/.harness/bootstrap.sh')
+  })
+
+  it('exits 0 when the bootstrap fails, and prints what it said', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bootstrap-session-'))
+    mkdirSync(join(dir, '.harness'))
+    writeFileSync(
+      join(dir, '.harness/bootstrap.sh'),
+      '#!/usr/bin/env bash\necho "bootstrap: the reason" >&2\nexit 1\n',
+    )
+    chmodSync(join(dir, '.harness/bootstrap.sh'), 0o755)
+
+    const run = session(dir)
+
+    expect(run.status).toBe(0)
+    expect(run.stdout).toContain('bootstrap: the reason')
+  })
+
+  it('exits 0 with the real bootstrap on a pin that cannot be fetched', () => {
+    const { origin, first } = harness()
+    const dir = project(join(origin, 'missing.git'), first)
+
+    const run = session(dir)
+
+    expect(run.status).toBe(0)
+    expect(run.stdout).toMatch(/^bootstrap: cannot fetch /m)
+    expect(existsSync(join(dir, '.harness/bin'))).toBe(false)
+  })
+
+  it('lays the templates out when the pin can be fetched', () => {
+    const { origin, first } = harness()
+    const dir = project(origin, first)
+
+    const run = session(dir)
+
+    expect(run.status).toBe(0)
+    expect(readFileSync(join(dir, '.harness/bin/.sha'), 'utf8')).toBe(
+      `${first}\n`,
+    )
+  })
+})

@@ -9,8 +9,25 @@
 # the base of the push: a commit of the range could rewrite them, and it is
 # not a document.
 set -euo pipefail
-[ "${HARNESS_ALLOW_MAIN:-}" = 1 ] && exit 0
 cd "$(git rev-parse --show-toplevel)"
+# The pin before any other check: .harness/bin/.sha, which the bootstrap
+# writes, must be the pin.sha of .harness/stamp.json, or this clone commits
+# under rules the others no longer have. HARNESS_ALLOW_MAIN does not open it.
+# The harness repo has no pin, and the rule of the bootstrap spares it: no
+# stamp, the template tracked, .harness/bootstrap.sh a tracked link to it and
+# .harness/bin tracked. The same lines sit in the three hooks.
+t=skills/harness-init/templates/bootstrap.sh
+if [ -f .harness/stamp.json ] || [ -z "$(git ls-files -- .harness/bin)" ] ||
+  [ -z "$(git ls-files -- "$t")" ] ||
+  [ "$(git ls-files -s -- .harness/bootstrap.sh | cut -c1-6)" != 120000 ] ||
+  [ "$(readlink .harness/bootstrap.sh)" != "../$t" ]; then
+  pin="$(jq -r '.pin.sha // empty' .harness/stamp.json 2>/dev/null || true)"
+  if [ -z "$pin" ] || [ "$(cat .harness/bin/.sha 2>/dev/null || true)" != "$pin" ]; then
+    echo "harness: .harness/bin is not at the pin.sha of .harness/stamp.json, run .harness/bootstrap.sh" >&2
+    exit 1
+  fi
+fi
+[ "${HARNESS_ALLOW_MAIN:-}" = 1 ] && exit 0
 while read -r _local_ref local_sha remote_ref remote_sha; do
   case "$remote_ref" in
     refs/heads/main|refs/heads/master) ;;

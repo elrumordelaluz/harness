@@ -6,7 +6,9 @@
 // this repo (or its docs_mode turned to pr, or taken out) and the scripts the
 // hooks call.
 // `pnpm` is a stub that logs and passes: Prettier and typecheck have their own
-// gates, here only the rule on main is under test.
+// gates, here only the rule on main is under test. Every clone is at its pin,
+// `.harness/bin/.sha` equal to the `pin.sha` of `.harness/stamp.json`, unless
+// a case moves one of the two.
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -15,6 +17,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -60,7 +63,12 @@ function documenti(text: string, value: string | null): string {
 
 // The files every case starts from, committed on main and pushed before the
 // hooks are switched on: the base is not what is under test.
+const pinned = 'b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80'
+const stamp = (sha: string | null): string =>
+  `${JSON.stringify({ harness: 'x', stages: {}, pin: sha === null ? undefined : { origin: 'x', sha, date: '2026-10-04' } })}\n`
 const base: Files = {
+  '.harness/stamp.json': stamp(pinned),
+  '.harness/bin/.sha': `${pinned}\n`,
   'docs/intent/README.md': 'un file per idea\n',
   'docs/intent/vecchia.md': '## Problema\n\nuna riga\n',
   'src/app.ts': 'export const app = 1\n',
@@ -588,5 +596,167 @@ describe('pre-push to main', () => {
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain(`no direct push to ${branch}`)
     expect(pushed(origin, branch)).toBe(before)
+  })
+})
+
+// S87. A clone whose .harness/bin is not at the pin of the stamp commits
+// under rules the others no longer have: the three hooks refuse, first, with
+// one line that says to run the bootstrap. Each hook runs here as a process
+// on its own, so the one under test is the one that answers.
+describe('a clone off the pin', () => {
+  function hook(
+    dir: string,
+    name: string,
+    args: string[],
+    env: Record<string, string> = {},
+    input = '',
+  ): { status: number | null; stderr: string } {
+    const top = dirname(dir)
+    const result = spawnSync(join(hooks, name), args, {
+      cwd: dir,
+      encoding: 'utf8',
+      input,
+      env: {
+        PATH: `${join(top, 'bin')}:${process.env.PATH}`,
+        HOME: process.env.HOME ?? top,
+        PNPM_LOG: join(top, 'pnpm.log'),
+        ...env,
+      },
+    })
+    return { status: result.status, stderr: result.stderr }
+  }
+
+  // Code on main, a message commitlint accepts, a push to main: every other
+  // check would have its own say, so a lone line about the bootstrap is the
+  // pin answering first.
+  function all(
+    dir: string,
+    top: string,
+    env: Record<string, string> = {},
+  ): Array<[string, { status: number | null; stderr: string }]> {
+    write(dir, { 'src/app.ts': 'export const app = 2\n' })
+    git(dir, 'add', '-A')
+    const message = join(top, 'message')
+    writeFileSync(message, 'fix(app): due\n')
+    const head = git(dir, 'rev-parse', 'HEAD')
+    return [
+      ['pre-commit', hook(dir, 'pre-commit', [], env)],
+      ['commit-msg', hook(dir, 'commit-msg', [message], env)],
+      [
+        'pre-push',
+        hook(
+          dir,
+          'pre-push',
+          ['origin', join(top, 'origin.git')],
+          env,
+          `refs/heads/main ${head} refs/heads/main ${'0'.repeat(40)}\n`,
+        ),
+      ],
+    ]
+  }
+
+  function refused(
+    results: Array<[string, { status: number | null; stderr: string }]>,
+  ): void {
+    for (const [name, result] of results) {
+      expect(result.status, `${name} let it through`).not.toBe(0)
+      const lines = result.stderr.trim().split('\n')
+      expect(lines, `${name}: ${result.stderr}`).toHaveLength(1)
+      expect(lines[0], name).toContain('.harness/bootstrap.sh')
+    }
+  }
+
+  it('a marker that is not the pin: the three hooks refuse and name the bootstrap', () => {
+    const { dir, top } = repo()
+    write(dir, { '.harness/bin/.sha': `${'a'.repeat(40)}\n` })
+    refused(all(dir, top))
+    expect(() => readFileSync(join(top, 'pnpm.log'))).toThrow()
+  })
+
+  it('a git commit is refused with the line, and nothing is committed', () => {
+    const { dir } = repo()
+    git(dir, 'switch', '-q', '-c', 'slice/S01-x')
+    const before = git(dir, 'rev-parse', 'HEAD')
+    write(dir, { '.harness/bin/.sha': `${'a'.repeat(40)}\n` })
+    const result = commit(
+      dir,
+      { 'src/app.ts': 'export const app = 2\n' },
+      'fix(app): due',
+    )
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('.harness/bootstrap.sh')
+    expect(git(dir, 'rev-parse', 'HEAD')).toBe(before)
+  })
+
+  it('no marker: the three hooks refuse', () => {
+    const { dir, top } = repo()
+    write(dir, { '.harness/bin/.sha': null })
+    refused(all(dir, top))
+  })
+
+  it('a stamp with no pin.sha: the three hooks refuse', () => {
+    const { dir, top } = repo()
+    write(dir, { '.harness/stamp.json': stamp(null) })
+    refused(all(dir, top))
+  })
+
+  it('no stamp at all: the three hooks refuse', () => {
+    const { dir, top } = repo()
+    write(dir, { '.harness/stamp.json': null })
+    refused(all(dir, top))
+  })
+
+  it('HARNESS_ALLOW_MAIN=1 does not open it', () => {
+    const { dir, top } = repo()
+    write(dir, { '.harness/bin/.sha': `${'a'.repeat(40)}\n` })
+    refused(all(dir, top, allow))
+  })
+
+  it('at the pin, a commit on a slice branch goes through', () => {
+    const { dir } = repo()
+    git(dir, 'switch', '-q', '-c', 'slice/S01-x')
+    const result = commit(
+      dir,
+      { 'src/app.ts': 'export const app = 2\n' },
+      'fix(app): due',
+    )
+    expect(result.status, result.stderr).toBe(0)
+  })
+
+  // The harness repo in miniature, the rule of the bootstrap: no stamp, the
+  // template tracked, .harness/bootstrap.sh a tracked link to it and
+  // .harness/bin tracked. There is no pin to be off.
+  it('in the harness repo, with .harness/bin tracked, no marker is looked for', () => {
+    const { dir } = repo()
+    const script = 'skills/harness-init/templates/bootstrap.sh'
+    mkdirSync(join(dir, dirname(script)), { recursive: true })
+    copyFileSync(join(root, script), join(dir, script))
+    symlinkSync(`../${script}`, join(dir, '.harness/bootstrap.sh'))
+    write(dir, { '.harness/stamp.json': null, '.harness/bin/.sha': null })
+    git(dir, 'add', '-A')
+    git(dir, '-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'chore: x')
+    git(dir, 'switch', '-q', '-c', 'slice/S01-x')
+    const result = commit(
+      dir,
+      { 'src/app.ts': 'export const app = 2\n' },
+      'fix(app): due',
+    )
+    expect(result.status, result.stderr).toBe(0)
+    const pushed = run(dir, ['push', '-q', 'origin', 'slice/S01-x'])
+    expect(pushed.status, pushed.stderr).toBe(0)
+  })
+
+  // The same tree with a stamp is a project that tracks its .harness/bin, and
+  // a tracked .harness/bin counts for nothing there.
+  it('a project that tracks .harness/bin is still held to its pin', () => {
+    const { dir, top } = repo()
+    const script = 'skills/harness-init/templates/bootstrap.sh'
+    mkdirSync(join(dir, dirname(script)), { recursive: true })
+    copyFileSync(join(root, script), join(dir, script))
+    symlinkSync(`../${script}`, join(dir, '.harness/bootstrap.sh'))
+    write(dir, { '.harness/bin/.sha': null })
+    git(dir, 'add', '-A')
+    git(dir, '-c', 'core.hooksPath=/dev/null', 'commit', '-q', '-m', 'chore: x')
+    refused(all(dir, top))
   })
 })
