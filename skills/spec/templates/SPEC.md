@@ -1,6 +1,6 @@
 ---
 status: draft
-intent: docs/intent/{{slug}}.md
+intent: .harness/docs/intent/{{slug}}.md
 date: {{date}}
 approved:
 ---

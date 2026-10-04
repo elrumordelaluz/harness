@@ -69,8 +69,8 @@ const stamp = (sha: string | null): string =>
 const base: Files = {
   '.harness/stamp.json': stamp(pinned),
   '.harness/bin/.sha': `${pinned}\n`,
-  'docs/intent/README.md': 'un file per idea\n',
-  'docs/intent/vecchia.md': '## Problema\n\nuna riga\n',
+  '.harness/docs/intent/README.md': 'un file per idea\n',
+  '.harness/docs/intent/vecchia.md': '## Problema\n\nuna riga\n',
   'src/app.ts': 'export const app = 1\n',
 }
 
@@ -143,7 +143,7 @@ function commit(
 }
 
 const allow = { HARNESS_ALLOW_MAIN: '1' }
-const intent = { 'docs/intent/nuova.md': '## Problema\n\ndue righe\n' }
+const intent = { '.harness/docs/intent/nuova.md': '## Problema\n\ndue righe\n' }
 
 describe('pre-commit on main, with docs_mode main', () => {
   it('lets a commit of documents through', () => {
@@ -153,19 +153,42 @@ describe('pre-commit on main, with docs_mode main', () => {
     expect(result.status, result.stderr).toBe(0)
     expect(git(dir, 'rev-parse', 'HEAD^')).toBe(before)
     expect(git(dir, 'show', '--name-only', '--format=', 'HEAD')).toBe(
-      'docs/intent/nuova.md',
+      '.harness/docs/intent/nuova.md',
     )
+  })
+
+  // S88: the documents moved under .harness/docs/, and the old place is
+  // code like any other path.
+  it('lets a commit of a slice under .harness/docs/backlog/ through', () => {
+    const { dir } = repo()
+    const result = commit(
+      dir,
+      { '.harness/docs/backlog/S01-x.md': '---\nid: S01\n---\n' },
+      'docs(backlog): s01',
+    )
+    expect(result.status, result.stderr).toBe(0)
+  })
+
+  it('refuses a slice left under docs/backlog/', () => {
+    const { dir } = repo()
+    const result = commit(
+      dir,
+      { 'docs/backlog/S01-x.md': '---\nid: S01\n---\n' },
+      'docs(backlog): s01',
+    )
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('docs/backlog/S01-x.md')
   })
 
   it('lets a deletion of a document through', () => {
     const { dir } = repo()
-    const result = commit(dir, { 'docs/intent/vecchia.md': null })
+    const result = commit(dir, { '.harness/docs/intent/vecchia.md': null })
     expect(result.status, result.stderr).toBe(0)
   })
 
   // This repo widens the documents with docs_extra_paths: here the prose of
   // the skills is a document too (ADR-0003, decision 4).
-  it.each(['skills/judge/SKILL.md', 'docs/inbox.md', 'docs/spec.md'])(
+  it.each(['skills/judge/SKILL.md', '.harness/docs/inbox.md', 'docs/spec.md'])(
     'lets %s through, a path of docs_extra_paths',
     (file) => {
       const { dir } = repo()
@@ -197,7 +220,7 @@ describe('pre-commit on main, with docs_mode main', () => {
   // Without renames a move shows both names, and the new one is out.
   it('reads a move out of the paths under its new name', () => {
     const { dir } = repo()
-    git(dir, 'mv', 'docs/intent/vecchia.md', 'src/vecchia.md')
+    git(dir, 'mv', '.harness/docs/intent/vecchia.md', 'src/vecchia.md')
     const result = run(dir, ['commit', '-q', '-m', 'docs(intent): sposta'])
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('src/vecchia.md')
@@ -207,15 +230,17 @@ describe('pre-commit on main, with docs_mode main', () => {
   // git prints quoted no longer looks like the name it is, so it is outside.
   it('reads a name with spaces as the name it is', () => {
     const { dir } = repo()
-    const result = commit(dir, { 'docs/intent/an idea.md': 'a line\n' })
+    const result = commit(dir, {
+      '.harness/docs/intent/an idea.md': 'a line\n',
+    })
     expect(result.status, result.stderr).toBe(0)
   })
 
   it('refuses a name git prints quoted', () => {
     const { dir } = repo()
-    const result = commit(dir, { 'docs/intent/a"b.md': 'riga\n' })
+    const result = commit(dir, { '.harness/docs/intent/a"b.md': 'riga\n' })
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('docs/intent/a')
+    expect(result.stderr).toContain('.harness/docs/intent/a')
   })
 
   // The rules are the ones at HEAD, the base of a commit on main. A commit
@@ -251,9 +276,9 @@ describe('pre-commit on main, with docs_mode main', () => {
   // puts one at tier 0 for that reason. Under a human-gate path the pattern
   // alone would let one onto main with no PR and no judge.
   it.each([
-    'docs/intent/CLAUDE.md',
-    'docs/backlog/x/AGENTS.md',
-    'docs/specs/.claude/settings.json',
+    '.harness/docs/intent/CLAUDE.md',
+    '.harness/docs/backlog/x/AGENTS.md',
+    '.harness/docs/specs/.claude/settings.json',
   ])('refuses %s, a contract under a document path', (file) => {
     const { dir } = repo()
     const result = commit(dir, { [file]: 'regole\n' })
@@ -286,7 +311,9 @@ describe('pre-commit on main, with docs_mode main', () => {
   // human_gate_paths.
   it('with the template AGENTS.md, the documents are the human-gate paths', () => {
     const { dir } = repo(template)
-    expect(commit(dir, { 'docs/specs/SPEC-x.md': 'x\n' }).status).toBe(0)
+    expect(commit(dir, { '.harness/docs/specs/SPEC-x.md': 'x\n' }).status).toBe(
+      0,
+    )
     const skill = commit(
       dir,
       { 'skills/judge/SKILL.md': 'x\n' },
@@ -392,7 +419,8 @@ describe('pre-push to main', () => {
     const { dir, origin } = repo()
     expect(commit(dir, intent).status).toBe(0)
     expect(
-      commit(dir, { 'docs/inbox.md': '- riga\n' }, 'docs(inbox): riga').status,
+      commit(dir, { '.harness/docs/inbox.md': '- riga\n' }, 'docs(inbox): riga')
+        .status,
     ).toBe(0)
     const result = run(dir, ['push', '-q', 'origin', 'main'])
     expect(result.status, result.stderr).toBe(0)
@@ -470,14 +498,14 @@ describe('pre-push to main', () => {
     expect(
       commit(
         dir,
-        { 'docs/intent/CLAUDE.md': 'regole\n' },
+        { '.harness/docs/intent/CLAUDE.md': 'regole\n' },
         'docs(intent): regole',
         allow,
       ).status,
     ).toBe(0)
     const result = run(dir, ['push', '-q', 'origin', 'main'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('docs/intent/CLAUDE.md')
+    expect(result.stderr).toContain('.harness/docs/intent/CLAUDE.md')
     expect(pushed(origin)).toBe(before)
   })
 
@@ -503,8 +531,11 @@ describe('pre-push to main', () => {
     const before = pushed(origin)
     git(dir, 'reset', '-q', '--hard', 'HEAD^')
     expect(
-      commit(dir, { 'docs/intent/altra.md': 'x\n' }, 'docs(intent): altra')
-        .status,
+      commit(
+        dir,
+        { '.harness/docs/intent/altra.md': 'x\n' },
+        'docs(intent): altra',
+      ).status,
     ).toBe(0)
     const result = run(dir, ['push', '-q', '--force', 'origin', 'main'])
     expect(result.status).not.toBe(0)

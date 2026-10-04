@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The board of the repo in one screen, for whoever opens a cold session: the
-# slices of docs/backlog/ that are still open, the lines of docs/inbox.md, the
+# slices of .harness/docs/backlog/ that are still open, the lines of .harness/docs/inbox.md, the
 # open PRs, what waits for a human, the plan in force and the next action, in
 # forty lines and without a grep. The screen is computed here and not by the
 # skill, because from a terminal it costs no tokens and a rule is only
@@ -24,14 +24,14 @@
 #   Slices     the count of the done ones in the head, then one row per slice
 #              that is not done: id, status, blocked_by, tier, human, title.
 #              The done are not listed: they would eat the screen.
-#   Inbox      one row per line of docs/inbox.md, its date and its text.
+#   Inbox      one row per line of .harness/docs/inbox.md, its date and its text.
 #   Open PRs   number, tier label, judge label and title, from `gh pr list`.
 #   Waiting on a human
 #              the open PRs labelled human-gate, needs-human or tier:3, the
-#              draft specs of docs/specs/, and the ADRs that hold an open
+#              draft specs of .harness/docs/specs/, and the ADRs that hold an open
 #              slice still, one row each with the ids of the slices and the
 #              title of the ADR. A parked draft spec is not one of them.
-#   Parked     one row per line of docs/parked.md: kind (`intent`,
+#   Parked     one row per line of .harness/docs/parked.md: kind (`intent`,
 #              `spec <status>`, or `missing` for a path not in the tree),
 #              slug, date and why. A parked document waits on purpose: it is
 #              never a row of the human section and never the next action.
@@ -70,7 +70,7 @@
 # not there. What the `## Blocked` section of a slice says is never read: the
 # condition that would free it is a human's to weigh, and the board only says
 # that the decision is due.
-# `parked` is one entry per line of docs/parked.md with `path`, `kind`
+# `parked` is one entry per line of .harness/docs/parked.md with `path`, `kind`
 # (`intent`, `spec`, `document` or `missing`), `status` (the status of a
 # spec, null otherwise), `date` and `why` whole, [] when nothing is parked.
 # The board does not check that a parked document is one that can be parked:
@@ -184,8 +184,8 @@ fi
 # frontmatter is what the board reads. A repo with no backlog yet is an empty
 # list and not an error.
 files=()
-if [ -d docs/backlog ]; then
-  for file in docs/backlog/*.md; do
+if [ -d .harness/docs/backlog ]; then
+  for file in .harness/docs/backlog/*.md; do
     [ -f "$file" ] || continue
     case "${file##*/}" in README.md) continue ;; esac
     files[${#files[@]}]="$file"
@@ -197,7 +197,7 @@ fi
 # last. The spec is not a key of a slice in the JSON: it is read to tell an
 # approved spec that no slice names.
 # A value keeps neither a trailing comment nor trailing spaces: the skeleton in
-# docs/backlog/README.md carries its legend as a comment, and a repo that
+# .harness/docs/backlog/README.md carries its legend as a comment, and a repo that
 # copied it must not read `todo # todo | blocked | done` as a status.
 slices_tsv=""
 if [ ${#files[@]} -gt 0 ]; then
@@ -238,7 +238,7 @@ if [ ${#files[@]} -gt 0 ]; then
 fi
 # The claim of a slice is its branch on the remote and nothing else, so the
 # board reads it from the refs a fetch has left here: the script fetches
-# nothing, as it reads docs/ from the working tree, and the screen is as fresh
+# nothing, as it reads .harness/docs/ from the working tree, and the screen is as fresh
 # as the last fetch of whoever ran it. The id is the part between `slice/` and
 # the first dash, compared whole with the id of the frontmatter, so slice/S1-x
 # does not take S10; a ref that is not `slice/S<NN>-<slug>` names no slice. A
@@ -271,11 +271,11 @@ slices="$(printf '%s' "$slices_tsv" | jq -R -s --argjson branches "$branches" '
 slice_specs="$(printf '%s' "$slices_tsv" | jq -R -s '
   split("\n") | map(select(length > 0)) | map(split("\t")[5] // "")')"
 
-# One entry per line, `- <YYYY-MM-DD>: <text>`, as docs/inbox.md says: the
+# One entry per line, `- <YYYY-MM-DD>: <text>`, as .harness/docs/inbox.md says: the
 # prose above the list is not an entry, and a closed line is removed and not
 # ticked, so what is in the file is what is open.
 inbox_tsv=""
-if [ -f docs/inbox.md ]; then
+if [ -f .harness/docs/inbox.md ]; then
   inbox_tsv="$(awk '
     /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]:/ {
       text = substr($0, 14)
@@ -283,20 +283,20 @@ if [ -f docs/inbox.md ]; then
       gsub(/\t/, " ", text)
       printf "%s\t%s\n", substr($0, 3, 10), text
     }
-  ' docs/inbox.md)"
+  ' .harness/docs/inbox.md)"
 fi
 inbox="$(printf '%s' "$inbox_tsv" | jq -R -s '
   split("\n") | map(select(length > 0)) | map(split("\t"))
   | map({ date: .[0], text: (.[1] // "") })')"
 
-# One entry per line of docs/parked.md, `- <YYYY-MM-DD>: <path>: <why>`, in
+# One entry per line of .harness/docs/parked.md, `- <YYYY-MM-DD>: <path>: <why>`, in
 # the form of the inbox: the path is the text up to the first `: `, the why is
 # the rest. A document parked there is waiting on purpose, and the board lists
 # it and never picks it. Whether the path is in the working tree is read here,
 # because a line that outlived its file is a row marked `missing` and not an
 # error, as a `gh` that cannot answer is a row.
 parked_tsv=""
-if [ -f docs/parked.md ]; then
+if [ -f .harness/docs/parked.md ]; then
   parked_raw="$(awk '
     /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]:/ {
       text = substr($0, 14)
@@ -305,7 +305,7 @@ if [ -f docs/parked.md ]; then
       gsub(/\t/, " ", text)
       printf "%s\t%s\n", substr($0, 3, 10), text
     }
-  ' docs/parked.md)"
+  ' .harness/docs/parked.md)"
   while IFS="$(printf '\t')" read -r date rest; do
     [ -n "$date" ] || continue
     path="${rest%%: *}"
@@ -324,12 +324,12 @@ parked_lines="$(printf '%s' "$parked_tsv" | jq -R -s '
   | map({ date: .[0], path: (.[1] // ""), why: (.[2] // ""),
           there: (.[3] == "1") })')"
 
-# Every spec of docs/specs/, README apart, with the two fields the board reads:
+# Every spec of .harness/docs/specs/, README apart, with the two fields the board reads:
 # its status, for the drafts that wait for a human and the approved ones not
 # cut yet, and its intent, for the intents nobody has specced.
 spec_files=()
-if [ -d docs/specs ]; then
-  for file in docs/specs/*.md; do
+if [ -d .harness/docs/specs ]; then
+  for file in .harness/docs/specs/*.md; do
     [ -f "$file" ] || continue
     case "${file##*/}" in README.md) continue ;; esac
     spec_files[${#spec_files[@]}]="$file"
@@ -362,11 +362,11 @@ specs="$(printf '%s' "$specs_tsv" | jq -R -s '
   split("\n") | map(select(length > 0)) | map(split("\t"))
   | map({ path: .[0], status: (.[1] // ""), intent: (.[2] // "") })')"
 
-# Every intent of docs/intent/, README apart, by path: an intent without a spec
+# Every intent of .harness/docs/intent/, README apart, by path: an intent without a spec
 # is one that no spec names in its `intent:` field.
 intents_list=""
-if [ -d docs/intent ]; then
-  for file in docs/intent/*.md; do
+if [ -d .harness/docs/intent ]; then
+  for file in .harness/docs/intent/*.md; do
     [ -f "$file" ] || continue
     case "${file##*/}" in README.md) continue ;; esac
     intents_list="$intents_list$file
@@ -387,15 +387,15 @@ eligible_def='def eligible($status):
   and all(.blocked_by | splits("[, \t]+") | select(. != "" and . != "none");
     $status[.] == "done");'
 
-# Every ADR of docs/decisions/ by id and title, so that a slice held by a
+# Every ADR of .harness/docs/decisions/ by id and title, so that a slice held by a
 # decision can say which one in words. The title is the text of the first
 # heading without the `ADR-<nnnn>:` the id column already carries, and an ADR
 # with no heading has none, like one with no file: the board says what
 # blocked_by says, and a decision nobody wrote down is still a decision a
 # slice is waiting for.
 decisions_tsv=""
-if [ -d docs/decisions ]; then
-  for file in docs/decisions/ADR-*.md; do
+if [ -d .harness/docs/decisions ]; then
+  for file in .harness/docs/decisions/ADR-*.md; do
     [ -f "$file" ] || continue
     rest="${file##*/ADR-}"
     number="${rest%%[!0-9]*}"
@@ -425,8 +425,8 @@ decisions="$(printf '%s' "$decisions_tsv" | jq -R -s '
 plan_adr=""
 plan_file=""
 plan_number=-1
-if [ -d docs/decisions ]; then
-  for file in docs/decisions/ADR-*.md; do
+if [ -d .harness/docs/decisions ]; then
+  for file in .harness/docs/decisions/ADR-*.md; do
     [ -f "$file" ] || continue
     rest="${file##*/ADR-}"
     number="${rest%%[!0-9]*}"
@@ -529,8 +529,8 @@ board="$(jq -n \
   ([$parked_lines[] | . as $line
     | ([$specs[] | select(.path == $line.path)] | first) as $spec
     | (if $line.there | not then "missing"
-       elif $line.path | startswith("docs/specs/") then "spec"
-       elif $line.path | startswith("docs/intent/") then "intent"
+       elif $line.path | startswith(".harness/docs/specs/") then "spec"
+       elif $line.path | startswith(".harness/docs/intent/") then "intent"
        else "document" end) as $kind
     | { path: $line.path,
         kind: $kind,

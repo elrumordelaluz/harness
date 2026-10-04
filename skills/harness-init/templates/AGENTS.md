@@ -4,8 +4,8 @@
 
 ## Map
 
-- docs/codebase-map.md: modules, entry points, how it is tested, dragons. Read it before touching code.
-- docs/intent/: ten human lines per idea. docs/specs/: specs with a status. docs/backlog/: slices. docs/decisions/: ADRs. docs/review-log/: verdicts.
+- .harness/docs/codebase-map.md: modules, entry points, how it is tested, dragons. Read it before touching code.
+- .harness/docs/intent/: ten human lines per idea. .harness/docs/specs/: specs with a status. .harness/docs/backlog/: slices. .harness/docs/decisions/: ADRs. .harness/docs/review-log/: verdicts.
 - {{one line per top-level module: path: what it owns}}
 
 ## Commands (single-run)
@@ -30,14 +30,14 @@ read sits in "Policy block", and that is where it is changed.
 
 - Sensitive paths: `.harness/stamp.json`, `.harness/bootstrap.sh`, `.harness/AGENTS.md`, `.harness/judge.md`, `.github/**`, `.claude/settings.json`, `package.json`, `pnpm-lock.yaml`, `tsconfig*.json`, {{`server/**`, `src/lib/engine/**`, `src/state/**`, `vite.config.ts`}}.
 - Tier 0: the prose nobody executes, at any length; the other docs up to 20 lines. The files on the line below are never tier 0, and neither are comments and formatting in code. Tier 1: within `max_lines` and `max_files` of the block below, no sensitive path, no dependency.
-- Never tier 0: `AGENTS.md`, `CLAUDE.md`, `.claude/**`, `.harness/AGENTS.md`, `.harness/judge.md`, `docs/codebase-map.md`.
+- Never tier 0: `AGENTS.md`, `CLAUDE.md`, `.claude/**`, `.harness/AGENTS.md`, `.harness/judge.md`, `.harness/docs/codebase-map.md`.
 - Tier 2: over the thresholds, or a sensitive path, or a dependency, or a schema, or `.github/**`. Tier 3: slice `human: true`, tests weakened, judges in disagreement, fix rounds used up, or a policy block that cannot be read at the base ref.
 - The tier is the maximum of the signals. CI computes it with `.harness/bin/tier.sh`, not whoever opens the PR.
 - The judge never merges. The policy in `.github/` decides.
 
 ## Human gates
 
-- Human merge by path: `docs/intent/**`, `docs/specs/**`, `docs/backlog/**`, `docs/decisions/**`, `docs/review-log/**`, `docs/inbox.md`, `docs/parked.md`.
+- Human merge by path: `.harness/docs/intent/**`, `.harness/docs/specs/**`, `.harness/docs/backlog/**`, `.harness/docs/decisions/**`, `.harness/docs/review-log/**`, `.harness/docs/inbox.md`, `.harness/docs/parked.md`.
 - The tier says how much scrutiny is needed, `human_gate_paths` says who merges: CI turns it into the `human-gate` label, neither `automerge.yml` nor `policy.sh` merges it, not even at tier 0, and only a human removes the label.
 - Documents: on main. The files of `human_gate_paths` go on main with a commit, without a PR: the human's yes in the conversation is the approval and the commit is the record. The git hooks do not read this line: they read `docs_mode`, and with `main` they let through on main a commit made only of those files; on a team the key says `pr`, and the approval goes back to being the merge.
 - Intent and spec: explicit approval. Board: review before the first PR. Tier 2 with an open `high` or `needs-human`, and tier 3: human merge. Audit: three automatic PRs a week.
@@ -76,16 +76,16 @@ removes one does not widen the rule, they stop whoever reads it.
     ".claude/**",
     ".harness/AGENTS.md",
     ".harness/judge.md",
-    "docs/codebase-map.md"
+    ".harness/docs/codebase-map.md"
   ],
   "human_gate_paths": [
-    "docs/intent/**",
-    "docs/specs/**",
-    "docs/backlog/**",
-    "docs/decisions/**",
-    "docs/review-log/**",
-    "docs/inbox.md",
-    "docs/parked.md"
+    ".harness/docs/intent/**",
+    ".harness/docs/specs/**",
+    ".harness/docs/backlog/**",
+    ".harness/docs/decisions/**",
+    ".harness/docs/review-log/**",
+    ".harness/docs/inbox.md",
+    ".harness/docs/parked.md"
   ],
   "docs_extra_paths": [],
   "max_lines": 200,
@@ -96,5 +96,5 @@ removes one does not widen the rule, they stop whoever reads it.
 ## Do not
 
 - Do not commit code on main: only the documents of the Documents line of "Human gates". Do not touch `.github/` from a slice. Do not change a test to make it pass. Do not add dependencies without declaring them in the PR.
-- Do not repair the harness from a skill that is working here: a template behind, a line missing in this file, a script that gets it wrong are one dated line in `docs/inbox.md` and the run carries on. The fix is made in the harness repo and comes back here by rerunning the `/harness-init` phase that owns the file.
+- Do not repair the harness from a skill that is working here: a template behind, a line missing in this file, a script that gets it wrong are one dated line in `.harness/docs/inbox.md` and the run carries on. The fix is made in the harness repo and comes back here by rerunning the `/harness-init` phase that owns the file.
 - {{project rules derived from the map, for instance: `src/lib/engine/` imports neither React nor `src/state/`}}

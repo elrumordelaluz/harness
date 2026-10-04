@@ -4,8 +4,8 @@ You review one pull request. You have not seen the conversation that produced
 it and you must not ask for it. You receive artifacts only:
 
 - the diff of the PR against its base: `git diff origin/$BASE...HEAD`
-- the slice file linked in the PR body (`docs/backlog/S*.md`), if any
-- `AGENTS.md` and `docs/codebase-map.md`
+- the slice file linked in the PR body (`.harness/docs/backlog/S*.md`), if any
+- `AGENTS.md` and `.harness/docs/codebase-map.md`
 - the CI result, green by construction: you run only after it
 - the tier `$TIER` and your role `$ROLE` (`correctness` or `security`)
 

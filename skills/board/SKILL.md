@@ -3,11 +3,11 @@ name: board
 description: >
   Open a cold session from the board of the repo: run .harness/bin/board.sh, show
   its screen as it is, repeat the next action it chose, then close every open
-  line of docs/inbox.md with one word, intent, slice or via, one question per
+  line of .harness/docs/inbox.md with one word, intent, slice or via, one question per
   message and one commit on main per answer.
   Use when the user runs /board, says "open the board", "where are we",
   "what do I do next", or when a session starts in a repo that has the
-  harness. Writes only docs/inbox.md, a slice in docs/backlog/ and the
+  harness. Writes only .harness/docs/inbox.md, a slice in .harness/docs/backlog/ and the
   skeleton of intent.sh new: never code, never a spec, never AGENTS.md.
 ---
 
@@ -30,9 +30,9 @@ in decision 6 of ADR-0002, the documents on main in ADR-0003.
   action is the last line of `.harness/bin/board.sh`, and the skill repeats it,
   never a different one, not even when the screen seems to call for another:
   two sessions, the same answer.
-- **Four places are written, and nothing else.** `docs/inbox.md`, to take a
-  line out; `docs/backlog/S<NN>-<slug>.md`, the slice a line becomes;
-  `docs/intent/<slug>.md`, the skeleton `.harness/bin/intent.sh new` writes; and
+- **Four places are written, and nothing else.** `.harness/docs/inbox.md`, to take a
+  line out; `.harness/docs/backlog/S<NN>-<slug>.md`, the slice a line becomes;
+  `.harness/docs/intent/<slug>.md`, the skeleton `.harness/bin/intent.sh new` writes; and
   the file of a slice already written, for its `blocked_by` field and its
   `## Blocked` section alone, where 6 takes an ADR out with the human's yes.
   Never code, never a spec, never `AGENTS.md`, never anything else of a slice
@@ -51,24 +51,24 @@ in decision 6 of ADR-0002, the documents on main in ADR-0003.
   which is pushed, as paths and line numbers, never as the content of a file.
 - **The harness of the repo you are working in is not yours to fix.** A
   template behind, a line missing in `AGENTS.md`, a script that misbehaves:
-  write one dated line in `docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
+  write one dated line in `.harness/docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
   carry on with what is there. Never rerun `/harness-init`, never edit a
   script, a hook, a workflow or the `AGENTS.md` of that repo: the fix belongs
   to the harness repo and comes back with the stage of `/harness-init` that
   owns the file. The only stop is a directory this skill must write into that
-  is not there, which means there is no harness. If `docs/inbox.md` alone is
+  is not there, which means there is no harness. If `.harness/docs/inbox.md` alone is
   missing, say so in the hand-back and do not create it.
 - **A line of the skill's own waits for the hand-back.** The inbox is the
   file the answers take lines out of, and each of their commits carries its
   own line and nothing else: a line the guardrail above asks for, written in
   the middle of the run, would stop the questions at the check of 3 or ride
-  out in the commit of an unrelated answer. So during the run `docs/inbox.md`
+  out in the commit of an unrelated answer. So during the run `.harness/docs/inbox.md`
   changes only by the answers, and the skill's lines are written in 7, with
   the human's yes, in a commit of their own.
 
 ## 1. Refuse early
 
-Stop and say why when `docs/` or `.harness/bin/board.sh` is missing: the repo has
+Stop and say why when `.harness/docs/` or `.harness/bin/board.sh` is missing: the repo has
 no harness, or one from before the board. Say `/harness-init local`, the
 stage that brings the script, and stop.
 
@@ -107,7 +107,7 @@ stamp from before the pin, and a stage never installed is `-` too. The skill
 shows the line and never compares the pin with `.harness/bin/`: the hooks do.
 
 The `Parked` section, after "Waiting on a human", lists the lines of
-`docs/parked.md`: an intent or a spec written and set aside on purpose, with
+`.harness/docs/parked.md`: an intent or a spec written and set aside on purpose, with
 its kind, its slug, the date and the why, and `missing` for a line whose file
 is gone. It is data the skill shows and never asks about: a parked document is
 never the next action, and it comes back with `.harness/bin/park.sh resume <path>`,
@@ -127,10 +127,10 @@ can be read, not so that the skill applies it:
    the field is never done, and a slice whose branch is there is taken by
    somebody, which the screen says with `in progress` in place of `todo`. The
    action is `/next`.
-3. `approved spec with no slice`: a spec of `docs/specs/` with
+3. `approved spec with no slice`: a spec of `.harness/docs/specs/` with
    `status: approved` that no slice names in `spec:`; the action is
    `/slice <path>`.
-4. `intent with no spec`: an intent of `docs/intent/` that no spec names in
+4. `intent with no spec`: an intent of `.harness/docs/intent/` that no spec names in
    `intent:`; the action is `/spec <path>`.
 5. `step of the plan`: the current step of `## Ordine di lavoro` in the latest
    ADR that has one, the first step not done, when no slice has an id above
@@ -158,7 +158,7 @@ that explains it.
 
 With `main` the questions do not start, and the skill says why in one line
 after the screen, when the checkout is not on the default branch, when the
-pull was not a fast-forward, or when `docs/inbox.md` has changes that are not
+pull was not a fast-forward, or when `.harness/docs/inbox.md` has changes that are not
 committed: the commit of an answer carries its line and nothing else. The
 check holds because the skill has written nothing there yet: its own lines
 wait for 6.
@@ -207,13 +207,13 @@ shows them.
 
 ## 5. The answers
 
-Every answer ends the same way: the line out of `docs/inbox.md`, with nothing
+Every answer ends the same way: the line out of `.harness/docs/inbox.md`, with nothing
 else in the file changed, the files formatted with the formatter the
 pre-commit hook checks, `pnpm exec prettier --write` in a pnpm repo, a commit
 of those files alone, and a push. The message goes in on stdin through a
 quoted heredoc, never inside `-m "..."`: an inbox line names paths and
 commands in backticks, and in double quotes the shell would run them. The
-body carries the line whole, so that `git log -- docs/inbox.md` says what was
+body carries the line whole, so that `git log -- .harness/docs/inbox.md` says what was
 closed and how. The hooks run as on every commit: fix what they refuse and
 commit again, never `--no-verify`. A push refused because the default branch
 moved is `git pull --rebase` and the push again.
@@ -221,8 +221,8 @@ moved is `git pull --rebase` and the push again.
 ### via
 
 ```
-git add docs/inbox.md
-git commit -F - -- docs/inbox.md <<'INBOX_MSG'
+git add .harness/docs/inbox.md
+git commit -F - -- .harness/docs/inbox.md <<'INBOX_MSG'
 docs(inbox): <why>
 
 <the line, whole>
@@ -240,12 +240,12 @@ before:
 
 ```
 git fetch origin
-git ls-tree --name-only origin/<default branch> docs/backlog/ |
-  sed -n 's#^docs/backlog/S\([0-9][0-9]*\)-.*#\1#p' | sort -n | tail -1
+git ls-tree --name-only origin/<default branch> .harness/docs/backlog/ |
+  sed -n 's#^\.harness/docs/backlog/S\([0-9][0-9]*\)-.*#\1#p' | sort -n | tail -1
 ```
 
-The skill writes `docs/backlog/S<NN>-<slug>.md` in the format of
-`docs/backlog/README.md`, in the language of the inbox, the frontmatter
+The skill writes `.harness/docs/backlog/S<NN>-<slug>.md` in the format of
+`.harness/docs/backlog/README.md`, in the language of the inbox, the frontmatter
 fields and the section headings as the README writes them:
 
 - `status: todo`, `spec: inbox (<date of the line>)`, `blocked_by: none` or
@@ -271,8 +271,8 @@ id lowercase, `s<NN>`, because `commitlint.sh` wants a lowercase letter after
 `type(scope): `; the file name keeps it uppercase, where it is the id:
 
 ```
-git add docs/backlog/S<NN>-<slug>.md docs/inbox.md
-git commit -F - -- docs/backlog/S<NN>-<slug>.md docs/inbox.md <<'INBOX_MSG'
+git add .harness/docs/backlog/S<NN>-<slug>.md .harness/docs/inbox.md
+git commit -F - -- .harness/docs/backlog/S<NN>-<slug>.md .harness/docs/inbox.md <<'INBOX_MSG'
 docs(backlog): s<NN> from the inbox
 
 <the title of the slice>
@@ -296,13 +296,13 @@ accepts:
 ```
 
 It checks that the slug is free on the default branch and writes
-`docs/intent/<slug>.md` with its three sections empty. A refusal of the
+`.harness/docs/intent/<slug>.md` with its three sections empty. A refusal of the
 script is quoted as it is, and the line stays. Then the line comes out in a
 commit of its own, the skeleton left untracked where the script wrote it:
 
 ```
-git add docs/inbox.md
-git commit -F - -- docs/inbox.md <<'INBOX_MSG'
+git add .harness/docs/inbox.md
+git commit -F - -- .harness/docs/inbox.md <<'INBOX_MSG'
 docs(inbox): <why>
 
 <the line, whole>
@@ -313,7 +313,7 @@ git push
 `<why>` here is `becomes the intent <slug>`. Then the run stops, the only
 answer that does not close on its own: the ten lines of an intent are written
 by a human and by no agent. Say, in two lines, that the human writes
-`docs/intent/<slug>.md`, and that `.harness/bin/intent.sh open <slug>` checks it,
+`.harness/docs/intent/<slug>.md`, and that `.harness/bin/intent.sh open <slug>` checks it,
 commits it on the default branch and names `/spec` as the step after. The
 lines after this one wait for the next `/board`.
 
@@ -351,8 +351,8 @@ the formatter, one commit and the push, as in 5, with the file of every slice
 of the entry on the command line:
 
 ```
-git add docs/backlog/S<NN>-<slug>.md
-git commit -F - -- docs/backlog/S<NN>-<slug>.md <<'BLOCKED_MSG'
+git add .harness/docs/backlog/S<NN>-<slug>.md
+git commit -F - -- .harness/docs/backlog/S<NN>-<slug>.md <<'BLOCKED_MSG'
 docs(backlog): take ADR-<nnnn> out of blocked_by
 
 <the title of the ADR>
@@ -362,7 +362,7 @@ BLOCKED_MSG
 git push
 ```
 
-No other file goes with them, and no line of `docs/inbox.md` rides along: one
+No other file goes with them, and no line of `.harness/docs/inbox.md` rides along: one
 ADR, one question, one answer, one commit. A slice that comes out with
 `blocked_by: none` and `human: false` is eligible at once, and the next board
 says so with the next action.
@@ -381,12 +381,12 @@ in `git log`.
 Then the lines the guardrail asked for during the run, if there are any,
 each `- <YYYY-MM-DD>: <one line>` verbatim, with one question: whether to
 commit them on the default branch. On the yes, and only with `main` and
-the checks of 3 passing, they go at the end of `docs/inbox.md` in one commit
+the checks of 3 passing, they go at the end of `.harness/docs/inbox.md` in one commit
 of their own, through the same quoted heredoc as the answers, and a push:
 
 ```
-git add docs/inbox.md
-git commit -F - -- docs/inbox.md <<'INBOX_MSG'
+git add .harness/docs/inbox.md
+git commit -F - -- .harness/docs/inbox.md <<'INBOX_MSG'
 docs(inbox): <what the lines are about>
 
 <the lines, whole>

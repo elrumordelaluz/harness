@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# The only way a line of docs/parked.md is written or taken out. A parked
+# The only way a line of .harness/docs/parked.md is written or taken out. A parked
 # document is written and not wanted yet: the board lists it and never picks
 # it. Two verbs:
 #   park.sh <path> "<why>"  check that <path> is one the board would pick, an
 #                           intent no spec names, a draft spec or an approved
 #                           spec no slice names, and add
-#                           `- <YYYY-MM-DD>: <path>: <why>` to docs/parked.md
+#                           `- <YYYY-MM-DD>: <path>: <why>` to .harness/docs/parked.md
 #   park.sh resume <path>   take the line of <path> out, even when the file
 #                           it names is gone
 # What happens to the list depends on the docs_mode key of .harness/AGENTS.md
@@ -17,8 +17,8 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-LIST=docs/parked.md
-# The sections of docs/intent/README.md, the check of intent.sh open: parking
+LIST=.harness/docs/parked.md
+# The sections of .harness/docs/intent/README.md, the check of intent.sh open: parking
 # says a document was written and waits, and a skeleton was never written.
 SECTIONS='Problem|What success looks like|Out of scope'
 
@@ -160,10 +160,10 @@ park() {
   esac
   [ -n "$(printf '%s' "$why" | tr -d ' \t')" ] || die "the why is empty: say in one line why $path waits"
   case "$path" in
-    docs/intent/README.md | docs/specs/README.md) die "only an intent of docs/intent/ or a spec of docs/specs/ is parked, not $path" ;;
-    docs/intent/*/* | docs/specs/*/*) die "only an intent of docs/intent/ or a spec of docs/specs/ is parked, not $path" ;;
-    docs/intent/*.md | docs/specs/*.md) ;;
-    *) die "only an intent of docs/intent/ or a spec of docs/specs/ is parked, not $path" ;;
+    .harness/docs/intent/README.md | .harness/docs/specs/README.md) die "only an intent of .harness/docs/intent/ or a spec of .harness/docs/specs/ is parked, not $path" ;;
+    .harness/docs/intent/*/* | .harness/docs/specs/*/*) die "only an intent of .harness/docs/intent/ or a spec of .harness/docs/specs/ is parked, not $path" ;;
+    .harness/docs/intent/*.md | .harness/docs/specs/*.md) ;;
+    *) die "only an intent of .harness/docs/intent/ or a spec of .harness/docs/specs/ is parked, not $path" ;;
   esac
 
   local base flow
@@ -179,8 +179,8 @@ park() {
 
   local file status
   case "$path" in
-    docs/intent/*)
-      for file in $(tracked_in "$base" docs/specs); do
+    .harness/docs/intent/*)
+      for file in $(tracked_in "$base" .harness/docs/specs); do
         if [ "$(git show "origin/$base:$file" | field intent)" = "$path" ]; then
           die "$file names it in intent:, and an intent with a spec is not parked; park the spec instead"
         fi
@@ -190,12 +190,12 @@ park() {
       [ -z "$missing" ] || die "$path needs text under every section to be parked; missing or empty:
 $missing"
       ;;
-    docs/specs/*)
+    .harness/docs/specs/*)
       status="$(git show "origin/$base:$path" | field status)"
       case "$status" in
         draft) ;;
         approved)
-          for file in $(tracked_in "$base" docs/backlog); do
+          for file in $(tracked_in "$base" .harness/docs/backlog); do
             if [ "$(git show "origin/$base:$file" | field spec)" = "$path" ]; then
               local id
               id="$(git show "origin/$base:$file" | field id)"

@@ -99,23 +99,25 @@ function tier(
 
 describe('tier.sh, how much scrutiny', () => {
   it('gives 0 to the prose nobody executes, whatever its size', () => {
-    expect(tier({ 'docs/specs/SPEC-x.md': body(100) }).tier).toBe(0)
-    expect(tier({ 'docs/backlog/S99-x.md': body(200) }).tier).toBe(0)
-    expect(tier({ 'docs/intent/x.md': body(300) }).tier).toBe(0)
-    expect(tier({ 'docs/decisions/ADR-1.md': body(40) }).tier).toBe(0)
-    expect(tier({ 'docs/review-log/verdicts.jsonl': body(40) }).tier).toBe(0)
+    expect(tier({ '.harness/docs/specs/SPEC-x.md': body(100) }).tier).toBe(0)
+    expect(tier({ '.harness/docs/backlog/S99-x.md': body(200) }).tier).toBe(0)
+    expect(tier({ '.harness/docs/intent/x.md': body(300) }).tier).toBe(0)
+    expect(tier({ '.harness/docs/decisions/ADR-1.md': body(40) }).tier).toBe(0)
+    expect(
+      tier({ '.harness/docs/review-log/verdicts.jsonl': body(40) }).tier,
+    ).toBe(0)
   })
 
   it('says on stderr which path took it to 0', () => {
-    expect(tier({ 'docs/specs/SPEC-x.md': body(100) }).why).toMatch(
-      /tier: prose nobody executes \(docs\/specs\/\*\*\), 100 lines/,
+    expect(tier({ '.harness/docs/specs/SPEC-x.md': body(100) }).why).toMatch(
+      /tier: prose nobody executes \(\.harness\/docs\/specs\/\*\*\), 100 lines/,
     )
   })
 
   it('keeps the prose an agent executes, and the contracts, above 0', () => {
     expect(tier({ 'skills/spec/SKILL.md': body(1) }).tier).toBe(1)
     expect(tier({ 'docs/spec.md': body(1) }).tier).toBe(1)
-    expect(tier({ 'docs/codebase-map.md': body(1) }).tier).toBe(1)
+    expect(tier({ '.harness/docs/codebase-map.md': body(1) }).tier).toBe(1)
     expect(tier({ 'CLAUDE.md': body(1) }).tier).toBe(1)
     expect(tier({ 'AGENTS.md': body(1) }).tier).toBe(1)
     expect(
@@ -135,7 +137,9 @@ describe('tier.sh, how much scrutiny', () => {
     })
     const base = { '.harness/AGENTS.md': bare }
     expect(tier({ 'CLAUDE.md': body(2) }, {}, { base }).tier).toBe(1)
-    expect(tier({ 'docs/codebase-map.md': body(2) }, {}, { base }).tier).toBe(1)
+    expect(
+      tier({ '.harness/docs/codebase-map.md': body(2) }, {}, { base }).tier,
+    ).toBe(1)
     expect(tier({ 'docs/spec.md': body(2) }, {}, { base }).tier).toBe(0)
   })
 
@@ -166,7 +170,7 @@ describe('tier.sh, how much scrutiny', () => {
     'CLAUDE.md',
     '.claude/commands/x.md',
     'packages/a/AGENTS.md',
-    'docs/codebase-map.md',
+    '.harness/docs/codebase-map.md',
   ])('keeps %s off tier 0 whatever the block says', (file) => {
     const named = tier(
       { [file]: body(2) },
@@ -231,7 +235,8 @@ describe('tier.sh, how much scrutiny', () => {
 
   it('needs every file to be prose, not just one', () => {
     expect(
-      tier({ 'docs/specs/SPEC-x.md': body(100), 'src/a.ts': body(3) }).tier,
+      tier({ '.harness/docs/specs/SPEC-x.md': body(100), 'src/a.ts': body(3) })
+        .tier,
     ).toBe(1)
   })
 
@@ -284,7 +289,7 @@ describe('tier.sh, how much scrutiny', () => {
   it('lets a label win over the tier by path', () => {
     expect(
       tier(
-        { 'docs/backlog/S99-x.md': body(5) },
+        { '.harness/docs/backlog/S99-x.md': body(5) },
         { PR_LABELS: 'tier:0,needs-human' },
       ).tier,
     ).toBe(3)
@@ -293,50 +298,54 @@ describe('tier.sh, how much scrutiny', () => {
 
 describe('tier.sh, who may merge', () => {
   it('marks the human gate by path, and only there', () => {
-    expect(tier({ 'docs/specs/SPEC-x.md': body(5) }).why).toMatch(
-      /^human-gate: docs\/specs\/SPEC-x\.md \(docs\/specs\/\*\*\)$/m,
+    expect(tier({ '.harness/docs/specs/SPEC-x.md': body(5) }).why).toMatch(
+      /^human-gate: \.harness\/docs\/specs\/SPEC-x\.md \(\.harness\/docs\/specs\/\*\*\)$/m,
     )
     expect(tier({ 'src/a.ts': body(5) }).why).not.toMatch(/human-gate/)
   })
 
-  // S19. The gate on `docs/backlog/**` is wanted: no PR changes the criteria
+  // S19. The gate on `.harness/docs/backlog/**` is wanted: no PR changes the criteria
   // of a slice without a human. The price is paid by the PR that goes through
   // it, which the policy does not merge even at tier 1 with zero findings, and
   // it is why the PR of a slice does not touch the backlog: a slice is taken
   // by the branch on the remote, not by a commit that moves it to in-progress.
   it('marks the human gate on a slice file, even at tier 1', () => {
     const run = tier({
-      'docs/backlog/S01-x.md': '---\nid: S01\nhuman: false\n---\n',
+      '.harness/docs/backlog/S01-x.md': '---\nid: S01\nhuman: false\n---\n',
       'src/a.ts': body(5),
     })
 
     expect(run.tier).toBe(1)
     expect(run.why).toMatch(
-      /^human-gate: docs\/backlog\/S01-x\.md \(docs\/backlog\/\*\*\)$/m,
+      /^human-gate: \.harness\/docs\/backlog\/S01-x\.md \(\.harness\/docs\/backlog\/\*\*\)$/m,
     )
   })
 
   it('reads the policy block from the base ref, not from the diff', () => {
     const rewritten = withPolicy(agents, (block) => {
       block.sensitive_paths = ['pnpm-lock.yaml']
-      block.human_gate_paths = ['docs/decisions/**']
+      block.human_gate_paths = ['.harness/docs/decisions/**']
     })
     const run = tier({
       '.harness/AGENTS.md': rewritten,
       '.harness/bin/foo.sh': body(1),
-      'docs/specs/SPEC-x.md': body(1),
+      '.harness/docs/specs/SPEC-x.md': body(1),
     })
 
     expect(run.tier).toBe(2)
     expect(run.why).toMatch(/sensitive path \.harness\/bin\/foo\.sh/)
-    expect(run.why).toMatch(/^human-gate: docs\/specs\/SPEC-x\.md/m)
+    expect(run.why).toMatch(/^human-gate: \.harness\/docs\/specs\/SPEC-x\.md/m)
   })
 
   // No .harness/AGENTS.md at the base ref: the repo cannot say how it is
   // judged, and since S40 the answer is 3, the tier no model judges, as for
   // the four faces of the unreadable block below.
   it('fails closed when .harness/AGENTS.md is missing at the base ref', () => {
-    const run = tier({ 'docs/specs/SPEC-x.md': body(5) }, {}, { agents: false })
+    const run = tier(
+      { '.harness/docs/specs/SPEC-x.md': body(5) },
+      {},
+      { agents: false },
+    )
     expect(run.tier).toBe(3)
     expect(run.why).toMatch(/no \.harness\/AGENTS\.md at/)
     expect(run.why).toContain('/harness-init local')
@@ -371,11 +380,15 @@ describe('tier.sh, who may merge', () => {
   it('reads the slice human flag at the base ref too', () => {
     const run = tier(
       {
-        'docs/backlog/S01-x.md': '---\nid: S01\nhuman: false\n---\n',
+        '.harness/docs/backlog/S01-x.md': '---\nid: S01\nhuman: false\n---\n',
         'src/a.ts': body(3),
       },
       { GITHUB_HEAD_REF: 'slice/S01-x' },
-      { base: { 'docs/backlog/S01-x.md': '---\nid: S01\nhuman: true\n---\n' } },
+      {
+        base: {
+          '.harness/docs/backlog/S01-x.md': '---\nid: S01\nhuman: true\n---\n',
+        },
+      },
     )
     expect(run.tier).toBe(3)
     expect(run.why).toMatch(/slice S01 is human: true/)
@@ -390,13 +403,15 @@ describe('tier.sh, who may merge', () => {
 
     const slice = tier(
       {
-        'docs/backlog/S05-città.md': '---\nid: S05\nhuman: false\n---\n',
+        '.harness/docs/backlog/S05-città.md':
+          '---\nid: S05\nhuman: false\n---\n',
         'src/a.ts': body(3),
       },
       { GITHUB_HEAD_REF: 'slice/S05-città' },
       {
         base: {
-          'docs/backlog/S05-città.md': '---\nid: S05\nhuman: true\n---\n',
+          '.harness/docs/backlog/S05-città.md':
+            '---\nid: S05\nhuman: true\n---\n',
         },
       },
     )
@@ -436,13 +451,14 @@ describe('tier.sh, who may merge', () => {
 
     const slice = tier(
       {
-        'docs/backlog/S06-a"b.md': '---\nid: S06\nhuman: false\n---\n',
+        '.harness/docs/backlog/S06-a"b.md': '---\nid: S06\nhuman: false\n---\n',
         'src/a.ts': body(3),
       },
       { GITHUB_HEAD_REF: 'slice/S06-ab' },
       {
         base: {
-          'docs/backlog/S06-a"b.md': '---\nid: S06\nhuman: true\n---\n',
+          '.harness/docs/backlog/S06-a"b.md':
+            '---\nid: S06\nhuman: true\n---\n',
         },
       },
     )
@@ -560,11 +576,11 @@ describe('tier.sh, who may merge', () => {
     expect(contract.tier).toBe(1)
 
     const gate = tier(
-      { 'docs/inbox.md': null, 'notes/inbox.md': body(5) },
+      { '.harness/docs/inbox.md': null, 'notes/inbox.md': body(5) },
       {},
-      { base: { 'docs/inbox.md': body(5) } },
+      { base: { '.harness/docs/inbox.md': body(5) } },
     )
-    expect(gate.why).toMatch(/human-gate: docs\/inbox\.md/)
+    expect(gate.why).toMatch(/human-gate: \.harness\/docs\/inbox\.md/)
 
     const sensitive = tier(
       { 'src/foo.sh': null, '.harness/bin/foo.sh': body(5) },
@@ -578,7 +594,7 @@ describe('tier.sh, who may merge', () => {
   it('still reads a slice that exists only on the branch', () => {
     const run = tier(
       {
-        'docs/backlog/S02-y.md': '---\nid: S02\nhuman: true\n---\n',
+        '.harness/docs/backlog/S02-y.md': '---\nid: S02\nhuman: true\n---\n',
         'src/a.ts': body(3),
       },
       { GITHUB_HEAD_REF: 'slice/S02-y' },
@@ -587,10 +603,10 @@ describe('tier.sh, who may merge', () => {
   })
 
   it('reads file names whole, spaces included', () => {
-    const run = tier({ 'docs/specs/SPEC a.md': body(5) })
+    const run = tier({ '.harness/docs/specs/SPEC a.md': body(5) })
     expect(run.tier).toBe(0)
     expect(run.why).toMatch(
-      /^human-gate: docs\/specs\/SPEC a\.md \(docs\/specs\/\*\*\)$/m,
+      /^human-gate: \.harness\/docs\/specs\/SPEC a\.md \(\.harness\/docs\/specs\/\*\*\)$/m,
     )
   })
 

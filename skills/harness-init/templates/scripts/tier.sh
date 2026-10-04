@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Review tier of the current branch against a base ref. Same output locally
 # and in CI: the tier on stdout, the reasons on stderr. Max signal wins.
-#   0  the prose nobody executes (docs/intent, specs, backlog, decisions,
+#   0  the prose nobody executes (.harness/docs/intent, specs, backlog, decisions,
 #      review-log) at any size; any other docs (*.md, docs/, *.txt) <= 20
 #      lines, except the contracts, which are never 0
 #   1  inside max_lines and max_files, nothing else
@@ -49,11 +49,11 @@ up() { [ "$1" -gt "$tier" ] && tier="$1"; why "$2"; }
 # it to judge it either. Apart from it stand the documents an agent does
 # execute and the contracts, which are never tier 0 however short the diff:
 # their list comes from the policy block.
-prose='docs/intent/**
-docs/specs/**
-docs/backlog/**
-docs/decisions/**
-docs/review-log/**'
+prose='.harness/docs/intent/**
+.harness/docs/specs/**
+.harness/docs/backlog/**
+.harness/docs/decisions/**
+.harness/docs/review-log/**'
 
 # First pattern of $2 (one per line) that matches $1, empty when none does.
 match() { policy_match "$@"; }
@@ -82,7 +82,7 @@ CLAUDE.md
 */AGENTS.md
 */CLAUDE.md
 .claude/**
-docs/codebase-map.md
+.harness/docs/codebase-map.md
 $(policy '.never_tier_0[]')"
 
 # The diff is read twice, because the patterns and the thresholds ask it two
@@ -222,13 +222,13 @@ sid="$(printf '%s' "$branch" | sed -n 's#^slice/\(S[0-9][0-9]*\)-.*#\1#p')"
 if [ -n "$sid" ]; then
   flagged=""
   while IFS= read -r s; do
-    case "$s" in \"docs/backlog/"$sid"-*) flagged="$s at $base, a name git prints quoted"; continue ;; esac
-    case "$s" in docs/backlog/"$sid"-*.md) ;; *) continue ;; esac
+    case "$s" in \".harness/docs/backlog/"$sid"-*) flagged="$s at $base, a name git prints quoted"; continue ;; esac
+    case "$s" in .harness/docs/backlog/"$sid"-*.md) ;; *) continue ;; esac
     if grep -Eq '^human: *true' <<< "$(git show "$base:$s" 2>/dev/null || true)"; then flagged="$s at $base"; fi
   done <<EOT
-$(git -c core.quotePath=false ls-tree --name-only "$base" docs/backlog/ 2>/dev/null || true)
+$(git -c core.quotePath=false ls-tree --name-only "$base" .harness/docs/backlog/ 2>/dev/null || true)
 EOT
-  for s in docs/backlog/"$sid"-*.md; do
+  for s in .harness/docs/backlog/"$sid"-*.md; do
     if [ -f "$s" ] && grep -Eq '^human: *true' "$s"; then flagged="${flagged:-$s}"; fi
   done
   if [ -n "$flagged" ]; then up 3 "slice $sid is human: true ($flagged)"; fi

@@ -21,7 +21,7 @@
 # comment is named on stderr, never dropped in silence.
 set -euo pipefail
 pr="$1"
-out="${2:-docs/review-log/verdicts.jsonl}"
+out="${2:-.harness/docs/review-log/verdicts.jsonl}"
 # close.yml fills MERGED_BY from the event. By hand, days later, there is no
 # event: the PR itself says who merged, and the line credits them and not
 # whoever reran the script. A read that comes back with nothing is a PR that

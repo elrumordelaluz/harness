@@ -1,7 +1,7 @@
 ---
 name: next
 description: >
-  Take the eligible slices of docs/backlog/ and carry each one to a merged PR:
+  Take the eligible slices of .harness/docs/backlog/ and carry each one to a merged PR:
   read the board, run the waves, give every slice a clean-context subagent
   that writes the tests first and the code from green, judge it once, answer
   the findings with commits, open the PR and wait for the policy to merge it.
@@ -49,21 +49,21 @@ a whole board instead of one slice.
   wave carry on, and the one-line question reaches the human at the end.
 - **The harness of the repo you are working in is not yours to fix.** A
   template behind, a line missing in `AGENTS.md`, a script that misbehaves:
-  write one dated line in `docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
+  write one dated line in `.harness/docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
   carry on with what is there. Never rerun `/harness-init`, never edit a
   script, a hook, a workflow or the `AGENTS.md` of that repo: the fix belongs
   to the harness repo and comes back with the stage of `/harness-init` that
   owns the file. The only stop is a directory this skill must write into that
-  is not there, which means there is no harness. If `docs/inbox.md` alone is
+  is not there, which means there is no harness. If `.harness/docs/inbox.md` alone is
   missing, say so in the hand-back and do not create it.
 
 ## 1. Refuse early
 
 Stop and say why, before opening a branch or a subagent, when:
 
-- `docs/backlog/` is missing: the repo has no harness. Say `/harness-init
+- `.harness/docs/backlog/` is missing: the repo has no harness. Say `/harness-init
 local` and stop.
-- `docs/backlog/` holds no slice but its README: the board is `/slice`'s to
+- `.harness/docs/backlog/` holds no slice but its README: the board is `/slice`'s to
   write, from a spec the human approved. Say so and stop.
 - `package.json` has no `typecheck`, `test`, `format:check` and `build`
   script, all four. Name the ones missing and stop: the definition of done
@@ -91,7 +91,7 @@ local` and stop.
 
 ## 2. The board and the waves
 
-Read every `docs/backlog/S*.md` of the working tree on the default branch,
+Read every `.harness/docs/backlog/S*.md` of the working tree on the default branch,
 fetched and pulled first, with `git fetch --prune origin`: the fourth point
 below reads the remote branches from the refs that fetch leaves, and without
 the prune a branch deleted on the remote would hold its slice for good. A
@@ -190,13 +190,13 @@ general-purpose`, `model: opus`, **never `subagent_type: fork`**. All the
 calls of a wave go in a single message, so the slices run at the same time.
 
 The subagent is given, by path and not by summary: its worktree, and in it
-`AGENTS.md`, `docs/codebase-map.md` and the slice file. Not the spec: the
+`AGENTS.md`, `.harness/docs/codebase-map.md` and the slice file. Not the spec: the
 slice carries the decisions inlined, by construction, and that is why `/slice`
 writes them. Then these instructions, which are 4.4 of the harness spec and
 the guardrails of 5.4, and are not negotiable:
 
 ```
-Read AGENTS.md, docs/codebase-map.md and <the slice file> in <the
+Read AGENTS.md, .harness/docs/codebase-map.md and <the slice file> in <the
 worktree path>. Work only on that slice.
 
 1. Work only in <the worktree path>, where slice/S<NN>-<slug> is already
@@ -212,7 +212,7 @@ worktree path>. Work only on that slice.
    --no-track and has no upstream, so a bare push has no target, and that
    push is still the claim. If it fails because the branch already
    exists, the slice is someone else's. Stop there and report it, change
-   nothing. The branch is the whole claim: do not touch docs/backlog/,
+   nothing. The branch is the whole claim: do not touch .harness/docs/backlog/,
    not to mark the slice taken and not for anything else.
 2. For every acceptance criterion, in order: a test that fails for the
    right reason first, then the smallest code that passes it, then the
@@ -229,13 +229,13 @@ worktree path>. Work only on that slice.
    be moved.
 5. Nothing outside the slice's scope. If a change out of scope seems
    necessary, do not make it: report it as a question. The prose the
-   slice names in Touchpoints, docs/spec.md, docs/codebase-map.md, a
+   slice names in Touchpoints, docs/spec.md, .harness/docs/codebase-map.md, a
    SKILL.md, is in scope and travels in this branch with the code, never
    in a commit on the default branch: the judge reads the touchpoints of
    the slice, and the PR is where the change is whole.
 6. Do not repair the harness of this repo. A template behind, a line
    missing, a script that misbehaves: one dated line, `- <YYYY-MM-DD>:
-   <one line>`, in your report, and carry on. Never in docs/inbox.md on
+   <one line>`, in your report, and carry on. Never in .harness/docs/inbox.md on
    your branch: that file is a human-merge path, a PR that touches it gets
    human-gate and the policy does not merge it, and the judge reads it as
    out of scope.
@@ -252,7 +252,7 @@ Nothing about how you reasoned, and no retelling of the code.
 ```
 
 The backlog is out of bounds for a slice branch, and that is the point.
-`docs/backlog/**` is in `human_gate_paths` of `.harness/AGENTS.md`, so `tier.sh`
+`.harness/docs/backlog/**` is in `human_gate_paths` of `.harness/AGENTS.md`, so `tier.sh`
 prints `human-gate` for any PR that touches it and the CI puts the label on:
 neither `automerge.yml` nor `policy.sh` merges a PR that carries it, not even
 at tier 1 with zero findings. The commit that used to mark the slice
@@ -343,7 +343,7 @@ finding. If you believe a finding is wrong, say so in one line with the
 reason and answer it anyway with the commit that makes the code say why,
 a comment or a test. Do not open a second judgement and do not touch the
 verdict by hand. If a fix would make the code say something the approved
-spec does not, do not fix it here: write one dated line in docs/inbox.md,
+spec does not, do not fix it here: write one dated line in .harness/docs/inbox.md,
 it becomes a slice with spec: inbox (<date>), and say so in your report.
 
 <the findings, as .harness/bin/judge.sh findings <role> prints them>
@@ -466,7 +466,7 @@ Under them, only what a human has to act on:
 - what the twenty-minute cap left open, if anything;
 - the worktrees `git worktree remove` refused, with their path, if any;
 - the inbox lines the subagents reported, verbatim, with one question:
-  whether to commit them on the default branch. `docs/inbox.md` goes on main
+  whether to commit them on the default branch. `.harness/docs/inbox.md` goes on main
   with the human's yes, and the hand-back is where the human is.
 
 No retelling of the code, no summary of the diffs, no list of the files
