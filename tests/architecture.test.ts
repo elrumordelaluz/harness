@@ -401,6 +401,33 @@ describe('this repo keeps its documents under .harness/docs/', () => {
     ).toBe(false)
   })
 
+  // /slice finds the slices of a spec by their `spec:` line, and a spec names
+  // its intent in `intent:`: a line left on the old path would point nowhere.
+  // `spec: inbox (<date>)` and `spec: audit (PR #n)` are not paths.
+  it('every spec: and intent: path of the documents names a tracked file', () => {
+    const tracked = execFileSync('git', ['ls-files'], {
+      cwd: root,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .filter(Boolean)
+    const lines = tracked
+      .filter((file) =>
+        /^\.harness\/docs\/(backlog|specs)\/[^/]+\.md$/.test(file),
+      )
+      .flatMap((file) =>
+        [
+          ...readFileSync(join(root, file), 'utf8').matchAll(
+            /^(?:spec|intent): (\S+\/\S+\.md)\s*$/gm,
+          ),
+        ].map((match) => [file, match[1] ?? ''] as [string, string]),
+      )
+    expect(lines.length).toBeGreaterThan(0)
+    for (const [file, path] of lines) {
+      expect(tracked, `${file} names ${path}, not tracked`).toContain(path)
+    }
+  })
+
   it('docs/ keeps spec.md and its assets', () => {
     expect(existsSync(join(root, 'docs/spec.md'))).toBe(true)
     expect(existsSync(join(root, 'docs/assets'))).toBe(true)
