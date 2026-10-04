@@ -3212,7 +3212,9 @@ describe('no reader is told that "vai" starts /next', () => {
 // Section 0 of docs/spec.md heads each entry with the version it starts
 // from: "From 0.35" holds what 0.36 changed. The last heading is therefore
 // one minor behind the version of the header, and a heading named after the
-// new version breaks the trail the other way.
+// new version breaks the trail the other way. The history in the header names
+// the change after the new version, "0.49, of 4 October", and section 0 after
+// the old one, "From 0.48": two names for the one change, by design.
 describe('the last entry of section 0 starts from the version before the header', () => {
   const spec = readFileSync(join(root, 'docs/spec.md'), 'utf8')
 
