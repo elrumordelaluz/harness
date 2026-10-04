@@ -335,6 +335,111 @@ describe('the templates and the skills call the machinery under .harness/bin/', 
   })
 })
 
+// S88: the documents of the harness live under `.harness/docs/`, so a
+// project keeps its `docs/` for itself. A template, a skill or the spec
+// template that still named one of the eight paths at the root of `docs/`
+// would read and write where no repo keeps them any more. The match wants
+// `docs/` at the start of a path: `templates/docs/inbox.md` is where a
+// template lives. templates/README.md says where stage local writes, and that
+// is S93.
+const documentPaths = [
+  'intent',
+  'specs',
+  'backlog',
+  'decisions',
+  'review-log',
+  'inbox.md',
+  'parked.md',
+  'codebase-map.md',
+]
+const oldDocument = new RegExp(
+  `(?<![\\w/.-])docs/(${documentPaths
+    .map((path) => path.replace(/[.]/g, '\\.'))
+    .join('|')})`,
+)
+
+describe('the templates and the skills name the documents under .harness/docs/', () => {
+  const files = [
+    ...walk(templates)
+      .filter((file) => file !== 'README.md')
+      .map((file) => join(templates, file).slice(root.length + 1)),
+    ...readdirSync(join(root, 'skills')).map(
+      (skill) => `skills/${skill}/SKILL.md`,
+    ),
+    'skills/spec/templates/SPEC.md',
+  ]
+
+  it.each(files)('%s', (file) => {
+    const hit = readFileSync(join(root, file), 'utf8')
+      .split('\n')
+      .find((line) => oldDocument.test(line))
+    expect(hit, `${file} still names a document under docs/`).toBeUndefined()
+  })
+
+  it('catches a document under docs/ and leaves .harness/docs/ and a template alone', () => {
+    expect(oldDocument.test('read `docs/backlog/S01-x.md`')).toBe(true)
+    expect(oldDocument.test("sed -n 's#^docs/backlog/S#'")).toBe(true)
+    expect(oldDocument.test('read `.harness/docs/backlog/S01-x.md`')).toBe(
+      false,
+    )
+    expect(
+      oldDocument.test('skills/harness-init/templates/docs/inbox.md'),
+    ).toBe(false)
+    expect(oldDocument.test('`docs/spec.md` and `docs/assets/`')).toBe(false)
+  })
+})
+
+describe('this repo keeps its documents under .harness/docs/', () => {
+  it.each(documentPaths)('%s', (path) => {
+    expect(
+      existsSync(join(root, '.harness/docs', path)),
+      `.harness/docs/${path} is missing`,
+    ).toBe(true)
+    expect(
+      existsSync(join(root, 'docs', path)),
+      `docs/${path} is still there`,
+    ).toBe(false)
+  })
+
+  // /slice finds the slices of a spec by their `spec:` line, and a spec names
+  // its intent in `intent:`: a line left on the old path would point nowhere.
+  // `spec: inbox (<date>)` and `spec: audit (PR #n)` are not paths.
+  it('every spec: and intent: path of the documents names a tracked file', () => {
+    const tracked = execFileSync('git', ['ls-files'], {
+      cwd: root,
+      encoding: 'utf8',
+    })
+      .split('\n')
+      .filter(Boolean)
+    const lines = tracked
+      .filter((file) =>
+        /^\.harness\/docs\/(backlog|specs)\/[^/]+\.md$/.test(file),
+      )
+      .flatMap((file) =>
+        [
+          ...readFileSync(join(root, file), 'utf8').matchAll(
+            /^(?:spec|intent): (\S+\/\S+\.md)\s*$/gm,
+          ),
+        ].map((match) => [file, match[1] ?? ''] as [string, string]),
+      )
+    expect(lines.length).toBeGreaterThan(0)
+    for (const [file, path] of lines) {
+      expect(tracked, `${file} names ${path}, not tracked`).toContain(path)
+    }
+  })
+
+  it('docs/ keeps spec.md and its assets', () => {
+    expect(existsSync(join(root, 'docs/spec.md'))).toBe(true)
+    expect(existsSync(join(root, 'docs/assets'))).toBe(true)
+  })
+
+  it('.prettierignore names the verdicts where they moved', () => {
+    expect(
+      readFileSync(join(root, '.prettierignore'), 'utf8').split('\n'),
+    ).toContain('.harness/docs/review-log/verdicts.jsonl')
+  })
+})
+
 // The same line, its other half. Under `.github/` nothing can be a symlink:
 // GitHub Actions does not register a workflow that is one, and the rest of
 // the folder sits next to the workflows. They stay copies, and a copy drifts
@@ -625,7 +730,9 @@ describe('the workflows that act on a merge look at the default branch', () => {
     expect(
       block,
       'the close step has no branch for a missing slice file: a slice merged without its file stays todo and nobody is told',
-    ).toMatch(/if !? ?(ls|compgen|\[)[^\n]*docs\/backlog\/"\$sid"-\*\.md/)
+    ).toMatch(
+      /if !? ?(ls|compgen|\[)[^\n]*\.harness\/docs\/backlog\/"\$sid"-\*\.md/,
+    )
     expect(
       block,
       'the missing-file branch does not write to $GITHUB_STEP_SUMMARY: the run ends green and silent',
@@ -642,7 +749,7 @@ describe('the workflows that act on a merge look at the default branch', () => {
   // written, and a blocked slice stays blocked and is said.
   it('close.yml: the close step leaves a blocked slice blocked', () => {
     const run = jobText(source('github/close.yml'), 'close')
-    const start = run.indexOf('for s in docs/backlog/"$sid"-*.md; do')
+    const start = run.indexOf('for s in .harness/docs/backlog/"$sid"-*.md; do')
     expect(
       start,
       'the close step no longer loops over the slice files of the id',
@@ -705,20 +812,20 @@ describe('the workflows that act on a merge look at the default branch', () => {
   })
 })
 
-// The same dragon, in docs/. This repo has the READMEs of the five folders
+// The same dragon, in .harness/docs/. This repo has the READMEs of the five folders
 // from stage local, like every project, and they are copies written by hand
 // in two places: whoever changes the contract of the backlog in one of the
 // two alone leaves this repo with one rule and installs a different version
 // of it everywhere else.
-describe('docs/*/README.md matches the templates it was copied from', () => {
+describe('.harness/docs/*/README.md matches the templates it was copied from', () => {
   const dirs = readdirSync(join(templates, 'docs')).filter((name) =>
     statSync(join(templates, 'docs', name)).isDirectory(),
   )
 
-  it.each(dirs)('docs/%s/README.md', (dir) => {
+  it.each(dirs)('.harness/docs/%s/README.md', (dir) => {
     expect(
-      readFileSync(join(root, 'docs', dir, 'README.md'), 'utf8'),
-      `docs/${dir}/README.md drifted from skills/harness-init/templates/docs/${dir}/README.md: change both, the template is what /harness-init local installs elsewhere`,
+      readFileSync(join(root, '.harness/docs', dir, 'README.md'), 'utf8'),
+      `.harness/docs/${dir}/README.md drifted from skills/harness-init/templates/docs/${dir}/README.md: change both, the template is what /harness-init local installs elsewhere`,
     ).toBe(readFileSync(join(templates, 'docs', dir, 'README.md'), 'utf8'))
   })
 })
@@ -930,6 +1037,7 @@ describe('the policy block of .harness/AGENTS.md', () => {
     '.claude/**',
     '.harness/AGENTS.md',
     '.harness/judge.md',
+    '.harness/docs/codebase-map.md',
   ])('templates/AGENTS.md names %s in never_tier_0', (path) => {
     expect(
       block(readFileSync(join(templates, 'AGENTS.md'), 'utf8'))
@@ -937,11 +1045,32 @@ describe('the policy block of .harness/AGENTS.md', () => {
     ).toContain(path)
   })
 
+  // S88: the seven paths a human merges, where the documents live now. A
+  // repo installed on the old layout keeps its docs/** gate paths on a rerun
+  // of stage local, which merges the block key by key and keeps the keys a
+  // repo has. That is the spec's decision of no migration: such a repo is set
+  // up again, and /harness-init does not move or rewrite its documents.
+  it('templates/AGENTS.md names the seven human gate paths under .harness/docs/', () => {
+    expect(
+      block(readFileSync(join(templates, 'AGENTS.md'), 'utf8'))
+        .human_gate_paths,
+    ).toEqual([
+      '.harness/docs/intent/**',
+      '.harness/docs/specs/**',
+      '.harness/docs/backlog/**',
+      '.harness/docs/decisions/**',
+      '.harness/docs/review-log/**',
+      '.harness/docs/inbox.md',
+      '.harness/docs/parked.md',
+    ])
+  })
+
   // The prose lines say the lists of the block, placeholders included, so
   // whoever reads the template reads the rule the scripts apply.
   it.each([
     ['- Sensitive paths:', 'sensitive_paths'],
     ['- Never tier 0:', 'never_tier_0'],
+    ['- Human merge by path:', 'human_gate_paths'],
   ])('templates/AGENTS.md: the line "%s" says the list of %s', (start, key) => {
     const text = readFileSync(join(templates, 'AGENTS.md'), 'utf8')
     const line = text
@@ -1544,7 +1673,7 @@ describe('every description keeps its command and the English triggers', () => {
   // the YAML, not of the phrase, and "spec this intent" arrives split in two.
   const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
 
-  // The command at the start of a word and whole: `docs/specs/` is not the
+  // The command at the start of a word and whole: `.harness/docs/specs/` is not the
   // command of /spec, and `.harness/bin/board.sh` is not the command of /board.
   const missing = (description: string, skill: string): string[] =>
     [`/${skill}`, ...(triggers[skill] ?? [])].filter((trigger) =>
@@ -1580,9 +1709,9 @@ describe('every description keeps its command and the English triggers', () => {
     expect(missing('Use when the user runs /board.', 'board')).toEqual([
       '"open the board"',
     ])
-    expect(missing('The spec lives in docs/specs/SPEC.md.', 'spec')).toContain(
-      '/spec',
-    )
+    expect(
+      missing('The spec lives in .harness/docs/specs/SPEC.md.', 'spec'),
+    ).toContain('/spec')
   })
 })
 
@@ -1661,14 +1790,14 @@ describe('the root AGENTS.md sends the agent to .harness/AGENTS.md', () => {
   })
 })
 
-// The ninth user story of docs/specs/SPEC-spec-skill.md: "Un test strutturale
+// The ninth user story of .harness/docs/specs/SPEC-spec-skill.md: "Un test strutturale
 // fallisce se le sezioni del template in skills/spec/templates/SPEC.md e la
-// lista nel README di docs/specs/ divergono". The template is what /spec
-// writes, the README of docs/specs/ is the contract in the repos where the
+// lista nel README di .harness/docs/specs/ divergono". The template is what /spec
+// writes, the README of .harness/docs/specs/ is the contract in the repos where the
 // skill is not there: if they say different sections or fields, /slice reads
 // a spec the contract does not describe. The READMEs are two, the one of this
 // repo and the one /harness-init local copies elsewhere, and both hold.
-describe('the spec template and the docs/specs README say the same sections', () => {
+describe('the spec template and the .harness/docs/specs README say the same sections', () => {
   const template = readFileSync(
     join(root, 'skills/spec/templates/SPEC.md'),
     'utf8',
@@ -1682,7 +1811,7 @@ describe('the spec template and the docs/specs README say the same sections', ()
     ),
   ].map((match) => match[1] ?? '')
   const readmes = [
-    'docs/specs/README.md',
+    '.harness/docs/specs/README.md',
     'skills/harness-init/templates/docs/specs/README.md',
   ]
 
@@ -1803,13 +1932,13 @@ describe('every skill carries the same harness guardrail', () => {
   const guardrail = [
     '- **The harness of the repo you are working in is not yours to fix.**',
     'A template behind, a line missing in `AGENTS.md`, a script that',
-    'misbehaves: write one dated line in `docs/inbox.md`,',
+    'misbehaves: write one dated line in `.harness/docs/inbox.md`,',
     '`- <YYYY-MM-DD>: <one line>`, and carry on with what is there. Never',
     'rerun `/harness-init`, never edit a script, a hook, a workflow or the',
     '`AGENTS.md` of that repo: the fix belongs to the harness repo and comes',
     'back with the stage of `/harness-init` that owns the file. The only stop',
     'is a directory this skill must write into that is not there, which means',
-    'there is no harness. If `docs/inbox.md` alone is missing, say so in the',
+    'there is no harness. If `.harness/docs/inbox.md` alone is missing, say so in the',
     'hand-back and do not create it.',
   ].join(' ')
 
@@ -1842,9 +1971,9 @@ describe('every skill carries the same harness guardrail', () => {
 // READMEs is that the inbox carries data, the entries, which belong to that
 // repo and are not kept aligned: the comparison is on the header, as for
 // .github/judge/prompt.md above "## This repo".
-describe('docs/inbox.md is a template plus the entries of this repo', () => {
+describe('.harness/docs/inbox.md is a template plus the entries of this repo', () => {
   const template = readFileSync(join(templates, 'docs/inbox.md'), 'utf8')
-  const mine = readFileSync(join(root, 'docs/inbox.md'), 'utf8')
+  const mine = readFileSync(join(root, '.harness/docs/inbox.md'), 'utf8')
   const entry = /^- \d{4}-\d{2}-\d{2}: /m
 
   it('the template carries no entry: a new repo starts empty', () => {
@@ -1854,17 +1983,17 @@ describe('docs/inbox.md is a template plus the entries of this repo', () => {
     ).toBe(false)
   })
 
-  it('docs/inbox.md opens with the template', () => {
+  it('.harness/docs/inbox.md opens with the template', () => {
     expect(
       mine.startsWith(template),
-      'docs/inbox.md drifted from skills/harness-init/templates/docs/inbox.md: change the template, the header is what /harness-init local installs elsewhere',
+      '.harness/docs/inbox.md drifted from skills/harness-init/templates/docs/inbox.md: change the template, the header is what /harness-init local installs elsewhere',
     ).toBe(true)
   })
 })
 
-// S74: docs/parked.md is the inbox of what waits on purpose, and it travels
+// S74: .harness/docs/parked.md is the inbox of what waits on purpose, and it travels
 // the same way: the header is the template, the lines belong to the repo.
-describe('docs/parked.md is a template plus the entries of this repo', () => {
+describe('.harness/docs/parked.md is a template plus the entries of this repo', () => {
   const read = (path: string): string =>
     existsSync(path) ? readFileSync(path, 'utf8') : ''
   const entry = /^- \d{4}-\d{2}-\d{2}: /m
@@ -1881,13 +2010,13 @@ describe('docs/parked.md is a template plus the entries of this repo', () => {
     ).toBe(false)
   })
 
-  it('docs/parked.md opens with the template', () => {
+  it('.harness/docs/parked.md opens with the template', () => {
     const template = read(join(templates, 'docs/parked.md'))
-    const mine = read(join(root, 'docs/parked.md'))
-    expect(mine, 'docs/parked.md is missing or empty').not.toBe('')
+    const mine = read(join(root, '.harness/docs/parked.md'))
+    expect(mine, '.harness/docs/parked.md is missing or empty').not.toBe('')
     expect(
       mine.startsWith(template),
-      'docs/parked.md drifted from skills/harness-init/templates/docs/parked.md: change the template, the header is what /harness-init local installs elsewhere',
+      '.harness/docs/parked.md drifted from skills/harness-init/templates/docs/parked.md: change the template, the header is what /harness-init local installs elsewhere',
     ).toBe(true)
   })
 
@@ -1910,33 +2039,33 @@ describe('.harness/AGENTS.md lets a line of inbox land', () => {
   it.each([
     ['.harness/AGENTS.md', join(root, '.harness/AGENTS.md')],
     ['skills/harness-init/templates/AGENTS.md', join(templates, 'AGENTS.md')],
-  ])('%s names docs/inbox.md in human_gate_paths', (_name, path) => {
+  ])('%s names .harness/docs/inbox.md in human_gate_paths', (_name, path) => {
     expect(
       policyBlock(readFileSync(path, 'utf8')).human_gate_paths,
       'a skill cannot commit the line it was told to write',
-    ).toContain('docs/inbox.md')
+    ).toContain('.harness/docs/inbox.md')
   })
 })
 
-// S74: the line of docs/parked.md lands on main the way a line of inbox does,
+// S74: the line of .harness/docs/parked.md lands on main the way a line of inbox does,
 // or the pre-commit hook refuses the commit of park.sh.
 describe('.harness/AGENTS.md lets a line of parked land', () => {
   it.each([
     ['.harness/AGENTS.md', join(root, '.harness/AGENTS.md')],
     ['skills/harness-init/templates/AGENTS.md', join(templates, 'AGENTS.md')],
-  ])('%s names docs/parked.md in human_gate_paths', (_name, path) => {
+  ])('%s names .harness/docs/parked.md in human_gate_paths', (_name, path) => {
     const text = readFileSync(path, 'utf8')
     expect(
       policyBlock(text).human_gate_paths,
-      'a commit of docs/parked.md alone is refused on main',
-    ).toContain('docs/parked.md')
+      'a commit of .harness/docs/parked.md alone is refused on main',
+    ).toContain('.harness/docs/parked.md')
     const prose = text
       .split('\n')
       .find((line) => line.startsWith('- Human merge by path:'))
     expect(
       prose,
-      `${_name} does not say docs/parked.md in Human gates`,
-    ).toContain('`docs/parked.md`')
+      `${_name} does not say .harness/docs/parked.md in Human gates`,
+    ).toContain('`.harness/docs/parked.md`')
   })
 })
 
@@ -2297,17 +2426,20 @@ describe('/board and /next read the claim of a slice from the remote', () => {
 
   // From `Eligible:` to the end of the line and not the whole line: the
   // paragraph says the claim just above, and names the branch anyway.
-  it('docs/backlog/README.md says it in the Eligible line', () => {
-    const line = readFileSync(join(root, 'docs/backlog/README.md'), 'utf8')
+  it('.harness/docs/backlog/README.md says it in the Eligible line', () => {
+    const line = readFileSync(
+      join(root, '.harness/docs/backlog/README.md'),
+      'utf8',
+    )
       .split('\n')
       .find((row) => row.includes('Eligible:'))
     expect(
       line,
-      'docs/backlog/README.md has no Eligible line to read',
+      '.harness/docs/backlog/README.md has no Eligible line to read',
     ).toBeDefined()
     expect(
       (line ?? '').slice((line ?? '').indexOf('Eligible:')),
-      'the Eligible line of docs/backlog/README.md does not name the branch: the contract in the repos of the projects still has three points',
+      'the Eligible line of .harness/docs/backlog/README.md does not name the branch: the contract in the repos of the projects still has three points',
     ).toContain('slice/S<NN>-')
   })
 })
@@ -2527,7 +2659,7 @@ describe('skills/judge/SKILL.md sends nothing to CI', () => {
   })
 })
 
-// S27: the ADRs of this repo sit in docs/decisions/ and in no project. A
+// S27: the ADRs of this repo sit in .harness/docs/decisions/ and in no project. A
 // comment of a template that cites ADR-0003 by number sends whoever reads a
 // hook in Tipoff looking for a file that repo does not have. The reason is
 // written in words of its own: the number stays here, where the ADR is.
@@ -2595,7 +2727,9 @@ describe('the slice branch of /next is born without an upstream', () => {
   // point 4 read the ref the worktree was cut from.
   it('skills/next/SKILL.md passes origin/<default branch> to the two scripts of the subagent block', () => {
     const skill = readFileSync(join(root, 'skills/next/SKILL.md'), 'utf8')
-    const start = skill.indexOf('```\nRead AGENTS.md, docs/codebase-map.md')
+    const start = skill.indexOf(
+      '```\nRead AGENTS.md, .harness/docs/codebase-map.md',
+    )
     const end = start === -1 ? -1 : skill.indexOf('\n```', start + 3)
     const block =
       start === -1 || end === -1
@@ -2790,7 +2924,9 @@ describe('/next builds a wave in parallel and lands its slices one at a time', (
 describe('a subagent of /next kills only the processes it started', () => {
   const file = 'skills/next/SKILL.md'
   const skill = readFileSync(join(root, file), 'utf8')
-  const start = skill.indexOf('```\nRead AGENTS.md, docs/codebase-map.md')
+  const start = skill.indexOf(
+    '```\nRead AGENTS.md, .harness/docs/codebase-map.md',
+  )
   const end = start === -1 ? -1 : skill.indexOf('\n```', start + 3)
   const block =
     start === -1 || end === -1
@@ -2800,7 +2936,7 @@ describe('a subagent of /next kills only the processes it started', () => {
   it('has the rule in the fenced subagent block', () => {
     expect(
       block,
-      `${file} has no fenced block that opens with "Read AGENTS.md, docs/codebase-map.md": the brief of the subagent has moved somewhere this test does not read`,
+      `${file} has no fenced block that opens with "Read AGENTS.md, .harness/docs/codebase-map.md": the brief of the subagent has moved somewhere this test does not read`,
     ).not.toBe('')
     for (const words of [
       'never pkill -f vitest',
@@ -3284,9 +3420,12 @@ describe('the open-questions sentinel is None.', () => {
 // test file leaves it alone. architecture.test.ts stays named: it is where a
 // session looks for the rule a check enforces. The Dragons tell what happened
 // and may point at the case that holds it, so they are not read here.
-describe('docs/codebase-map.md names no test file but architecture.test.ts', () => {
+describe('.harness/docs/codebase-map.md names no test file but architecture.test.ts', () => {
   it('outside the Dragons', () => {
-    const map = readFileSync(join(root, 'docs/codebase-map.md'), 'utf8')
+    const map = readFileSync(
+      join(root, '.harness/docs/codebase-map.md'),
+      'utf8',
+    )
     const [shape = ''] = map.split('\n## Dragons')
     const named = new Set(shape.match(/[a-z-]+\.test\.ts/g) ?? [])
     expect([...named]).toEqual(['architecture.test.ts'])
@@ -3294,7 +3433,7 @@ describe('docs/codebase-map.md names no test file but architecture.test.ts', () 
 })
 
 // A parked document says nothing about it in its own file: the list is
-// docs/parked.md. /spec and /slice read it before the first question, quote
+// .harness/docs/parked.md. /spec and /slice read it before the first question, quote
 // the line and name the command that brings the document back, so nobody
 // reopens an interview or cuts a spec that was set aside.
 describe('/spec and /slice refuse a parked document', () => {
@@ -3313,7 +3452,7 @@ describe('/spec and /slice refuse a parked document', () => {
     'skills/%s/SKILL.md refuses in section 2 with the line and the command',
     (skill) => {
       const refuse = section(skill, '## 2.', '## 3.')
-      expect(refuse).toContain('docs/parked.md')
+      expect(refuse).toContain('.harness/docs/parked.md')
       expect(refuse).toContain('.harness/bin/park.sh resume')
     },
   )
@@ -3321,11 +3460,11 @@ describe('/spec and /slice refuse a parked document', () => {
   it('skills/spec/SKILL.md leaves parked intents out of the list', () => {
     const pick = section('spec', '## 1.', '## 2.')
     const list = pick.slice(pick.indexOf('Without an argument'))
-    expect(list.split('\n\n')[0]).toContain('docs/parked.md')
+    expect(list.split('\n\n')[0]).toContain('.harness/docs/parked.md')
   })
 })
 
-// S77: later/ was the workaround docs/parked.md replaces. Its documents sit
+// S77: later/ was the workaround .harness/docs/parked.md replaces. Its documents sit
 // where they belong again, parked, and the board lists them and picks none.
 describe('later/ is gone', () => {
   const tracked = execFileSync('git', ['ls-files'], {
@@ -3334,31 +3473,35 @@ describe('later/ is gone', () => {
   })
     .split('\n')
     .filter(Boolean)
-  const parkedPaths = readFileSync(join(root, 'docs/parked.md'), 'utf8')
+  const parkedPaths = readFileSync(
+    join(root, '.harness/docs/parked.md'),
+    'utf8',
+  )
     .split('\n')
     .filter((line) => /^- \d{4}-\d{2}-\d{2}: /.test(line))
     .map((line) => line.slice(14).split(': ')[0] ?? '')
   const three = [
-    'docs/intent/audit-sample.md',
-    'docs/intent/roadmap-view.md',
-    'docs/specs/SPEC-audit-sample.md',
+    '.harness/docs/intent/audit-sample.md',
+    '.harness/docs/intent/roadmap-view.md',
+    '.harness/docs/specs/SPEC-audit-sample.md',
   ]
 
-  it('tracks nothing under docs/intent/later/ or docs/specs/later/', () => {
+  it('tracks nothing under .harness/docs/intent/later/ or .harness/docs/specs/later/', () => {
     expect(
       tracked.filter(
         (path) =>
-          path.startsWith('docs/intent/later/') ||
-          path.startsWith('docs/specs/later/'),
+          path.startsWith('.harness/docs/intent/later/') ||
+          path.startsWith('.harness/docs/specs/later/'),
       ),
     ).toEqual([])
   })
 
-  it('every line of docs/parked.md names a tracked file', () => {
+  it('every line of .harness/docs/parked.md names a tracked file', () => {
     for (const path of parkedPaths) {
-      expect(tracked, `docs/parked.md parks ${path}, not tracked`).toContain(
-        path,
-      )
+      expect(
+        tracked,
+        `.harness/docs/parked.md parks ${path}, not tracked`,
+      ).toContain(path)
     }
   })
 
@@ -3368,10 +3511,10 @@ describe('later/ is gone', () => {
 
   it('SPEC-audit-sample.md names its intent where it sits now', () => {
     const spec = readFileSync(
-      join(root, 'docs/specs/SPEC-audit-sample.md'),
+      join(root, '.harness/docs/specs/SPEC-audit-sample.md'),
       'utf8',
     )
-    expect(spec).toMatch(/^intent: docs\/intent\/audit-sample\.md$/m)
+    expect(spec).toMatch(/^intent: \.harness\/docs\/intent\/audit-sample\.md$/m)
   })
 
   it('the board lists the three under Parked and picks none of them', () => {

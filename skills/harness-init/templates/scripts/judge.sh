@@ -238,11 +238,11 @@ cmd_bundle() {
   branch="$(git rev-parse --abbrev-ref HEAD)"
   tier="$(.harness/bin/tier.sh "$base" 2>/dev/null || echo '?')"
   # The slice is the one the branch took charge of: slice/S04-<slug> owns
-  # docs/backlog/S04-*.md. Deterministic, so the judge never picks the wrong one.
+  # .harness/docs/backlog/S04-*.md. Deterministic, so the judge never picks the wrong one.
   slice=""
   case "$branch" in
     slice/S*)
-      slice="$(ls docs/backlog/"$(printf '%s' "${branch#slice/}" | sed 's/-.*//')"-*.md 2>/dev/null | head -1 || true)"
+      slice="$(ls .harness/docs/backlog/"$(printf '%s' "${branch#slice/}" | sed 's/-.*//')"-*.md 2>/dev/null | head -1 || true)"
       ;;
   esac
   mkdir -p "$(store_dir)"
@@ -305,7 +305,7 @@ cmd_bundle() {
     printf '%s\n' "$checks"
     close_section 'commands reported by the session under review'
     section ".harness/AGENTS.md" ".harness/AGENTS.md"
-    section "docs/codebase-map.md" "docs/codebase-map.md"
+    section ".harness/docs/codebase-map.md" ".harness/docs/codebase-map.md"
     if [ -n "$slice" ]; then section "$slice" "$slice"; fi
     open_section 'commits'
     git log --format='%s%n%b' "$base..HEAD"

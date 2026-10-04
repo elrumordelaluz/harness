@@ -1,6 +1,6 @@
 // Behaviour of .harness/bin/board.sh, the screen someone reads when they open a
-// cold session: the slices of docs/backlog/ that are still open, the lines of
-// docs/inbox.md and the open PRs, and the same data as one object under
+// cold session: the slices of .harness/docs/backlog/ that are still open, the lines of
+// .harness/docs/inbox.md and the open PRs, and the same data as one object under
 // --json. Each case is a throwaway git repo whose docs/ the test writes, so
 // the test covers the shell on real files and not a port of its rules, and
 // `gh` is the stub in tests/fixtures/bin, which answers `pr list` from
@@ -39,7 +39,7 @@ type Slice = {
   blockedNote?: string
 }
 
-// A spec of docs/specs/, SPEC-<slug>.md, with the two fields the board reads.
+// A spec of .harness/docs/specs/, SPEC-<slug>.md, with the two fields the board reads.
 type Spec = { slug: string; status: string; intent: string }
 
 // The stamp of .harness/stamp.json as a stage leaves it: S56. A string is
@@ -66,7 +66,7 @@ function frontmatter(s: Slice): string {
     `blocked_by: ${s.blocked_by ?? 'none'}`,
     `tier: ${s.tier ?? 1}`,
     `human: ${s.human ?? false}`,
-    `spec: ${s.spec ?? 'docs/specs/SPEC-x.md'}`,
+    `spec: ${s.spec ?? '.harness/docs/specs/SPEC-x.md'}`,
     '---',
     '',
     '## Goal',
@@ -84,10 +84,10 @@ type Options = {
   // branch names under refs/remotes/origin/, the claim of a slice: S29
   branches?: string[]
   inbox?: string[]
-  // file name in docs/decisions/ to its content
+  // file name in .harness/docs/decisions/ to its content
   decisions?: Record<string, string>
   specs?: Spec[]
-  // slugs of docs/intent/
+  // slugs of .harness/docs/intent/
   intents?: string[]
   json?: boolean
   args?: string[]
@@ -100,7 +100,7 @@ type Options = {
   harnessRepo?: boolean
   // one empty commit, for the cases that read HEAD: S56
   commit?: boolean
-  // the lines of docs/parked.md, written under its header; no file when
+  // the lines of .harness/docs/parked.md, written under its header; no file when
   // undefined: S74
   parked?: string[]
 }
@@ -114,26 +114,32 @@ function board(opts: Options = {}): {
 } {
   const dir = mkdtempSync(join(tmpdir(), 'board-'))
   execFileSync('git', ['init', '-b', 'main', '-q'], { cwd: dir })
-  mkdirSync(join(dir, 'docs/backlog'), { recursive: true })
-  writeFileSync(join(dir, 'docs/backlog/README.md'), 'One slice per file.\n')
+  mkdirSync(join(dir, '.harness/docs/backlog'), { recursive: true })
+  writeFileSync(
+    join(dir, '.harness/docs/backlog/README.md'),
+    'One slice per file.\n',
+  )
   for (const s of opts.slices ?? []) {
-    writeFileSync(join(dir, `docs/backlog/${s.id}-a-slice.md`), frontmatter(s))
+    writeFileSync(
+      join(dir, `.harness/docs/backlog/${s.id}-a-slice.md`),
+      frontmatter(s),
+    )
   }
   for (const [name, content] of Object.entries(opts.decisions ?? {})) {
-    mkdirSync(join(dir, 'docs/decisions'), { recursive: true })
-    writeFileSync(join(dir, 'docs/decisions', name), content)
+    mkdirSync(join(dir, '.harness/docs/decisions'), { recursive: true })
+    writeFileSync(join(dir, '.harness/docs/decisions', name), content)
   }
   for (const s of opts.specs ?? []) {
-    mkdirSync(join(dir, 'docs/specs'), { recursive: true })
+    mkdirSync(join(dir, '.harness/docs/specs'), { recursive: true })
     writeFileSync(
-      join(dir, `docs/specs/SPEC-${s.slug}.md`),
+      join(dir, `.harness/docs/specs/SPEC-${s.slug}.md`),
       `---\nstatus: ${s.status}\nintent: ${s.intent}\ndate: 2026-09-16\n---\n\n# SPEC: ${s.slug}\n`,
     )
   }
   for (const slug of opts.intents ?? []) {
-    mkdirSync(join(dir, 'docs/intent'), { recursive: true })
+    mkdirSync(join(dir, '.harness/docs/intent'), { recursive: true })
     writeFileSync(
-      join(dir, `docs/intent/${slug}.md`),
+      join(dir, `.harness/docs/intent/${slug}.md`),
       '## Problem\n\nA problem.\n',
     )
   }
@@ -151,14 +157,14 @@ function board(opts: Options = {}): {
   }
   const lines = opts.inbox ?? []
   writeFileSync(
-    join(dir, 'docs/inbox.md'),
+    join(dir, '.harness/docs/inbox.md'),
     `# Inbox\n\nThe prose at the top, which is not an entry.\n\n${lines
       .map((line) => `${line}\n`)
       .join('')}`,
   )
   if (opts.parked !== undefined) {
     writeFileSync(
-      join(dir, 'docs/parked.md'),
+      join(dir, '.harness/docs/parked.md'),
       `# Parked\n\nThe prose at the top, which is not an entry.\n\n${opts.parked
         .map((line) => `${line}\n`)
         .join('')}`,
@@ -755,7 +761,9 @@ describe('the PR section reads the open PRs from gh', () => {
         pr(34, 'A short title', ['tier:1', 'judge:security:approve']),
         pr(35, 'Another title', ['tier:3']),
       ]),
-      specs: [{ slug: 'x', status: 'draft', intent: 'docs/intent/a.md' }],
+      specs: [
+        { slug: 'x', status: 'draft', intent: '.harness/docs/intent/a.md' },
+      ],
     })
     expect(section(lines, 'Open PRs')).toEqual([
       '  ' +
@@ -771,7 +779,10 @@ describe('the PR section reads the open PRs from gh', () => {
     ])
     expect(section(lines, 'Waiting on a human')).toEqual([
       '  ' + '#35'.padEnd(7) + 'tier:3'.padEnd(25) + 'Another title',
-      '  ' + 'spec'.padEnd(7) + 'draft'.padEnd(25) + 'docs/specs/SPEC-x.md',
+      '  ' +
+        'spec'.padEnd(7) +
+        'draft'.padEnd(25) +
+        '.harness/docs/specs/SPEC-x.md',
     ])
   })
 })
@@ -947,10 +958,10 @@ describe('the screen fits in forty lines', () => {
       },
       intents: ['audit-sample', 'roadmap-view', 'inbox-across-repos'],
       parked: [
-        '- 2026-09-24: docs/intent/audit-sample.md: stopped at Q8 of the interview, the audit waits for real verdicts',
-        '- 2026-09-24: docs/intent/roadmap-view.md: the board comes first',
-        '- 2026-09-24: docs/intent/inbox-across-repos.md: not before two repos use the harness',
-        '- 2026-09-25: docs/intent/gone.md: a line that outlived its file',
+        '- 2026-09-24: .harness/docs/intent/audit-sample.md: stopped at Q8 of the interview, the audit waits for real verdicts',
+        '- 2026-09-24: .harness/docs/intent/roadmap-view.md: the board comes first',
+        '- 2026-09-24: .harness/docs/intent/inbox-across-repos.md: not before two repos use the harness',
+        '- 2026-09-25: .harness/docs/intent/gone.md: a line that outlived its file',
       ],
     })
     expect(status).toBe(0)
@@ -1000,10 +1011,10 @@ describe('the screen fits in forty lines', () => {
     },
     intents: ['audit-sample', 'roadmap-view', 'inbox-across-repos'],
     parked: [
-      '- 2026-09-24: docs/intent/audit-sample.md: stopped at Q8 of the interview, the audit waits for real verdicts',
-      '- 2026-09-24: docs/intent/roadmap-view.md: the board comes first',
-      '- 2026-09-24: docs/intent/inbox-across-repos.md: not before two repos use the harness',
-      '- 2026-09-25: docs/intent/gone.md: a line that outlived its file',
+      '- 2026-09-24: .harness/docs/intent/audit-sample.md: stopped at Q8 of the interview, the audit waits for real verdicts',
+      '- 2026-09-24: .harness/docs/intent/roadmap-view.md: the board comes first',
+      '- 2026-09-24: .harness/docs/intent/inbox-across-repos.md: not before two repos use the harness',
+      '- 2026-09-25: .harness/docs/intent/gone.md: a line that outlived its file',
     ],
   }
   const folded: Options = {
@@ -1167,8 +1178,16 @@ describe('the human section lists what waits for a human, and nothing else', () 
         pr(37, 'The PR the policy merges', ['tier:2']),
       ]),
       specs: [
-        { slug: 'interview', status: 'draft', intent: 'docs/intent/a.md' },
-        { slug: 'approved', status: 'approved', intent: 'docs/intent/b.md' },
+        {
+          slug: 'interview',
+          status: 'draft',
+          intent: '.harness/docs/intent/a.md',
+        },
+        {
+          slug: 'approved',
+          status: 'approved',
+          intent: '.harness/docs/intent/b.md',
+        },
       ],
     })
     expect(status).toBe(0)
@@ -1182,7 +1201,9 @@ describe('the human section lists what waits for a human, and nothing else', () 
     expect(rows.find((line) => line.includes('#36'))).toContain('tier:3')
     expect(rows.join('\n')).not.toContain('#37')
     expect(
-      rows.find((line) => line.includes('docs/specs/SPEC-interview.md')),
+      rows.find((line) =>
+        line.includes('.harness/docs/specs/SPEC-interview.md'),
+      ),
     ).toContain('draft')
     expect(rows.join('\n')).not.toContain('SPEC-approved')
   })
@@ -1204,7 +1225,11 @@ describe('the human section lists what waits for a human, and nothing else', () 
         ),
       ]),
       specs: [
-        { slug: 'interview', status: 'draft', intent: 'docs/intent/a.md' },
+        {
+          slug: 'interview',
+          status: 'draft',
+          intent: '.harness/docs/intent/a.md',
+        },
       ],
     })
     expect(status).toBe(0)
@@ -1217,7 +1242,7 @@ describe('the human section lists what waits for a human, and nothing else', () 
     const start = three.indexOf('Alfa')
     expect(start).toBeGreaterThan(0)
     expect(one.indexOf('Beta')).toBe(start)
-    expect(spec.indexOf('docs/specs/')).toBe(start)
+    expect(spec.indexOf('.harness/docs/specs/')).toBe(start)
     for (const line of rows) expect(line.length).toBeLessThanOrEqual(100)
   })
 
@@ -1235,14 +1260,23 @@ describe('the human section lists what waits for a human, and nothing else', () 
     const { lines } = board({
       prs: '[]',
       specs: [
-        { slug: 'interview', status: 'draft', intent: 'docs/intent/a.md' },
-        { slug: 'other', status: 'draft', intent: 'docs/intent/b.md' },
+        {
+          slug: 'interview',
+          status: 'draft',
+          intent: '.harness/docs/intent/a.md',
+        },
+        { slug: 'other', status: 'draft', intent: '.harness/docs/intent/b.md' },
       ],
-      parked: ['- 2026-09-24: docs/specs/SPEC-interview.md: stopped at Q8'],
+      parked: [
+        '- 2026-09-24: .harness/docs/specs/SPEC-interview.md: stopped at Q8',
+      ],
     })
     const rows = section(lines, head)
     expect(rows).toEqual([
-      '  ' + 'spec'.padEnd(7) + 'draft'.padEnd(25) + 'docs/specs/SPEC-other.md',
+      '  ' +
+        'spec'.padEnd(7) +
+        'draft'.padEnd(25) +
+        '.harness/docs/specs/SPEC-other.md',
     ])
     expect(section(lines, 'Parked')).toHaveLength(1)
     expect(section(lines, 'Parked')[0]).toContain('interview')
@@ -1252,9 +1286,15 @@ describe('the human section lists what waits for a human, and nothing else', () 
     const { lines } = board({
       prs: '[]',
       specs: [
-        { slug: 'interview', status: 'draft', intent: 'docs/intent/a.md' },
+        {
+          slug: 'interview',
+          status: 'draft',
+          intent: '.harness/docs/intent/a.md',
+        },
       ],
-      parked: ['- 2026-09-24: docs/specs/SPEC-interview.md: stopped at Q8'],
+      parked: [
+        '- 2026-09-24: .harness/docs/specs/SPEC-interview.md: stopped at Q8',
+      ],
     })
     expect(lines).toContain('Waiting on a human  nothing waits for a human')
   })
@@ -1281,7 +1321,7 @@ describe('the human section lists what waits for a human, and nothing else', () 
 // condition, which stays a human's.
 describe('the human section lists the ADRs that hold a slice still', () => {
   const head = 'Waiting on a human'
-  // An ADR as docs/decisions/ writes them: the title in the first heading,
+  // An ADR as .harness/docs/decisions/ writes them: the title in the first heading,
   // after the id, and no `## Ordine di lavoro`, which would make this the
   // plan.
   const decision = (id: string, title: string): string =>
@@ -1400,7 +1440,11 @@ describe('the human section lists the ADRs that hold a slice still', () => {
       decisions,
       prs: JSON.stringify([pr(34, 'The backlog PR', ['tier:1', 'human-gate'])]),
       specs: [
-        { slug: 'interview', status: 'draft', intent: 'docs/intent/a.md' },
+        {
+          slug: 'interview',
+          status: 'draft',
+          intent: '.harness/docs/intent/a.md',
+        },
       ],
       slices: [
         {
@@ -1419,7 +1463,7 @@ describe('the human section lists the ADRs that hold a slice still', () => {
     expect(adrRow).toContain('ADR-0002')
     const start = prRow.indexOf('The backlog PR')
     expect(start).toBeGreaterThan(0)
-    expect(specRow.indexOf('docs/specs/')).toBe(start)
+    expect(specRow.indexOf('.harness/docs/specs/')).toBe(start)
     expect(adrRow.indexOf(parteAlta)).toBe(start)
     for (const line of rows) expect(line.length).toBeLessThanOrEqual(100)
   })
@@ -1459,7 +1503,7 @@ describe('the human section lists the ADRs that hold a slice still', () => {
 })
 
 // S74. A document written and not wanted yet is parked by a line of
-// docs/parked.md, `- <YYYY-MM-DD>: <path>: <why>`: the board lists it, after
+// .harness/docs/parked.md, `- <YYYY-MM-DD>: <path>: <why>`: the board lists it, after
 // what waits for a human, with its kind, slug, date and why, and never picks
 // it as the next action.
 describe('the Parked section lists what waits and why', () => {
@@ -1471,12 +1515,12 @@ describe('the Parked section lists what waits and why', () => {
         {
           slug: 'audit-sample',
           status: 'draft',
-          intent: 'docs/intent/audit-sample.md',
+          intent: '.harness/docs/intent/audit-sample.md',
         },
         {
           slug: 'board',
           status: 'approved',
-          intent: 'docs/intent/board.md',
+          intent: '.harness/docs/intent/board.md',
         },
       ],
       parked,
@@ -1484,9 +1528,9 @@ describe('the Parked section lists what waits and why', () => {
 
   it('prints one row per line with its kind, slug, date and why', () => {
     const lines = parkedBoard([
-      '- 2026-09-24: docs/intent/roadmap-view.md: not wanted before the audit',
-      '- 2026-09-24: docs/specs/SPEC-audit-sample.md: stopped at Q8',
-      '- 2026-09-25: docs/specs/SPEC-board.md: the slices wait for Tipoff',
+      '- 2026-09-24: .harness/docs/intent/roadmap-view.md: not wanted before the audit',
+      '- 2026-09-24: .harness/docs/specs/SPEC-audit-sample.md: stopped at Q8',
+      '- 2026-09-25: .harness/docs/specs/SPEC-board.md: the slices wait for Tipoff',
     ])
     expect(lines).toContain(head)
     expect(section(lines, head)).toEqual([
@@ -1510,7 +1554,7 @@ describe('the Parked section lists what waits and why', () => {
 
   it('comes after the human section and before the plan', () => {
     const lines = parkedBoard([
-      '- 2026-09-24: docs/intent/roadmap-view.md: later',
+      '- 2026-09-24: .harness/docs/intent/roadmap-view.md: later',
     ])
     const at = (text: string): number =>
       lines.findIndex((line) => line.startsWith(text))
@@ -1521,7 +1565,7 @@ describe('the Parked section lists what waits and why', () => {
 
   it('cuts the why at the column and never the row', () => {
     const lines = parkedBoard([
-      `- 2026-09-24: docs/intent/roadmap-view.md: ${'a why that runs on '.repeat(8)}end`,
+      `- 2026-09-24: .harness/docs/intent/roadmap-view.md: ${'a why that runs on '.repeat(8)}end`,
     ])
     const rows = section(lines, head)
     expect(rows).toHaveLength(1)
@@ -1535,7 +1579,7 @@ describe('the Parked section lists what waits and why', () => {
     expect(section(lines, head)).toEqual([])
   })
 
-  it('says nothing parked on its head when there is no docs/parked.md', () => {
+  it('says nothing parked on its head when there is no .harness/docs/parked.md', () => {
     const { lines, status } = board({})
     expect(status).toBe(0)
     expect(lines).toContain('Parked  nothing parked')
@@ -1544,7 +1588,9 @@ describe('the Parked section lists what waits and why', () => {
 
   it('prints a line whose path is not in the tree as missing, and exits 0', () => {
     const { lines, status } = board({
-      parked: ['- 2026-09-24: docs/intent/gone.md: moved away by hand'],
+      parked: [
+        '- 2026-09-24: .harness/docs/intent/gone.md: moved away by hand',
+      ],
     })
     expect(status).toBe(0)
     expect(section(lines, head)).toEqual([
@@ -1606,7 +1652,7 @@ describe('the plan in force is the latest ADR with a work order', () => {
     expect(section(lines, 'Plan')).toEqual([])
   })
 
-  it('says there is no plan when docs/decisions/ does not exist', () => {
+  it('says there is no plan when .harness/docs/decisions/ does not exist', () => {
     const { lines, status } = board({})
     expect(status).toBe(0)
     expect(lines).toContain('Plan  no plan in force')
@@ -1761,12 +1807,12 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
         id: 'S18',
         title: 'The eligible slice',
         status: 'todo',
-        spec: 'docs/specs/SPEC-a.md',
+        spec: '.harness/docs/specs/SPEC-a.md',
       },
     ],
     specs: [
-      { slug: 'a', status: 'approved', intent: 'docs/intent/a.md' },
-      { slug: 'b', status: 'approved', intent: 'docs/intent/b.md' },
+      { slug: 'a', status: 'approved', intent: '.harness/docs/intent/a.md' },
+      { slug: 'b', status: 'approved', intent: '.harness/docs/intent/b.md' },
     ],
     intents: ['a', 'b', 'c'],
     decisions: {
@@ -1784,7 +1830,9 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
   })
   const sliced = (o: Options): Options => ({
     ...notEligible(o),
-    specs: [{ slug: 'a', status: 'approved', intent: 'docs/intent/a.md' }],
+    specs: [
+      { slug: 'a', status: 'approved', intent: '.harness/docs/intent/a.md' },
+    ],
     intents: ['a', 'c'],
   })
   const specced = (o: Options): Options => ({ ...sliced(o), intents: ['a'] })
@@ -1838,7 +1886,7 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
   it('3. an approved spec that no slice names, /slice', () => {
     const { lines } = board(notEligible(everything()))
     expect(last(lines)).toBe(
-      'next action: /slice docs/specs/SPEC-b.md, because approved spec with no slice: SPEC-b.md',
+      'next action: /slice .harness/docs/specs/SPEC-b.md, because approved spec with no slice: SPEC-b.md',
     )
   })
 
@@ -1847,9 +1895,13 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
     const { lines } = board({
       ...o,
       specs: [
-        { slug: 'a', status: 'approved', intent: 'docs/intent/a.md' },
-        { slug: 'b', status: 'draft', intent: 'docs/intent/b.md' },
-        { slug: 'd', status: 'superseded', intent: 'docs/intent/c.md' },
+        { slug: 'a', status: 'approved', intent: '.harness/docs/intent/a.md' },
+        { slug: 'b', status: 'draft', intent: '.harness/docs/intent/b.md' },
+        {
+          slug: 'd',
+          status: 'superseded',
+          intent: '.harness/docs/intent/c.md',
+        },
       ],
     })
     expect(last(lines)).toMatch(/because step of the plan: /)
@@ -1860,17 +1912,17 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
   it('3. does not fire for a parked approved spec, and 4 fires instead', () => {
     const { lines } = board({
       ...notEligible(everything()),
-      parked: ['- 2026-09-24: docs/specs/SPEC-b.md: later'],
+      parked: ['- 2026-09-24: .harness/docs/specs/SPEC-b.md: later'],
     })
     expect(last(lines)).toBe(
-      'next action: /spec docs/intent/c.md, because intent with no spec: c.md',
+      'next action: /spec .harness/docs/intent/c.md, because intent with no spec: c.md',
     )
   })
 
   it('4. does not fire for a parked intent, and 5 fires instead', () => {
     const { lines } = board({
       ...sliced(everything()),
-      parked: ['- 2026-09-24: docs/intent/c.md: not wanted yet'],
+      parked: ['- 2026-09-24: .harness/docs/intent/c.md: not wanted yet'],
     })
     expect(last(lines)).toBe(
       'next action: step 1 of ADR-0003, because step of the plan: S18, the board.',
@@ -1880,7 +1932,7 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
   it('4. an intent that no spec names, /spec', () => {
     const { lines } = board(sliced(everything()))
     expect(last(lines)).toBe(
-      'next action: /spec docs/intent/c.md, because intent with no spec: c.md',
+      'next action: /spec .harness/docs/intent/c.md, because intent with no spec: c.md',
     )
   })
 
@@ -1901,7 +1953,7 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
           id: 'S19',
           title: 'Beyond',
           status: 'done',
-          spec: 'docs/specs/SPEC-a.md',
+          spec: '.harness/docs/specs/SPEC-a.md',
         },
       ],
     })
@@ -1937,7 +1989,7 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
           title: 'Held by a decision',
           status: 'todo',
           blocked_by: 'ADR-0002',
-          spec: 'docs/specs/SPEC-a.md',
+          spec: '.harness/docs/specs/SPEC-a.md',
         },
       ],
       decisions: {
@@ -2180,7 +2232,7 @@ describe('--json is the data model behind the screen', () => {
   // S20 held plan and next at null; S21 fills them, and the keys stay; S38
   // adds `blocked`, the ADRs the human section prints; S56 `harness`, the
   // stamp the first line of the screen is derived from.
-  // S74 adds `parked`, the lines of docs/parked.md with their kind.
+  // S74 adds `parked`, the lines of .harness/docs/parked.md with their kind.
   it('has exactly the eight keys, plan null without a plan and next filled', () => {
     const { stdout, status } = board({
       json: true,
@@ -2508,41 +2560,49 @@ describe('--json carries the parked documents whole', () => {
       json: true,
       intents: ['roadmap-view'],
       specs: [
-        { slug: 'audit', status: 'draft', intent: 'docs/intent/audit.md' },
-        { slug: 'board', status: 'approved', intent: 'docs/intent/b.md' },
+        {
+          slug: 'audit',
+          status: 'draft',
+          intent: '.harness/docs/intent/audit.md',
+        },
+        {
+          slug: 'board',
+          status: 'approved',
+          intent: '.harness/docs/intent/b.md',
+        },
       ],
       parked: [
-        `- 2026-09-24: docs/intent/roadmap-view.md: ${why}`,
-        '- 2026-09-24: docs/specs/SPEC-audit.md: stopped at Q8',
-        '- 2026-09-25: docs/specs/SPEC-board.md: later',
-        '- 2026-09-26: docs/intent/gone.md: moved by hand',
+        `- 2026-09-24: .harness/docs/intent/roadmap-view.md: ${why}`,
+        '- 2026-09-24: .harness/docs/specs/SPEC-audit.md: stopped at Q8',
+        '- 2026-09-25: .harness/docs/specs/SPEC-board.md: later',
+        '- 2026-09-26: .harness/docs/intent/gone.md: moved by hand',
       ],
     })
     expect(status).toBe(0)
     expect(JSON.parse(stdout).parked).toEqual([
       {
-        path: 'docs/intent/roadmap-view.md',
+        path: '.harness/docs/intent/roadmap-view.md',
         kind: 'intent',
         status: null,
         date: '2026-09-24',
         why,
       },
       {
-        path: 'docs/specs/SPEC-audit.md',
+        path: '.harness/docs/specs/SPEC-audit.md',
         kind: 'spec',
         status: 'draft',
         date: '2026-09-24',
         why: 'stopped at Q8',
       },
       {
-        path: 'docs/specs/SPEC-board.md',
+        path: '.harness/docs/specs/SPEC-board.md',
         kind: 'spec',
         status: 'approved',
         date: '2026-09-25',
         why: 'later',
       },
       {
-        path: 'docs/intent/gone.md',
+        path: '.harness/docs/intent/gone.md',
         kind: 'missing',
         status: null,
         date: '2026-09-26',

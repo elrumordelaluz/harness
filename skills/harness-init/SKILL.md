@@ -214,7 +214,7 @@ Documents and rules that work without a server.
    `tier.sh`), `scripts/ensure-hooks.sh`, `scripts/ensure-verdict.sh`,
    `scripts/prose.sh` (an em dash in an added line fails: style is a gate,
    so the judge never reads for it), `scripts/intent.sh` (`new <slug>`
-   writes the empty sections of `docs/intent/README.md`, `open` commits that
+   writes the empty sections of `.harness/docs/intent/README.md`, `open` commits that
    file alone; with `main` both on the default branch and the push is the
    approval, with `pr` on `intent/<slug>` and `open` opens its PR: the human
    types only the ten lines), `scripts/board.sh` (the board of the repo in
@@ -373,7 +373,7 @@ This stage installs what the judge reads and what acts on its verdict.
    job ends) and never with `human-gate`; the ntfy notification with the
    verdict inside when a human puts `needs-human` on by hand; on a merge
    into the default branch, the slice to `done` and the verdict line
-   appended to `docs/review-log/verdicts.jsonl`. Every autonomous write (the
+   appended to `.harness/docs/review-log/verdicts.jsonl`. Every autonomous write (the
    policy's merge, that append) uses the token of a GitHub App (`contents:
 write`, `pull-requests: write`): events raised by `GITHUB_TOKEN` start no
    workflow, so a merge done with it would never start `close.yml` and the

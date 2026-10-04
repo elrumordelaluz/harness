@@ -58,12 +58,12 @@ sees to that, and a head judged here is never judged again by anyone.
   `request-changes`, in the words the judge used.
 - **The harness of the repo you are working in is not yours to fix.** A
   template behind, a line missing in `AGENTS.md`, a script that misbehaves:
-  write one dated line in `docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
+  write one dated line in `.harness/docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
   carry on with what is there. Never rerun `/harness-init`, never edit a
   script, a hook, a workflow or the `AGENTS.md` of that repo: the fix belongs
   to the harness repo and comes back with the stage of `/harness-init` that
   owns the file. The only stop is a directory this skill must write into that
-  is not there, which means there is no harness. If `docs/inbox.md` alone is
+  is not there, which means there is no harness. If `.harness/docs/inbox.md` alone is
   missing, say so in the hand-back and do not create it.
 
 ## 1. Refuse early
@@ -118,7 +118,7 @@ printf '%s\n' "$checks" | .harness/bin/judge.sh bundle <base> <role>
 ```
 
 It prints the path of one file holding the protocol, the tier, the role, the
-gate results, `.harness/AGENTS.md`, `docs/codebase-map.md`, the slice file when the
+gate results, `.harness/AGENTS.md`, `.harness/docs/codebase-map.md`, the slice file when the
 branch name names one, the commit messages and the diff against the base.
 Do not assemble this by hand and do not add to it: what the judge may see is a
 decision of the chain, not of this session.

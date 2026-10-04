@@ -57,7 +57,7 @@ function repo(work: Files = {}, branch?: string): string {
   git(dir, 'config', 'user.name', 'judge')
   for (const file of [
     '.harness/AGENTS.md',
-    'docs/codebase-map.md',
+    '.harness/docs/codebase-map.md',
     '.harness/bin/tier.sh',
     '.harness/bin/policy-lines.sh',
     '.harness/bin/judge.sh',
@@ -222,7 +222,7 @@ describe('judge.sh required: the tier decides whether to judge at all', () => {
   })
 
   it('asks for none at tier 0, the tier that never judges', () => {
-    const dir = repo({ 'docs/intent/idea.md': 'due righe\n' })
+    const dir = repo({ '.harness/docs/intent/idea.md': 'due righe\n' })
     const run = judge(dir, ['required', 'main'])
     expect(run.out.trim()).toBe('0')
     expect(run.code).toBe(1)
@@ -263,7 +263,7 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
       '.github/judge/prompt.md',
       '.github/judge/verdict.schema.json',
       '.harness/AGENTS.md',
-      'docs/codebase-map.md',
+      '.harness/docs/codebase-map.md',
     ]) {
       expect(bundle, `the bundle has no ${marker}`).toContain(
         `======== BEGIN ${marker} [`,
@@ -392,15 +392,17 @@ describe('judge.sh bundle: one file, everything the judge may see', () => {
   it('finds the slice from the branch name, and says so when there is none', () => {
     const slice = '---\nid: S04\n---\n\n## Goal\n\nun check.\n'
     const named = repo(
-      { ...code, 'docs/backlog/S04-workflow.md': slice },
+      { ...code, '.harness/docs/backlog/S04-workflow.md': slice },
       'slice/S04-workflow',
     )
     const bundle = readFileSync(
       judge(named, ['bundle', 'main'], 'ok\n').out.trim(),
       'utf8',
     )
-    expect(bundle).toContain('- slice: docs/backlog/S04-workflow.md')
-    expect(bundle).toContain('======== BEGIN docs/backlog/S04-workflow.md [')
+    expect(bundle).toContain('- slice: .harness/docs/backlog/S04-workflow.md')
+    expect(bundle).toContain(
+      '======== BEGIN .harness/docs/backlog/S04-workflow.md [',
+    )
 
     const plain = readFileSync(
       judge(repo(code), ['bundle', 'main'], 'ok\n').out.trim(),
@@ -909,14 +911,14 @@ describe('ensure-verdict.sh: no verdict for this head, no PR', () => {
   })
 
   it('stays out at tier 0 and tier 3, the tiers that never judge', () => {
-    const zero = repo({ 'docs/intent/idea.md': 'due righe\n' })
+    const zero = repo({ '.harness/docs/intent/idea.md': 'due righe\n' })
     expect(hook(zero, `${open} --fill`).out).toBe('')
 
     // tier.sh reads the human flag from the slice the branch took charge of.
     const three = repo(
       {
         ...code,
-        'docs/backlog/S09-x.md': '---\nid: S09\nhuman: true\n---\n',
+        '.harness/docs/backlog/S09-x.md': '---\nid: S09\nhuman: true\n---\n',
       },
       'slice/S09-x',
     )

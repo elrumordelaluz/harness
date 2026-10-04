@@ -1,4 +1,4 @@
-// Behaviour of .harness/bin/park.sh, the only way a line of docs/parked.md is
+// Behaviour of .harness/bin/park.sh, the only way a line of .harness/docs/parked.md is
 // written or taken out: `park.sh <path> "<why>"` checks that the document is
 // one the board would pick, an intent no spec names, a draft spec or an
 // approved spec no slice names, and adds the dated line; `park.sh resume
@@ -112,23 +112,41 @@ function slice(id: string, specPath: string): string {
 
 // Every state a document can be in, on the default branch of the origin.
 const states: Files = {
-  'docs/intent/alpha.md': filled,
-  'docs/intent/beta.md': filled,
-  'docs/specs/SPEC-beta.md': spec('draft', 'docs/intent/beta.md'),
-  'docs/intent/gamma.md': filled,
-  'docs/specs/SPEC-gamma.md': spec('approved', 'docs/intent/gamma.md'),
-  'docs/intent/delta.md': filled,
-  'docs/specs/SPEC-delta.md': spec('approved', 'docs/intent/delta.md'),
-  'docs/backlog/S01-delta.md': slice('S01', 'docs/specs/SPEC-delta.md'),
-  'docs/intent/old.md': filled,
-  'docs/specs/SPEC-old.md': spec('superseded', 'docs/intent/old.md'),
-  'docs/intent/half.md': filled.replace(
+  '.harness/docs/intent/alpha.md': filled,
+  '.harness/docs/intent/beta.md': filled,
+  '.harness/docs/specs/SPEC-beta.md': spec(
+    'draft',
+    '.harness/docs/intent/beta.md',
+  ),
+  '.harness/docs/intent/gamma.md': filled,
+  '.harness/docs/specs/SPEC-gamma.md': spec(
+    'approved',
+    '.harness/docs/intent/gamma.md',
+  ),
+  '.harness/docs/intent/delta.md': filled,
+  '.harness/docs/specs/SPEC-delta.md': spec(
+    'approved',
+    '.harness/docs/intent/delta.md',
+  ),
+  '.harness/docs/backlog/S01-delta.md': slice(
+    'S01',
+    '.harness/docs/specs/SPEC-delta.md',
+  ),
+  '.harness/docs/intent/old.md': filled,
+  '.harness/docs/specs/SPEC-old.md': spec(
+    'superseded',
+    '.harness/docs/intent/old.md',
+  ),
+  '.harness/docs/intent/half.md': filled.replace(
     'At the end of the game a button downloads the PDF of the scoresheet.\n\n',
     '',
   ),
-  'docs/intent/renamed.md': filled.replace('## Out of scope', '## Out of'),
-  'docs/intent/taken.md': filled,
-  'docs/parked.md': `${parkedTemplate}\n- 2026-09-24: docs/intent/taken.md: not now\n`,
+  '.harness/docs/intent/renamed.md': filled.replace(
+    '## Out of scope',
+    '## Out of',
+  ),
+  '.harness/docs/intent/taken.md': filled,
+  '.harness/docs/parked.md': `${parkedTemplate}\n- 2026-09-24: .harness/docs/intent/taken.md: not now\n`,
 }
 
 // A bare origin whose main carries .harness/AGENTS.md, the scripts and
@@ -150,7 +168,7 @@ function repo(
   identity(seed)
   write(seed, {
     [file]: agents,
-    'docs/parked.md': parkedTemplate,
+    '.harness/docs/parked.md': parkedTemplate,
     ...base,
   })
   mkdirSync(join(seed, '.harness/bin'), { recursive: true })
@@ -218,19 +236,23 @@ function board(dir: string): { next: { action: string } } {
 
 describe('park.sh <path> "<why>", with docs_mode main', () => {
   it.each([
-    ['an intent no spec names', 'docs/intent/alpha.md', 'alpha'],
-    ['a draft spec', 'docs/specs/SPEC-beta.md', 'beta'],
-    ['an approved spec no slice names', 'docs/specs/SPEC-gamma.md', 'gamma'],
+    ['an intent no spec names', '.harness/docs/intent/alpha.md', 'alpha'],
+    ['a draft spec', '.harness/docs/specs/SPEC-beta.md', 'beta'],
+    [
+      'an approved spec no slice names',
+      '.harness/docs/specs/SPEC-gamma.md',
+      'gamma',
+    ],
   ])('parks %s: one line, one file committed, pushed', (_, path, slug) => {
     const { dir, origin } = repo()
-    const before = read(dir, 'docs/parked.md')
+    const before = read(dir, '.harness/docs/parked.md')
     const result = run(dir, [path, 'not wanted yet'])
     expect(result.status, result.stderr).toBe(0)
     const line = `- ${today}: ${path}: not wanted yet`
-    expect(read(dir, 'docs/parked.md')).toBe(`${before}${line}\n`)
+    expect(read(dir, '.harness/docs/parked.md')).toBe(`${before}${line}\n`)
     expect(git(dir, 'log', '-1', '--format=%s')).toBe(`docs(parked): ${slug}`)
     expect(git(dir, 'show', '--name-only', '--format=', 'HEAD')).toBe(
-      'docs/parked.md',
+      '.harness/docs/parked.md',
     )
     expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(
       git(dir, 'rev-parse', 'HEAD'),
@@ -239,24 +261,27 @@ describe('park.sh <path> "<why>", with docs_mode main', () => {
   })
 
   it('adds the line under a list with no line yet, as Prettier leaves it', () => {
-    const { dir } = repo({ ...states, 'docs/parked.md': parkedTemplate })
-    const result = run(dir, ['docs/intent/alpha.md', 'later'])
+    const { dir } = repo({
+      ...states,
+      '.harness/docs/parked.md': parkedTemplate,
+    })
+    const result = run(dir, ['.harness/docs/intent/alpha.md', 'later'])
     expect(result.status, result.stderr).toBe(0)
-    expect(read(dir, 'docs/parked.md')).toBe(
-      `${parkedTemplate}\n- ${today}: docs/intent/alpha.md: later\n`,
+    expect(read(dir, '.harness/docs/parked.md')).toBe(
+      `${parkedTemplate}\n- ${today}: .harness/docs/intent/alpha.md: later\n`,
     )
   })
 
   it('takes the document out of the next action of the board', () => {
-    const { dir } = repo({ 'docs/intent/alpha.md': filled })
-    expect(board(dir).next.action).toBe('/spec docs/intent/alpha.md')
-    expect(run(dir, ['docs/intent/alpha.md', 'later']).status).toBe(0)
+    const { dir } = repo({ '.harness/docs/intent/alpha.md': filled })
+    expect(board(dir).next.action).toBe('/spec .harness/docs/intent/alpha.md')
+    expect(run(dir, ['.harness/docs/intent/alpha.md', 'later']).status).toBe(0)
     expect(board(dir).next.action).not.toContain('alpha')
   })
 })
 
 describe('park.sh refuses, says why and writes nothing', () => {
-  const untracked = 'docs/intent/fresh.md'
+  const untracked = '.harness/docs/intent/fresh.md'
   it.each([
     [
       'a path not tracked on the default branch',
@@ -265,57 +290,61 @@ describe('park.sh refuses, says why and writes nothing', () => {
     ],
     [
       'a path that does not exist',
-      ['docs/intent/nowhere.md', 'later'],
+      ['.harness/docs/intent/nowhere.md', 'later'],
       /not tracked on main/,
     ],
     [
-      'a path outside docs/intent/ and docs/specs/',
-      ['docs/backlog/S01-delta.md', 'later'],
-      /only an intent of docs\/intent\/ or a spec of docs\/specs\//,
+      'a path outside .harness/docs/intent/ and .harness/docs/specs/',
+      ['.harness/docs/backlog/S01-delta.md', 'later'],
+      /only an intent of \.harness\/docs\/intent\/ or a spec of \.harness\/docs\/specs\//,
     ],
     [
-      'a path in a folder below docs/intent/',
-      ['docs/intent/later/alpha.md', 'later'],
-      /only an intent of docs\/intent\/ or a spec of docs\/specs\//,
+      'a path in a folder below .harness/docs/intent/',
+      ['.harness/docs/intent/later/alpha.md', 'later'],
+      /only an intent of \.harness\/docs\/intent\/ or a spec of \.harness\/docs\/specs\//,
     ],
     [
       'an intent a spec already names',
-      ['docs/intent/beta.md', 'later'],
-      /docs\/specs\/SPEC-beta\.md names it/,
+      ['.harness/docs/intent/beta.md', 'later'],
+      /\.harness\/docs\/specs\/SPEC-beta\.md names it/,
     ],
     [
       'an approved spec a slice names',
-      ['docs/specs/SPEC-delta.md', 'later'],
+      ['.harness/docs/specs/SPEC-delta.md', 'later'],
       /S01 names it/,
     ],
     [
       'a superseded spec',
-      ['docs/specs/SPEC-old.md', 'later'],
+      ['.harness/docs/specs/SPEC-old.md', 'later'],
       /status superseded/,
     ],
     [
       'an intent with an empty section',
-      ['docs/intent/half.md', 'later'],
+      ['.harness/docs/intent/half.md', 'later'],
       /What success looks like/,
     ],
     [
       'an intent with a missing section',
-      ['docs/intent/renamed.md', 'later'],
+      ['.harness/docs/intent/renamed.md', 'later'],
       /Out of scope/,
     ],
     [
-      'a path already in docs/parked.md',
-      ['docs/intent/taken.md', 'later'],
+      'a path already in .harness/docs/parked.md',
+      ['.harness/docs/intent/taken.md', 'later'],
       /already parked/,
     ],
-    ['an empty why', ['docs/intent/alpha.md', ''], /the why is empty/],
-    ['a why of blanks', ['docs/intent/alpha.md', '  '], /the why is empty/],
+    ['an empty why', ['.harness/docs/intent/alpha.md', ''], /the why is empty/],
+    [
+      'a why of blanks',
+      ['.harness/docs/intent/alpha.md', '  '],
+      /the why is empty/,
+    ],
     [
       'a why on two lines',
-      ['docs/intent/alpha.md', 'one\ntwo'],
+      ['.harness/docs/intent/alpha.md', 'one\ntwo'],
       /the why is one line/,
     ],
-    ['no why at all', ['docs/intent/alpha.md'], /the why is empty/],
+    ['no why at all', ['.harness/docs/intent/alpha.md'], /the why is empty/],
   ])('%s', (_, args, message) => {
     const { dir, origin } = repo()
     write(dir, { [untracked]: filled })
@@ -333,7 +362,7 @@ describe('park.sh refuses, says why and writes nothing', () => {
     ({ agents: broken, fault }) => {
       const { dir, origin } = repo(states, broken)
       const before = git(origin, 'rev-parse', 'refs/heads/main')
-      const result = run(dir, ['docs/intent/alpha.md', 'later'])
+      const result = run(dir, ['.harness/docs/intent/alpha.md', 'later'])
       expect(result.status).not.toBe(0)
       expect(result.stderr).toMatch(fault)
       expect(git(dir, 'status', '--porcelain')).toBe('')
@@ -345,7 +374,7 @@ describe('park.sh refuses, says why and writes nothing', () => {
   it('a block in the root AGENTS.md alone stops it and names .harness/AGENTS.md', () => {
     const { dir, origin } = repo(states, onMain, 'AGENTS.md')
     const before = git(origin, 'rev-parse', 'refs/heads/main')
-    const result = run(dir, ['docs/intent/alpha.md', 'later'])
+    const result = run(dir, ['.harness/docs/intent/alpha.md', 'later'])
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('.harness/AGENTS.md')
     expect(result.stderr).toMatch(/no policy block/)
@@ -357,7 +386,7 @@ describe('park.sh refuses, says why and writes nothing', () => {
     const { dir, origin } = repo()
     git(dir, 'switch', '-q', '-c', 'slice/S02-x')
     const before = git(origin, 'rev-parse', 'refs/heads/main')
-    const result = run(dir, ['docs/intent/alpha.md', 'later'])
+    const result = run(dir, ['.harness/docs/intent/alpha.md', 'later'])
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('run it from main')
     expect(git(dir, 'status', '--porcelain')).toBe('')
@@ -370,7 +399,7 @@ describe('park.sh refuses, says why and writes nothing', () => {
     git(dir, 'add', 'notes.md')
     git(dir, 'commit', '-q', '-m', 'notes')
     const before = git(origin, 'rev-parse', 'refs/heads/main')
-    const result = run(dir, ['docs/intent/alpha.md', 'later'])
+    const result = run(dir, ['.harness/docs/intent/alpha.md', 'later'])
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('notes.md')
     expect(git(dir, 'log', '-1', '--format=%s')).toBe('notes')
@@ -382,24 +411,24 @@ describe('park.sh with docs_mode pr', () => {
   it('writes the line and commits nothing', () => {
     const { dir, origin } = repo(states, onPr)
     const head = git(dir, 'rev-parse', 'HEAD')
-    const before = read(dir, 'docs/parked.md')
-    const result = run(dir, ['docs/intent/alpha.md', 'later'])
+    const before = read(dir, '.harness/docs/parked.md')
+    const result = run(dir, ['.harness/docs/intent/alpha.md', 'later'])
     expect(result.status, result.stderr).toBe(0)
-    expect(read(dir, 'docs/parked.md')).toBe(
-      `${before}- ${today}: docs/intent/alpha.md: later\n`,
+    expect(read(dir, '.harness/docs/parked.md')).toBe(
+      `${before}- ${today}: .harness/docs/intent/alpha.md: later\n`,
     )
     expect(result.stdout).toContain('travels on a PR')
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(head)
     expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(head)
-    expect(git(dir, 'status', '--porcelain')).toBe('M docs/parked.md')
+    expect(git(dir, 'status', '--porcelain')).toBe('M .harness/docs/parked.md')
   })
 
   it('resume takes the line out and commits nothing', () => {
     const { dir } = repo(states, onPr)
     const head = git(dir, 'rev-parse', 'HEAD')
-    const result = run(dir, ['resume', 'docs/intent/taken.md'])
+    const result = run(dir, ['resume', '.harness/docs/intent/taken.md'])
     expect(result.status, result.stderr).toBe(0)
-    expect(read(dir, 'docs/parked.md')).toBe(parkedTemplate)
+    expect(read(dir, '.harness/docs/parked.md')).toBe(parkedTemplate)
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(head)
   })
 })
@@ -407,23 +436,23 @@ describe('park.sh with docs_mode pr', () => {
 describe('park.sh resume <path>, with docs_mode main', () => {
   const two = [
     parkedTemplate,
-    '- 2026-09-24: docs/intent/alpha.md: not now',
-    '- 2026-09-25: docs/specs/SPEC-gamma.md: after the audit',
+    '- 2026-09-24: .harness/docs/intent/alpha.md: not now',
+    '- 2026-09-25: .harness/docs/specs/SPEC-gamma.md: after the audit',
     '',
   ].join('\n')
 
   it('takes its line out and nothing else, commits and pushes it', () => {
-    const { dir, origin } = repo({ ...states, 'docs/parked.md': two })
-    const result = run(dir, ['resume', 'docs/intent/alpha.md'])
+    const { dir, origin } = repo({ ...states, '.harness/docs/parked.md': two })
+    const result = run(dir, ['resume', '.harness/docs/intent/alpha.md'])
     expect(result.status, result.stderr).toBe(0)
-    expect(read(dir, 'docs/parked.md')).toBe(
-      two.replace('- 2026-09-24: docs/intent/alpha.md: not now\n', ''),
+    expect(read(dir, '.harness/docs/parked.md')).toBe(
+      two.replace('- 2026-09-24: .harness/docs/intent/alpha.md: not now\n', ''),
     )
     expect(git(dir, 'log', '-1', '--format=%s')).toBe(
       'docs(parked): resume alpha',
     )
     expect(git(dir, 'show', '--name-only', '--format=', 'HEAD')).toBe(
-      'docs/parked.md',
+      '.harness/docs/parked.md',
     )
     expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(
       git(dir, 'rev-parse', 'HEAD'),
@@ -432,35 +461,40 @@ describe('park.sh resume <path>, with docs_mode main', () => {
 
   it('a resumed intent is the next action again: /spec', () => {
     const { dir } = repo({
-      'docs/intent/alpha.md': filled,
-      'docs/parked.md': `${parkedTemplate}\n- 2026-09-24: docs/intent/alpha.md: not now\n`,
+      '.harness/docs/intent/alpha.md': filled,
+      '.harness/docs/parked.md': `${parkedTemplate}\n- 2026-09-24: .harness/docs/intent/alpha.md: not now\n`,
     })
     expect(board(dir).next.action).toBe('read the inbox')
-    expect(run(dir, ['resume', 'docs/intent/alpha.md']).status).toBe(0)
-    expect(board(dir).next.action).toBe('/spec docs/intent/alpha.md')
+    expect(run(dir, ['resume', '.harness/docs/intent/alpha.md']).status).toBe(0)
+    expect(board(dir).next.action).toBe('/spec .harness/docs/intent/alpha.md')
   })
 
   it('a resumed approved spec is the next action again: /slice', () => {
     const { dir } = repo({
-      'docs/intent/gamma.md': filled,
-      'docs/specs/SPEC-gamma.md': spec('approved', 'docs/intent/gamma.md'),
-      'docs/parked.md': `${parkedTemplate}\n- 2026-09-24: docs/specs/SPEC-gamma.md: not now\n`,
+      '.harness/docs/intent/gamma.md': filled,
+      '.harness/docs/specs/SPEC-gamma.md': spec(
+        'approved',
+        '.harness/docs/intent/gamma.md',
+      ),
+      '.harness/docs/parked.md': `${parkedTemplate}\n- 2026-09-24: .harness/docs/specs/SPEC-gamma.md: not now\n`,
     })
     expect(board(dir).next.action).toBe('read the inbox')
-    const result = run(dir, ['resume', 'docs/specs/SPEC-gamma.md'])
+    const result = run(dir, ['resume', '.harness/docs/specs/SPEC-gamma.md'])
     expect(result.status, result.stderr).toBe(0)
     expect(git(dir, 'log', '-1', '--format=%s')).toBe(
       'docs(parked): resume gamma',
     )
-    expect(board(dir).next.action).toBe('/slice docs/specs/SPEC-gamma.md')
+    expect(board(dir).next.action).toBe(
+      '/slice .harness/docs/specs/SPEC-gamma.md',
+    )
   })
 
   it('refuses a path with no line, and writes nothing', () => {
     const { dir, origin } = repo()
     const before = git(origin, 'rev-parse', 'refs/heads/main')
-    const result = run(dir, ['resume', 'docs/intent/alpha.md'])
+    const result = run(dir, ['resume', '.harness/docs/intent/alpha.md'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('no line for docs/intent/alpha.md')
+    expect(result.stderr).toContain('no line for .harness/docs/intent/alpha.md')
     expect(git(dir, 'status', '--porcelain')).toBe('')
     expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(before)
   })
@@ -468,12 +502,12 @@ describe('park.sh resume <path>, with docs_mode main', () => {
   it('takes out the line of a path that is gone', () => {
     const { dir, origin } = repo({
       ...states,
-      'docs/parked.md': `${parkedTemplate}\n- 2026-09-24: docs/intent/gone.md: not now\n`,
+      '.harness/docs/parked.md': `${parkedTemplate}\n- 2026-09-24: .harness/docs/intent/gone.md: not now\n`,
     })
-    expect(existsSync(join(dir, 'docs/intent/gone.md'))).toBe(false)
-    const result = run(dir, ['resume', 'docs/intent/gone.md'])
+    expect(existsSync(join(dir, '.harness/docs/intent/gone.md'))).toBe(false)
+    const result = run(dir, ['resume', '.harness/docs/intent/gone.md'])
     expect(result.status, result.stderr).toBe(0)
-    expect(read(dir, 'docs/parked.md')).toBe(parkedTemplate)
+    expect(read(dir, '.harness/docs/parked.md')).toBe(parkedTemplate)
     expect(git(dir, 'log', '-1', '--format=%s')).toBe(
       'docs(parked): resume gone',
     )

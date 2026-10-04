@@ -28,7 +28,7 @@ Here the next action is an inbox line written nine days earlier. Before asking, 
   <img src="docs/assets/board-slice.png" alt="The slice is written, the inbox line removed, and the commit pushed to main" width="720">
 </p>
 
-One yes, and the line is now slice S05 in `docs/backlog/`, committed on main. The session also notices that the spec still describes the old behaviour, and leaves that to you, because only a human changes a spec.
+One yes, and the line is now slice S05 in `.harness/docs/backlog/`, committed on main. The session also notices that the spec still describes the old behaviour, and leaves that to you, because only a human changes a spec.
 
 <p align="center">
   <img src="docs/assets/next.png" alt="/next at clean context finds one eligible slice and launches a subagent for it" width="720">
@@ -51,7 +51,7 @@ The harness makes most of that decision mechanical. The size and the paths of a 
     L3  Gates           git hooks (.harness/bin/hooks/)  ->  deterministic CI  ->  label tier:N
     L4  Judgement       /judge at clean context  ->  verdict  ->  policy.sh  ->  merge | needs-human
     L5  Human           writes the intent · approves spec and board · merges what the policy won't · audits
-    L6  Observability   docs/review-log/verdicts.jsonl  ->  audit  ->  threshold tuning
+    L6  Observability   .harness/docs/review-log/verdicts.jsonl  ->  audit  ->  threshold tuning
 
 Git hooks refuse code on the default branch and malformed commit messages. CI runs format, typecheck, test, build, a secret scan and a weakened-test check in one job, then computes the tier with `.harness/bin/tier.sh`. The rules it reads are the policy block of `AGENTS.md` **at the base ref**, so a PR cannot widen the rules it is judged by.
 
@@ -62,7 +62,7 @@ Git hooks refuse code on the default branch and malformed commit messages. CI ru
 | 2    | over the thresholds, sensitive path, dependency, schema | two roles | both approve and no open `high`, else `needs-human` |
 | 3    | slice with `human: true`, weakened tests                | none      | human                                               |
 
-The tier says how much scrutiny a change needs. Who may merge is a separate line: the paths listed under human gates in `AGENTS.md` (intent, specs, backlog, decisions, review log) get the `human-gate` label and the policy never merges them, at any tier. Every verdict lands in `docs/review-log/verdicts.jsonl` with the outcome of its PR, which is what the audit will tune the thresholds from.
+The tier says how much scrutiny a change needs. Who may merge is a separate line: the paths listed under human gates in `AGENTS.md` (intent, specs, backlog, decisions, review log) get the `human-gate` label and the policy never merges them, at any tier. Every verdict lands in `.harness/docs/review-log/verdicts.jsonl` with the outcome of its PR, which is what the audit will tune the thresholds from.
 
 Layers talk through files, labels and marked comments, never through a conversation. Every session starts at clean context from `AGENTS.md`, the codebase map and the slice.
 
@@ -84,7 +84,7 @@ Then, in the project repo:
     /harness-init ci       CI gates, tier label, PR template, ruleset
     /harness-init judge    judge prompt and schema, policy, automerge, escalate and close workflows
 
-The three stages land in one PR, merged by hand, because the gates cannot guard the PR that creates them. On an empty repo `local` bootstraps the stack first, from `~/.claude/stack.md` if it exists. The skill does everything `gh` can do and hands you one checklist at the end, usually two items. After the merge, fill `AGENTS.md` and `docs/codebase-map.md` with what is true of that repo: commands, sensitive paths, pitfalls. The judge and the subagents read them and nothing else.
+The three stages land in one PR, merged by hand, because the gates cannot guard the PR that creates them. On an empty repo `local` bootstraps the stack first, from `~/.claude/stack.md` if it exists. The skill does everything `gh` can do and hands you one checklist at the end, usually two items. After the merge, fill `AGENTS.md` and `.harness/docs/codebase-map.md` with what is true of that repo: commands, sensitive paths, pitfalls. The judge and the subagents read them and nothing else.
 
 `/harness-init` asks whether the repo is solo or team when it cannot tell. From there the two paths split.
 
@@ -99,14 +99,14 @@ One developer, Claude Code, a GitHub repo. This is how the harness has run every
     .harness/bin/intent.sh new <slug>    you write ten lines: problem, what success means, out of scope
     .harness/bin/intent.sh open          checks no section is empty, commits on main
     /spec                           one question per message, each with a recommendation, then the spec
-    /slice                          slice files in docs/backlog/ and the board, after one yes
+    /slice                          slice files in .harness/docs/backlog/ and the board, after one yes
     /next                           one subagent per slice, tests first, judged once, one PR each
 
 `/next` is the only command that produces code, and it never writes it itself: each slice gets a subagent at clean context in a worktree of its own, and slices that share no files run in parallel waves.
 
 **Turning on automerge.** Leave `HARNESS_AUTOMERGE` off for the first PRs and read what the policy says it would have done. When that matches what you would have done, install a GitHub App on the repo (merges made with the default token do not start workflows) and set the variable to `on`. An [ntfy](https://ntfy.sh) topic for escalations is optional.
 
-**Your day** is `/board` in the morning, `/next` when slices are ready, a notification when a tier 2 PR needs you, and a line in `docs/inbox.md` whenever you notice something outside the current slice. The next `/board` asks whether each line becomes an intent, a slice, or nothing.
+**Your day** is `/board` in the morning, `/next` when slices are ready, a notification when a tier 2 PR needs you, and a line in `.harness/docs/inbox.md` whenever you notice something outside the current slice. The next `/board` asks whether each line becomes an intent, a slice, or nothing.
 
 ## Path B: team
 
@@ -138,15 +138,15 @@ Several people on one repo, not all of them on Claude Code. The design principle
 
 ## Commands
 
-| Command                             | Use it when                                     | What you get                                                        |
-| ----------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------- |
-| `/board`                            | you open a session and don't know what is next  | repo state on one screen, the next action, inbox lines triaged      |
-| `.harness/bin/intent.sh new <slug>` | you have an idea                                | an intent skeleton; you write the ten lines, then `intent.sh open`  |
-| `/spec`                             | an intent is approved                           | an interview, one question per message, then the approved spec      |
-| `/slice`                            | a spec is approved                              | slice files in `docs/backlog/` and the board, after one yes         |
-| `/next`                             | slices are ready                                | one judged PR per slice; `/next S12` runs one, no argument runs all |
-| `/judge`                            | you open a PR by hand                           | a verdict for the head; `/next` runs it for you                     |
-| `/harness-init`                     | the repo has no harness, or the templates moved | stages `local`, `ci`, `judge`; one PR, merged by hand               |
+| Command                             | Use it when                                     | What you get                                                         |
+| ----------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------- |
+| `/board`                            | you open a session and don't know what is next  | repo state on one screen, the next action, inbox lines triaged       |
+| `.harness/bin/intent.sh new <slug>` | you have an idea                                | an intent skeleton; you write the ten lines, then `intent.sh open`   |
+| `/spec`                             | an intent is approved                           | an interview, one question per message, then the approved spec       |
+| `/slice`                            | a spec is approved                              | slice files in `.harness/docs/backlog/` and the board, after one yes |
+| `/next`                             | slices are ready                                | one judged PR per slice; `/next S12` runs one, no argument runs all  |
+| `/judge`                            | you open a PR by hand                           | a verdict for the head; `/next` runs it for you                      |
+| `/harness-init`                     | the repo has no harness, or the templates moved | stages `local`, `ci`, `judge`; one PR, merged by hand                |
 
 **`/next` or `/board`?** `/board` looks and tells you what to do. `/next` does it. If you know a slice is ready, `/next`. Otherwise `/board`.
 
@@ -182,14 +182,14 @@ The six skills could be packaged as a plugin on top of this, as a nicer install 
     skills/judge/            clean-context judgement before the PR
     skills/board/            session opener: the screen of .harness/bin/board.sh, inbox triage
     docs/spec.md             the spec; version and date in its header, changes listed in section 0
-    docs/codebase-map.md     modules, entry points, how to test, pitfalls
+    .harness/docs/codebase-map.md     modules, entry points, how to test, pitfalls
     docs/                    this repo's own harness: intent, specs, backlog, decisions, review-log, inbox
     AGENTS.md, CLAUDE.md     the map for agents, with the policy block the scripts read
     .harness/bin/            symlinks to the templates: the repo runs on its own hooks
     .github/                 copies of the workflow templates, kept equal to them by a test
     tests/                   Vitest suites that run the template scripts as processes
 
-The repo eats its own food: the slices in `docs/backlog/` are how it was built, and `docs/review-log/verdicts.jsonl` is the log of the judgements on its own PRs.
+The repo eats its own food: the slices in `.harness/docs/backlog/` are how it was built, and `.harness/docs/review-log/verdicts.jsonl` is the log of the judgements on its own PRs.
 
 ## Develop the harness
 
@@ -199,7 +199,7 @@ The repo eats its own food: the slices in `docs/backlog/` are how it was built, 
     pnpm format:check
     pnpm build          declared no-op
 
-Change a script or hook in `skills/harness-init/templates/`, never through the symlink. Workflows under `.github/` are copies, and a test fails until the copy matches the template. The scripts stay on bash 3.2 and `jq`: no `mapfile`, no associative arrays, no `${var,,}`, and a structural test looks for them because `bash -n` on CI's bash 5 does not. No em dash anywhere: `.harness/bin/prose.sh` fails on one, in the hooks and in CI. Test a skill on a project repo, not here, and read `docs/codebase-map.md` before touching code; its "Dragons" section holds what went wrong before.
+Change a script or hook in `skills/harness-init/templates/`, never through the symlink. Workflows under `.github/` are copies, and a test fails until the copy matches the template. The scripts stay on bash 3.2 and `jq`: no `mapfile`, no associative arrays, no `${var,,}`, and a structural test looks for them because `bash -n` on CI's bash 5 does not. No em dash anywhere: `.harness/bin/prose.sh` fails on one, in the hooks and in CI. Test a skill on a project repo, not here, and read `.harness/docs/codebase-map.md` before touching code; its "Dragons" section holds what went wrong before.
 
 Issues and pull requests are welcome. A PR from a fork gets the gates and the tier label but not the automerge: a human reads it and merges it.
 

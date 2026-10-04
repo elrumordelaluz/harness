@@ -83,7 +83,7 @@ jobs:
           set -euo pipefail
           sid="$(printf '%s' "$HEAD_REF" | sed -n 's#^slice/\(S[0-9][0-9]*\)-.*#\1#p')"
           if [ -n "$sid" ]; then
-            for s in docs/backlog/"$sid"-*.md; do
+            for s in .harness/docs/backlog/"$sid"-*.md; do
               [ -f "$s" ] || continue
               # A blocked slice whose draft PR was merged anyway has not
               # landed its work: it stays blocked, and the unblocking is the
@@ -99,16 +99,16 @@ jobs:
             # A branch named after a slice whose file is not on the default
             # branch closes nothing, and the slice stays an eligible todo: say
             # so, and let a comment the token may not post cost only itself.
-            if ! ls docs/backlog/"$sid"-*.md >/dev/null 2>&1; then
-              missing="PR #$PR merged from \`$HEAD_REF\`, but no \`docs/backlog/$sid-*.md\` is on the default branch: $sid was not set to done. Commit the slice file on the default branch with \`status: done\`, or the board keeps offering it."
+            if ! ls .harness/docs/backlog/"$sid"-*.md >/dev/null 2>&1; then
+              missing="PR #$PR merged from \`$HEAD_REF\`, but no \`.harness/docs/backlog/$sid-*.md\` is on the default branch: $sid was not set to done. Commit the slice file on the default branch with \`status: done\`, or the board keeps offering it."
               printf '%s\n' "$missing" >> "$GITHUB_STEP_SUMMARY"
               gh pr comment "$PR" --body "$missing" || true
             fi
           fi
-          .harness/bin/review-log.sh "$PR" docs/review-log/verdicts.jsonl
+          .harness/bin/review-log.sh "$PR" .harness/docs/review-log/verdicts.jsonl
           git config user.name "harness[bot]"
           git config user.email "harness[bot]@users.noreply.github.com"
-          git add -A docs
+          git add -A .harness/docs
           git diff --cached --quiet && exit 0
           git commit -m "chore(harness): close pr #$PR${sid:+ and slice $sid} [skip ci]"
           git push origin HEAD

@@ -1,6 +1,6 @@
 ## Slice
 
-<!-- path of the slice file, e.g. docs/backlog/S03-observer.md; "none" for a maintenance or harness PR -->
+<!-- path of the slice file, e.g. .harness/docs/backlog/S03-observer.md; "none" for a maintenance or harness PR -->
 
 ## Declarations
 

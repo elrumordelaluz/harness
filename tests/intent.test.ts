@@ -22,7 +22,10 @@ import { brokenPolicies, withPolicy } from './agents.js'
 
 const root = resolve(import.meta.dirname, '..')
 const bin = join(root, 'tests/fixtures/bin')
-const readme = readFileSync(join(root, 'docs/intent/README.md'), 'utf8')
+const readme = readFileSync(
+  join(root, '.harness/docs/intent/README.md'),
+  'utf8',
+)
 const template = readFileSync(
   join(root, 'skills/harness-init/templates/AGENTS.md'),
   'utf8',
@@ -80,7 +83,11 @@ function repo(
   mkdirSync(seed)
   git(seed, 'init', '-q', '-b', 'main')
   identity(seed)
-  write(seed, { [file]: suPr, 'docs/intent/README.md': readme, ...base })
+  write(seed, {
+    [file]: suPr,
+    '.harness/docs/intent/README.md': readme,
+    ...base,
+  })
   mkdirSync(join(seed, '.harness/bin'), { recursive: true })
   for (const script of ['intent.sh', 'policy-lines.sh']) {
     copyFileSync(
@@ -174,14 +181,14 @@ describe('intent.sh new', () => {
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(
       git(dir, 'rev-parse', 'origin/main'),
     )
-    expect(read(dir, 'docs/intent/export-pdf.md')).toBe(skeleton)
+    expect(read(dir, '.harness/docs/intent/export-pdf.md')).toBe(skeleton)
     expect(result.stdout).toContain('.harness/bin/intent.sh open')
   })
 
   // The skeleton is the README's contract written out: if the two drift, an
   // intent made with the script fails the check /spec reads the README for.
   it.each([
-    'docs/intent/README.md',
+    '.harness/docs/intent/README.md',
     'skills/harness-init/templates/docs/intent/README.md',
   ])('writes the sections %s lists, in order', (file) => {
     const sections = [
@@ -191,7 +198,7 @@ describe('intent.sh new', () => {
     const { dir } = repo()
     expect(run(dir, ['new', 'sezioni']).status).toBe(0)
     const written = [
-      ...read(dir, 'docs/intent/sezioni.md').matchAll(/^## (.+)$/gm),
+      ...read(dir, '.harness/docs/intent/sezioni.md').matchAll(/^## (.+)$/gm),
     ].map((match) => match[1])
     expect(written).toEqual(sections)
   })
@@ -227,20 +234,22 @@ describe('intent.sh new', () => {
   )
 
   it('refuses a slug whose intent is already on the default branch', () => {
-    const { dir } = repo({ 'docs/intent/taken.md': filled })
+    const { dir } = repo({ '.harness/docs/intent/taken.md': filled })
     const result = run(dir, ['new', 'taken'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('docs/intent/taken.md')
+    expect(result.stderr).toContain('.harness/docs/intent/taken.md')
     expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
   })
 
   // /spec stops on an approved or superseded spec and asks for a new intent:
   // an intent under the same slug would be a PR for a spec nobody can write.
   it('refuses a slug whose spec is already on the default branch', () => {
-    const { dir } = repo({ 'docs/specs/SPEC-done.md': 'status: approved\n' })
+    const { dir } = repo({
+      '.harness/docs/specs/SPEC-done.md': 'status: approved\n',
+    })
     const result = run(dir, ['new', 'done'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('docs/specs/SPEC-done.md')
+    expect(result.stderr).toContain('.harness/docs/specs/SPEC-done.md')
     expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
   })
 
@@ -271,32 +280,32 @@ describe('intent.sh new', () => {
     const result = run(dir, ['new', 'offline'])
     expect(result.status).not.toBe(0)
     expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
-    expect(existsSync(join(dir, 'docs/intent/offline.md'))).toBe(false)
+    expect(existsSync(join(dir, '.harness/docs/intent/offline.md'))).toBe(false)
   })
 
   // A switch carries uncommitted changes along: half a slice would land on
   // the intent branch without anyone asking.
   it('refuses a working tree with changes and names them', () => {
     const { dir } = repo()
-    write(dir, { 'docs/intent/README.md': 'changed\n' })
+    write(dir, { '.harness/docs/intent/README.md': 'changed\n' })
     const result = run(dir, ['new', 'dirty'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('docs/intent/README.md')
+    expect(result.stderr).toContain('.harness/docs/intent/README.md')
     expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
   })
 
   it('keeps an intent that was already being written', () => {
     const { dir } = repo()
-    write(dir, { 'docs/intent/draft.md': filled })
+    write(dir, { '.harness/docs/intent/draft.md': filled })
     const result = run(dir, ['new', 'draft'])
     expect(result.status, result.stderr).toBe(0)
     expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('intent/draft')
-    expect(read(dir, 'docs/intent/draft.md')).toBe(filled)
+    expect(read(dir, '.harness/docs/intent/draft.md')).toBe(filled)
   })
 
-  it('stops in a repo without docs/intent/ and names the stage that adds it', () => {
+  it('stops in a repo without .harness/docs/intent/ and names the stage that adds it', () => {
     const { dir } = repo()
-    git(dir, 'rm', '-q', '-r', 'docs')
+    git(dir, 'rm', '-q', '-r', '.harness/docs')
     git(dir, 'commit', '-q', '-m', 'no docs')
     const result = run(dir, ['new', 'nodocs'])
     expect(result.status).not.toBe(0)
@@ -308,7 +317,10 @@ describe('intent.sh open', () => {
   it('commits the intent alone, formatted, pushes it and opens the PR', () => {
     const { dir, origin } = repo({ 'notes.md': 'x\n' })
     expect(run(dir, ['new', 'export-pdf']).status).toBe(0)
-    write(dir, { 'docs/intent/export-pdf.md': filled, 'notes.md': 'y\n' })
+    write(dir, {
+      '.harness/docs/intent/export-pdf.md': filled,
+      'notes.md': 'y\n',
+    })
     git(dir, 'add', 'notes.md')
     const result = run(dir, ['open'])
     expect(result.status, result.stderr).toBe(0)
@@ -316,11 +328,15 @@ describe('intent.sh open', () => {
       'docs(intent): export-pdf',
     )
     expect(git(dir, 'show', '--name-only', '--format=', 'HEAD')).toBe(
-      'docs/intent/export-pdf.md',
+      '.harness/docs/intent/export-pdf.md',
     )
     expect(git(dir, 'rev-list', '--count', 'origin/main..HEAD')).toBe('1')
     // Prettier ran on the file: its list marker is the dash.
-    const committed = git(dir, 'show', 'HEAD:docs/intent/export-pdf.md')
+    const committed = git(
+      dir,
+      'show',
+      'HEAD:.harness/docs/intent/export-pdf.md',
+    )
     expect(committed).toContain('- Advanced statistics.')
     expect(committed).not.toContain('* Advanced')
     // What the human staged for something else stays staged, out of the commit.
@@ -346,14 +362,14 @@ describe('intent.sh open', () => {
     )
     const { dir } = repo({ '.github/pull_request_template.md': prTemplate })
     expect(run(dir, ['new', 'export-pdf']).status).toBe(0)
-    write(dir, { 'docs/intent/export-pdf.md': filled })
+    write(dir, { '.harness/docs/intent/export-pdf.md': filled })
     expect(run(dir, ['open']).status).toBe(0)
     const { body } = logs(dir)
     expect(body).toContain('## Slice\n\nnone\n')
     expect(body).toContain(
-      '## How to check by hand\n\nRead `docs/intent/export-pdf.md`.',
+      '## How to check by hand\n\nRead `.harness/docs/intent/export-pdf.md`.',
     )
-    expect(body).toContain('/spec docs/intent/export-pdf.md')
+    expect(body).toContain('/spec .harness/docs/intent/export-pdf.md')
     expect(body).toContain('- [ ] Touches a sensitive path')
     expect(body).not.toContain('- [x]')
     expect(body).not.toContain('<!-- path of the slice file')
@@ -362,9 +378,11 @@ describe('intent.sh open', () => {
   it('without a PR template the body is the line on how to check it', () => {
     const { dir } = repo()
     expect(run(dir, ['new', 'export-pdf']).status).toBe(0)
-    write(dir, { 'docs/intent/export-pdf.md': filled })
+    write(dir, { '.harness/docs/intent/export-pdf.md': filled })
     expect(run(dir, ['open']).status).toBe(0)
-    expect(logs(dir).body).toContain('Read `docs/intent/export-pdf.md`.')
+    expect(logs(dir).body).toContain(
+      'Read `.harness/docs/intent/export-pdf.md`.',
+    )
   })
 
   // The template belongs to the repo and this script to the harness: they
@@ -382,7 +400,7 @@ describe('intent.sh open', () => {
     ).replace('## How to check by hand', '## How to verify by hand')
     const { dir } = repo({ '.github/pull_request_template.md': stale })
     expect(run(dir, ['new', 'stale']).status).toBe(0)
-    write(dir, { 'docs/intent/stale.md': filled })
+    write(dir, { '.harness/docs/intent/stale.md': filled })
     const result = run(dir, ['open'])
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('## How to check by hand')
@@ -396,7 +414,7 @@ describe('intent.sh open', () => {
   it('a second run commits nothing new and points to the PR already open', () => {
     const { dir } = repo()
     expect(run(dir, ['new', 'again']).status).toBe(0)
-    write(dir, { 'docs/intent/again.md': filled })
+    write(dir, { '.harness/docs/intent/again.md': filled })
     expect(run(dir, ['open']).status).toBe(0)
     const url = 'https://github.test/o/r/pull/9'
     const second = run(dir, ['open'], { STUB_PRS: url })
@@ -412,7 +430,7 @@ describe('intent.sh open', () => {
   it('refuses a branch that carries more than the intent, and nothing leaves', () => {
     const { dir, origin } = repo()
     expect(run(dir, ['new', 'extra']).status).toBe(0)
-    write(dir, { 'docs/intent/extra.md': filled, 'notes.md': 'x\n' })
+    write(dir, { '.harness/docs/intent/extra.md': filled, 'notes.md': 'x\n' })
     git(dir, 'add', 'notes.md')
     git(dir, 'commit', '-q', '-m', 'notes')
     const result = run(dir, ['open'])
@@ -426,7 +444,7 @@ describe('intent.sh open', () => {
   it('says the branch is pushed when gh does not open the PR', () => {
     const { dir, origin } = repo()
     expect(run(dir, ['new', 'offline']).status).toBe(0)
-    write(dir, { 'docs/intent/offline.md': filled })
+    write(dir, { '.harness/docs/intent/offline.md': filled })
     const result = run(dir, ['open'], { STUB_FAIL: create })
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('intent/offline is pushed')
@@ -453,7 +471,7 @@ describe('intent.sh open', () => {
   ])('refuses %s, names it, and nothing leaves', (_, content, section) => {
     const { dir, origin } = repo()
     expect(run(dir, ['new', 'half']).status).toBe(0)
-    write(dir, { 'docs/intent/half.md': content })
+    write(dir, { '.harness/docs/intent/half.md': content })
     const result = run(dir, ['open'])
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain(section)
@@ -501,7 +519,7 @@ describe('intent.sh new, with docs_mode main', () => {
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(
       git(dir, 'rev-parse', 'origin/main'),
     )
-    expect(read(dir, 'docs/intent/export-pdf.md')).toBe(skeleton)
+    expect(read(dir, '.harness/docs/intent/export-pdf.md')).toBe(skeleton)
     expect(git(dir, 'branch', '--list', 'intent/*')).toBe('')
     expect(git(origin, 'branch', '--list', 'intent/*')).toBe('')
     expect(result.stdout).toContain('.harness/bin/intent.sh open export-pdf')
@@ -510,29 +528,29 @@ describe('intent.sh new, with docs_mode main', () => {
   it('moves to the default branch, brought up to date, from wherever it runs', () => {
     const { dir } = repo(suMain)
     git(dir, 'switch', '-q', '-c', 'slice/S01-x')
-    elsewhere(dir, { 'docs/inbox.md': '- riga\n' })
+    elsewhere(dir, { '.harness/docs/inbox.md': '- riga\n' })
     const result = run(dir, ['new', 'altrove'])
     expect(result.status, result.stderr).toBe(0)
     expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(
       git(dir, 'rev-parse', 'origin/main'),
     )
-    expect(read(dir, 'docs/inbox.md')).toBe('- riga\n')
+    expect(read(dir, '.harness/docs/inbox.md')).toBe('- riga\n')
   })
 
   it('refuses a slug whose intent is already on the default branch', () => {
-    const { dir } = repo({ ...suMain, 'docs/intent/taken.md': filled })
+    const { dir } = repo({ ...suMain, '.harness/docs/intent/taken.md': filled })
     const result = run(dir, ['new', 'taken'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('docs/intent/taken.md')
+    expect(result.stderr).toContain('.harness/docs/intent/taken.md')
   })
 
   it('refuses a working tree with changes and names them', () => {
     const { dir } = repo(suMain)
-    write(dir, { 'docs/intent/README.md': 'changed\n' })
+    write(dir, { '.harness/docs/intent/README.md': 'changed\n' })
     const result = run(dir, ['new', 'dirty'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('docs/intent/README.md')
+    expect(result.stderr).toContain('.harness/docs/intent/README.md')
   })
 })
 
@@ -540,7 +558,7 @@ describe('intent.sh open, with docs_mode main', () => {
   function written(slug = 'export-pdf'): { dir: string; origin: string } {
     const { dir, origin } = repo({ ...suMain, 'notes.md': 'x\n' })
     expect(run(dir, ['new', slug]).status).toBe(0)
-    write(dir, { [`docs/intent/${slug}.md`]: filled })
+    write(dir, { [`.harness/docs/intent/${slug}.md`]: filled })
     return { dir, origin }
   }
 
@@ -555,16 +573,20 @@ describe('intent.sh open, with docs_mode main', () => {
       'docs(intent): export-pdf',
     )
     expect(git(dir, 'show', '--name-only', '--format=', 'HEAD')).toBe(
-      'docs/intent/export-pdf.md',
+      '.harness/docs/intent/export-pdf.md',
     )
-    const committed = git(dir, 'show', 'HEAD:docs/intent/export-pdf.md')
+    const committed = git(
+      dir,
+      'show',
+      'HEAD:.harness/docs/intent/export-pdf.md',
+    )
     expect(committed).toContain('- Advanced statistics.')
     expect(git(dir, 'diff', '--cached', '--name-only')).toBe('notes.md')
     expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(
       git(dir, 'rev-parse', 'HEAD'),
     )
     expect(result.stdout).toContain(git(dir, 'rev-parse', '--short', 'HEAD'))
-    expect(result.stdout).toContain('/spec docs/intent/export-pdf.md')
+    expect(result.stdout).toContain('/spec .harness/docs/intent/export-pdf.md')
     expect(logs(dir).gh).toBe('')
   })
 
@@ -581,12 +603,12 @@ describe('intent.sh open, with docs_mode main', () => {
 
   it('refuses to guess between two intents and names them', () => {
     const { dir, origin } = written('prima')
-    write(dir, { 'docs/intent/seconda.md': filled })
+    write(dir, { '.harness/docs/intent/seconda.md': filled })
     const before = git(origin, 'rev-parse', 'refs/heads/main')
     const result = run(dir, ['open'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('docs/intent/prima.md')
-    expect(result.stderr).toContain('docs/intent/seconda.md')
+    expect(result.stderr).toContain('.harness/docs/intent/prima.md')
+    expect(result.stderr).toContain('.harness/docs/intent/seconda.md')
     expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(before)
   })
 
@@ -627,7 +649,7 @@ describe('intent.sh open, with docs_mode main', () => {
 
   it('lands on top of what reached the default branch meanwhile', () => {
     const { dir, origin } = written()
-    elsewhere(dir, { 'docs/inbox.md': '- riga\n' })
+    elsewhere(dir, { '.harness/docs/inbox.md': '- riga\n' })
     const result = run(dir, ['open'])
     expect(result.status, result.stderr).toBe(0)
     expect(git(dir, 'log', '-1', '--format=%s', 'HEAD^')).toBe(
@@ -673,7 +695,9 @@ describe('intent.sh, a policy block it cannot read', () => {
       expect(result.stderr).toMatch(fault)
       expect(result.stderr).toContain('/harness-init local')
       expect(git(dir, 'branch', '--list', 'intent/*')).toBe('')
-      expect(existsSync(join(dir, 'docs/intent/export-pdf.md'))).toBe(false)
+      expect(existsSync(join(dir, '.harness/docs/intent/export-pdf.md'))).toBe(
+        false,
+      )
     },
   )
 
@@ -682,7 +706,7 @@ describe('intent.sh, a policy block it cannot read', () => {
     ({ agents: broken, fault }) => {
       const { dir, origin } = repo({
         '.harness/AGENTS.md': broken,
-        'docs/intent/export-pdf.md': filled,
+        '.harness/docs/intent/export-pdf.md': filled,
       })
       const before = git(origin, 'rev-parse', 'refs/heads/main')
       const result = run(dir, ['open', 'export-pdf'])
@@ -704,6 +728,8 @@ describe('intent.sh, a policy block it cannot read', () => {
     expect(result.stderr).toMatch(/no policy block/)
     expect(result.stderr).toContain('/harness-init local')
     expect(git(dir, 'branch', '--list', 'intent/*')).toBe('')
-    expect(existsSync(join(dir, 'docs/intent/export-pdf.md'))).toBe(false)
+    expect(existsSync(join(dir, '.harness/docs/intent/export-pdf.md'))).toBe(
+      false,
+    )
   })
 })

@@ -44,7 +44,7 @@ while IFS= read -r l; do
       fi
       [ -z "$file" ] && continue
       case "$file" in
-        docs/review-log/*|pnpm-lock.yaml|*.lock|*.min.*|*.svg) ;;
+        .harness/docs/review-log/*|pnpm-lock.yaml|*.lock|*.min.*|*.svg) ;;
         *)
           if printf '%s' "${l#+}" | LC_ALL=C grep -q "$dash"; then
             echo "$file:$line: em dash: ${l#+}"

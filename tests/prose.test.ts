@@ -87,7 +87,7 @@ describe('prose.sh on a range', () => {
   it('leaves the review log alone: verdicts are data', () => {
     const { dir, sha } = repo()
     write(dir, {
-      'docs/review-log/verdicts.jsonl': `{"reason":"a ${dash} b"}\n`,
+      '.harness/docs/review-log/verdicts.jsonl': `{"reason":"a ${dash} b"}\n`,
     })
     git(dir, 'add', '-A')
     git(dir, 'commit', '-q', '-m', 'work')

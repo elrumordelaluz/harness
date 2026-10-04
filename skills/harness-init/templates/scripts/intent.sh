@@ -4,8 +4,8 @@
 # depends on the docs_mode key of .harness/AGENTS.md on the default branch.
 # With `"docs_mode": "main"`:
 #   intent.sh new <slug>    on the default branch, brought up to date, write
-#                           docs/intent/<slug>.md with the three sections of
-#                           docs/intent/README.md, empty
+#                           .harness/docs/intent/<slug>.md with the three sections of
+#                           .harness/docs/intent/README.md, empty
 #   intent.sh open [<slug>] on the default branch: refuse a section that is
 #                           missing or empty and a branch that carries anything
 #                           else, format the file, commit it alone, push it
@@ -23,7 +23,7 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# The sections of docs/intent/README.md, in order. tests/intent.test.ts holds
+# The sections of .harness/docs/intent/README.md, in order. tests/intent.test.ts holds
 # them equal to both copies of the README.
 SECTIONS='Problem|What success looks like|Out of scope'
 
@@ -134,7 +134,7 @@ pr_body() {
 new() {
   local slug="${1:-}"
   valid "$slug" || die "the slug is lowercase letters, digits and dashes, a letter first: '$slug'"
-  [ -d docs/intent ] || die "no docs/intent/ here: the repo has no harness yet, run /harness-init local"
+  [ -d .harness/docs/intent ] || die "no .harness/docs/intent/ here: the repo has no harness yet, run /harness-init local"
   # A switch carries uncommitted changes along, and half a slice would land on
   # the intent branch, or on the default branch the intent goes to. Untracked
   # files travel too, and that is the point: an intent begun before this
@@ -143,14 +143,14 @@ new() {
   dirty="$(git status --porcelain --untracked-files=no)"
   [ -z "$dirty" ] || die "commit or stash these first, the switch would carry them along:
 $dirty"
-  local base remote flow file="docs/intent/$slug.md"
+  local base remote flow file=".harness/docs/intent/$slug.md"
   base="$(default_branch)" || die "origin cannot be read, and the checks need its refs as they are now"
   flow="$(mode "$base")" || exit 1
   if git cat-file -e "origin/$base:$file" 2>/dev/null; then
     die "$file is already on $base: an intent is not rewritten, pick another slug"
   fi
-  if git cat-file -e "origin/$base:docs/specs/SPEC-$slug.md" 2>/dev/null; then
-    die "docs/specs/SPEC-$slug.md is already on $base: pick another slug"
+  if git cat-file -e "origin/$base:.harness/docs/specs/SPEC-$slug.md" 2>/dev/null; then
+    die ".harness/docs/specs/SPEC-$slug.md is already on $base: pick another slug"
   fi
   if [ "$flow" = main ]; then
     on_default "$base"
@@ -189,7 +189,7 @@ write_skeleton() {
     echo "intent: $2, $1 was already there and is kept"
   else
     tr '|' '\n' <<<"$SECTIONS" | awk 'NR > 1 { print "" } { print "## " $0 }' >"$1"
-    echo "intent: $2, write $1 (docs/intent/README.md says what goes in each section)"
+    echo "intent: $2, write $1 (.harness/docs/intent/README.md says what goes in each section)"
   fi
 }
 
@@ -206,9 +206,9 @@ edit() {
 # leaves one. README.md is the folder's, never an intent.
 pending() {
   {
-    git status --porcelain --untracked-files=all -- docs/intent/ | cut -c4-
-    git diff --no-renames --name-only "origin/$1...HEAD" -- docs/intent/
-  } | { grep -E '^docs/intent/[^/]+\.md$' || true; } | { grep -vx 'docs/intent/README.md' || true; } | LC_ALL=C sort -u
+    git status --porcelain --untracked-files=all -- .harness/docs/intent/ | cut -c4-
+    git diff --no-renames --name-only "origin/$1...HEAD" -- .harness/docs/intent/
+  } | { grep -E '^\.harness/docs/intent/[^/]+\.md$' || true; } | { grep -vxF '.harness/docs/intent/README.md' || true; } | LC_ALL=C sort -u
 }
 
 # With su main there is no branch and no PR: the file goes on the default
@@ -229,7 +229,7 @@ $found" ;;
     esac
   fi
   valid "$slug" || die "the slug is lowercase letters, digits and dashes, a letter first: '$slug'"
-  file="docs/intent/$slug.md"
+  file=".harness/docs/intent/$slug.md"
   [ -f "$file" ] || die "$file does not exist"
   local missing
   missing="$(empty_sections "$file")"
@@ -268,7 +268,7 @@ open_pr() {
   if [ "$branch" != "intent/$slug" ] || ! valid "$slug"; then
     die "run it from intent/<slug>, the branch intent.sh new cut; this is ${branch:-a detached HEAD}"
   fi
-  local file="docs/intent/$slug.md"
+  local file=".harness/docs/intent/$slug.md"
   [ -f "$file" ] || die "$file does not exist"
   local missing
   missing="$(empty_sections "$file")"
