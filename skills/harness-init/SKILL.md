@@ -2,8 +2,9 @@
 name: harness-init
 description: >
   Set up the agent production harness in the current repo, in three idempotent
-  stages: `local` (AGENTS.md, CLAUDE.md, docs/, git hooks, tracked
-  .claude/settings.json), `ci` (deterministic gates in GitHub Actions, tier
+  stages: `local` (.harness/ with its AGENTS.md, docs and bootstrap, one
+  block each in AGENTS.md, CLAUDE.md and the tracked .claude/settings.json,
+  the git hooks fetched), `ci` (deterministic gates in GitHub Actions, tier
   label, PR template, main ruleset), `judge` (the judge's prompt and schema,
   policy, automerge and escalation: the judgement itself is `/judge`). Use when the user runs
   /harness-init [local|ci|judge], says "set up the harness", "prepare the repo
@@ -32,8 +33,9 @@ this skill is its step 0.
   end of stage `judge`, with only what needs a browser or an interactive login.
 - Everything the harness needs must be tracked in git. A rule that lives only
   in `~/.claude/` does not exist in CI or for a teammate. Skills are personal
-  conveniences; `AGENTS.md`, `docs/`, `scripts/`, `.githooks/`, `.github/` are
-  the contract.
+  conveniences; `.harness/`, `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`
+  and `.github/` are the contract, and `.harness/bin/` is fetched at the pin,
+  ignored.
 - Templates live in `templates/` next to this file (see `templates/README.md`
   for the destination of each). They are starting points: fill the
   `{{placeholders}}`, drop what does not apply, keep AGENTS.md under 100 lines.
@@ -147,11 +149,11 @@ Print a one-screen state table before doing anything:
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Stack, package manager, scripts | `package.json` or `pyproject.toml`; presence of `typecheck`, `test`, `format:check`, `build`                                                                                                                                                                                   |
 | Layout                          | top-level dirs; which dir is the server, the domain, the state or sync layer, the tests                                                                                                                                                                                        |
-| Existing harness                | `AGENTS.md`, `CLAUDE.md`, `docs/`, `.githooks/`, `.claude/settings.json`, `.github/workflows/`, labels (`gh label list`), ruleset (`gh api repos/{owner}/{repo}/rulesets`)                                                                                                     |
-| Ignore rules                    | `.gitignore` lines matching `docs`, `CLAUDE.md`, `.claude`                                                                                                                                                                                                                     |
+| Existing harness                | `.harness/`, `AGENTS.md`, `CLAUDE.md`, `.claude/settings.json`, `core.hooksPath`, `.github/workflows/`, labels (`gh label list`), ruleset (`gh api repos/{owner}/{repo}/rulesets`)                                                                                             |
+| Ignore rules                    | `.gitignore` lines matching `.harness`, `CLAUDE.md`, `.claude`                                                                                                                                                                                                                 |
 | Plan                            | `gh repo view --json isPrivate` and a probe of `gh api repos/{owner}/{repo}/rulesets`. A 403 "Upgrade to GitHub Pro" means no rulesets, no branch protection, no auto-merge on this repo: say it once, skip the ruleset; the hooks protect main and the policy merges directly |
 | Remote and mode                 | `git remote -v`; solo or team (ask if not obvious: more than one collaborator, an org repo, a CODEOWNERS)                                                                                                                                                                      |
-| Stage                           | `local` done if `AGENTS.md` and `.githooks/` exist; `ci` done if `.github/workflows/ci.yml`; `judge` done if `.github/workflows/automerge.yml`                                                                                                                                 |
+| Stage                           | `local` done if `.harness/AGENTS.md` and `.harness/stamp.json` exist; `ci` done if `.github/workflows/ci.yml`; `judge` done if `.github/workflows/automerge.yml`                                                                                                               |
 
 With no argument, run the first stage not done. With an argument, run that
 stage even if done (update mode: rewrite what the stage owns, keep the user's
@@ -172,15 +174,26 @@ is the walking skeleton slice, which is not this skill's job.
 
 ## 2. Stage `local`
 
-Documents and rules that work without a server.
+Documents and rules that work without a server. The harness never rewrites a
+line it did not write: what it owns goes under `.harness/`, and in the four
+files a tool reads only at the root, `AGENTS.md`, `CLAUDE.md`,
+`.claude/settings.json` and `.gitignore`, it adds its own block and touches
+nothing else. Where it cannot, it stops and names the file. No script and no
+hook is copied: the bootstrap fetches them into `.harness/bin/`, ignored.
 
-1. **`.gitignore`.** If it ignores `docs/`, `CLAUDE.md` or `.claude/`, say so
-   and fix it: an ignored harness does not exist in CI. Keep
-   `.claude/settings.local.json` ignored. Add `.claude/worktrees/` if it is
-   not there: `/next` gives each slice a worktree under it, and without the
-   line the root sees every worktree as untracked files that a `git add -A`
-   would stage. Show the lines removed and the line added.
-2. **`AGENTS.md`** from `templates/AGENTS.md`. Fill: project name and the two
+1. **Stop before writing.** Read `git config --get core.hooksPath`. Set to
+   anything but `.harness/bin/hooks`, by Husky, lefthook or a hand, the
+   stage stops here, writes nothing and names the value it found: chaining
+   into another hook manager is not built, and taking the setting over would
+   switch off the project's hooks. A line of `.gitignore` that ignores
+   `.harness/` or `.claude/` stops it the same way, naming the line, except
+   `.harness/bin/`, `.claude/settings.local.json` and `.claude/worktrees/`,
+   the first and the last the lines step 5 appends, so a rerun does not stop
+   on its own work: an ignored harness does not exist in CI, and removing a
+   line the project wrote is not the harness's call. A repo set up before this layout, `.githooks/`,
+   `scripts/policy-lines.sh` or a policy block in the root `AGENTS.md`, is not
+   migrated: say so in one line and install the new layout next to it.
+2. **`.harness/AGENTS.md`** from `templates/AGENTS.md`. Fill: project name and the two
    lines from the README; the map with real paths and one line each on what
    the module owns; the four commands with the real package manager;
    sensitive paths derived from the repo (server dir, domain or engine dir,
@@ -199,11 +212,12 @@ Documents and rules that work without a server.
    of the human-gate paths land on main, and intent, spec and board are
    approved by the commit instead of a merge (ADR-0003); project-specific
    "Do not" lines derived from the map (for
-   instance: the domain dir imports no React). If an AGENTS.md exists, merge
-   section by section, never append a second copy. Hard cap 100 lines: it is
-   a map, `docs/` is the manual.
+   instance: the domain dir imports no React). If `.harness/AGENTS.md` exists,
+   a rerun refreshes what the template says and keeps the lines of the repo.
+   Hard cap 100 lines: it is a map, `.harness/docs/` is the manual.
 
-   The policy block of a repo that already has one is merged key by key, never
+   The policy block of a repo that already has one, the fence of
+   `.harness/AGENTS.md`, is merged key by key, never
    by judgement, reading its fence against the one in `templates/AGENTS.md`:
    `version`, `docs_mode`, `sensitive_paths`, `never_tier_0`,
    `human_gate_paths`, `docs_extra_paths`, `max_lines`, `max_files`. A key
@@ -218,59 +232,97 @@ Documents and rules that work without a server.
    takes the keys this harness grew after it was set up without losing the
    `sensitive_paths` someone widened on purpose.
 
-3. **`CLAUDE.md`** from `templates/CLAUDE.md`: `@AGENTS.md` plus at most five
-   Claude-only lines. If a CLAUDE.md with real content exists, move what is
-   durable into AGENTS.md or `docs/` and leave the pointer.
-4. **`docs/`**: `codebase-map.md` written by reading the code, one screen
+3. **`AGENTS.md`** at the root keeps every line it has and gets one section,
+   appended at the end, this one word for word:
+
+   ```markdown
+   ## Harness
+
+   The agent production chain of this repo, its map, conventions, review policy and "Do not", lives in `.harness/AGENTS.md`: read it before touching anything.
+   ```
+
+   A rerun that finds a `## Harness` heading changes nothing. With no
+   `AGENTS.md`, the file is created with that section alone.
+
+4. **`CLAUDE.md`**: `templates/CLAUDE.md` is one line, `@.harness/AGENTS.md`.
+   Append it to a `CLAUDE.md` that does not have it, as its last line, and
+   leave everything else where it is; with no `CLAUDE.md`, the file is that
+   line alone.
+5. **`.gitignore`**: append `.harness/bin/`, where the bootstrap puts the
+   machinery, and `.claude/worktrees/`, where `/next` gives each slice a
+   worktree that the root would otherwise see as untracked files a
+   `git add -A` stages. Each line only if `grep -qxF` does not find it, so a
+   rerun adds nothing, and nothing else in the file changes.
+6. **`.harness/docs/`**: `codebase-map.md` written by reading the code, one screen
    (template in `templates/docs/codebase-map.md`), then `README.md` from
    `templates/docs/README.md`, one section for each of `intent/`, `specs/`,
    `backlog/`, `decisions/` and `review-log/`, and `inbox.md` from `templates/docs/inbox.md` and
    `parked.md` from `templates/docs/parked.md`, each written only if it is
    not there: their entries belong to the repo, and a rerun that overwrote
    them would throw away the one place the other skills are allowed to write
-   and the list of what waits on purpose. Existing docs stay where they are; offer to reclassify
-   (a design brief becomes `decisions/ADR-0001-<slug>.md`) and do it only on yes.
-5. **Git hooks** from `templates/githooks/` and `templates/scripts/`:
-   `.githooks/pre-commit` (refuses commits on main, except a commit made
-   only of documents when `docs_mode` says `main`, then format
-   check on staged files, `scripts/prose.sh --staged` and typecheck, under
-   30 seconds or it moves to CI), `.githooks/commit-msg` (calls
-   `scripts/commitlint.sh --file`), `.githooks/pre-push` (refuses pushes to
-   main, with the same exception for a range of documents;
-   `HARNESS_ALLOW_MAIN=1` overrides both refusals),
-   `scripts/policy-lines.sh` (sourced, never run: the one reading of the
-   policy block of AGENTS.md, shared by the hooks, `intent.sh` and
-   `tier.sh`), `scripts/ensure-hooks.sh`, `scripts/ensure-verdict.sh`,
-   `scripts/prose.sh` (an em dash in an added line fails: style is a gate,
-   so the judge never reads for it), `scripts/intent.sh` (`new <slug>`
-   writes the empty sections the `intent/` section of `.harness/docs/README.md` lists, `open` commits that
-   file alone; with `main` both on the default branch and the push is the
-   approval, with `pr` on `intent/<slug>` and `open` opens its PR: the human
-   types only the ten lines), `scripts/board.sh` (the board of the repo in
-   one screen, the stamp of the stages, the open slices, the inbox and the
-   open PRs, and the same data under `--json`: it reads the files and `gh`,
-   it writes nothing, and a terminal without `gh` gets a row and an exit 0). Add
-   `"prepare": "git config core.hooksPath .githooks"` to the package scripts
-   so every clone installs the hooks on install, and run that config now.
-   Scripts and hooks must be executable.
-6. **`.claude/settings.json`**, tracked, from `templates/settings.json`: two
-   PreToolUse hooks and the allowlist for the four commands, git and gh.
+   and the list of what waits on purpose. The project's own `docs/`, if it
+   has one, stays as it is.
+7. **`.claude/settings.json`**, tracked, merged with the hooks and the
+   allowlist of `templates/settings.json`: the `SessionStart` hook that runs
+   `.harness/bootstrap.sh`, the two `PreToolUse` hooks and the allowlist for
+   the four commands, git and gh. Fill `{{pm}}` in the template first, into a
+   scratch file, then run the filter below over the project's file, or over
+   `{}` when there is none: every key already there stays, a hook goes in
+   unless one with the same `command` is there, an allowlist entry unless the
+   same string is, so a second run gives the same file.
+
+   ```sh
+   jq --slurpfile harness <filled template> -f <the filter> .claude/settings.json
+   ```
+
+   ```jq
+   def add_hook($matcher; $hook):
+     if any(.[]; any(.hooks[]?; .command == $hook.command)) then .
+     elif any(.[]; .matcher == $matcher) then
+       map(if .matcher == $matcher then .hooks += [$hook] else . end)
+     else
+       . + [(if $matcher == null then {} else { matcher: $matcher } end)
+         + { hooks: [$hook] }]
+     end;
+   $harness[0] as $h
+   | reduce ($h.hooks | to_entries[]) as $event (.;
+       reduce $event.value[] as $group (.;
+         reduce $group.hooks[] as $hook (.;
+           .hooks[$event.key] = ((.hooks[$event.key] // [])
+             | add_hook($group.matcher; $hook)))))
+   | .permissions.allow = reduce $h.permissions.allow[] as $entry
+       ((.permissions.allow // []);
+        if any(.[]; . == $entry) then . else . + [$entry] end)
+   ```
+
    `ensure-hooks.sh` guarantees the git hooks are installed before any
    `git commit`. `ensure-verdict.sh` refuses `gh pr create` for a head with no
-   verdict; it lands in this stage so the settings file never points at a
-   script that is not there, and stays inert until the `ci` and `judge` stages
-   give it a tier and a judge to ask. Do not touch `settings.local.json`.
-7. **Stamp**: `.harness/stamp.json` as "Ground rules" says: it sets `pin` to
-   the commit it runs from, and its own entry `local` under `stages`. And
-   `.gitignore` must not ignore `.harness/`. It is the first stage,
-   so the file is usually the one this step creates.
-8. **Verify**: run the four commands; run
-   `scripts/commitlint.sh --file <(echo "Bad message.")` and expect a
-   non-zero exit; stage a whitespace change, confirm the pre-commit hook runs
-   on `git commit --dry-run` is not enough (hooks do not run on dry runs), so
-   make and immediately amend or reset a throwaway commit on the harness branch.
-9. **Hand back**: branch `harness/local`, the diff summary, the line
-   "next: `/harness-init ci`, on top of this branch". No PR yet.
+   verdict, and stays inert until the `ci` and `judge` stages give it a tier
+   and a judge to ask. Do not touch `settings.local.json`.
+
+8. **`.harness/bootstrap.sh`** from `templates/bootstrap.sh`, executable.
+9. **Stamp**: `.harness/stamp.json` as "Ground rules" says: it sets `pin` to
+   the commit it runs from, and its own entry `local` under `stages`. It is
+   the first stage, so the file is usually the one this step creates.
+10. **Bootstrap**: run `.harness/bootstrap.sh`. It fetches the machinery at
+    the pin into `.harness/bin/`, the scripts at its top and the git hooks in
+    `hooks/`, and points `core.hooksPath` at `.harness/bin/hooks`. No
+    `prepare` script goes in `package.json`, which the harness cannot add to
+    as a block of its own: a clone gets its hooks from the `SessionStart`
+    hook, or from the bootstrap run by hand. With no pin, which a first
+    install from a dirty checkout leaves, the bootstrap refuses: the
+    hand-back says so.
+11. **Verify**: `git ls-files .harness` lists `.harness/AGENTS.md`,
+    `.harness/stamp.json`, `.harness/bootstrap.sh` and files under
+    `.harness/docs/`, and nothing under `.harness/bin/`; `git diff` on
+    `AGENTS.md`, `CLAUDE.md` and `.claude/settings.json` shows only added
+    lines. Run the four commands; run
+    `.harness/bin/commitlint.sh --file <(echo "Bad message.")` and expect a
+    non-zero exit; stage a whitespace change, confirm the pre-commit hook runs
+    on `git commit --dry-run` is not enough (hooks do not run on dry runs), so
+    make and immediately amend or reset a throwaway commit on the harness branch.
+12. **Hand back**: branch `harness/local`, the diff summary, the line
+    "next: `/harness-init ci`, on top of this branch". No PR yet.
 
 ## 3. Stage `ci`
 
@@ -439,8 +491,8 @@ delete`, and say so in the hand-back. Nothing in the chain reads them
 
 Same files. Differences: `CODEOWNERS` on the sensitive paths; the ruleset
 requires one review; the lines of the personal `stack.md` the team agrees on
-are copied into AGENTS.md; `.claude/settings.json` stays tracked but every
-rule in it has a twin in `.githooks/` or in CI, because not everyone runs
+are copied into the project's own `AGENTS.md`, outside the `## Harness` section; `.claude/settings.json` stays tracked but every
+rule in it has a twin in `.harness/bin/hooks/` or in CI, because not everyone runs
 Claude Code. Escalation goes to the team channel, not to a personal ntfy topic.
 
 ## 6. Hand-back format
