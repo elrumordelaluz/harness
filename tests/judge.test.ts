@@ -850,6 +850,35 @@ describe('ensure-verdict.sh: no verdict for this head, no PR', () => {
     expect(run.code).toBe(0)
   })
 
+  // A repo that ran stage judge before .harness/judge.md existed has none
+  // until the stage runs again: its entry in .harness/stamp.json says the
+  // stage is installed all the same, and moving the pin must not open the gate.
+  it('bites where the stamp has the judge stage and .harness/judge.md is missing', () => {
+    const stamp = JSON.stringify({
+      stages: { judge: { sha: 'a'.repeat(40), date: '2026-10-01' } },
+    })
+    const dir = repo(code, undefined, {
+      '.harness/judge.md': null,
+      '.harness/stamp.json': `${stamp}\n`,
+    })
+    expect(reasonFor(hook(dir, `${open} --fill`).out)).toContain('/judge')
+    const bin = pathWithoutJq(dir)
+    expect(hook(dir, `${open} --fill`, bin).out, 'without jq').not.toBe('')
+  })
+
+  it('keeps quiet where the stamp has stages but not judge', () => {
+    const stamp = JSON.stringify({
+      stages: { local: { sha: 'a'.repeat(40), date: '2026-10-01' } },
+    })
+    const dir = repo(code, undefined, {
+      '.harness/judge.md': null,
+      '.harness/stamp.json': `${stamp}\n`,
+    })
+    expect(hook(dir, `${open} --fill`).out).toBe('')
+    const bin = pathWithoutJq(dir)
+    expect(hook(dir, `${open} --fill`, bin).out, 'without jq').toBe('')
+  })
+
   it('denies at tier 1 with no verdict, and names /judge', () => {
     const reason = reasonFor(hook(repo(code), `${open} --fill`).out)
     expect(reason).toContain('tier 1')
