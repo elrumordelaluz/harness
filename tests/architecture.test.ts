@@ -2,6 +2,7 @@
 // enforce. Each describe names its line. A red run on existing files is a
 // finding for the hand-back, not something to patch in the test.
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   existsSync,
   lstatSync,
@@ -3211,7 +3212,9 @@ describe('no reader is told that "vai" starts /next', () => {
 // Section 0 of docs/spec.md heads each entry with the version it starts
 // from: "From 0.35" holds what 0.36 changed. The last heading is therefore
 // one minor behind the version of the header, and a heading named after the
-// new version breaks the trail the other way.
+// new version breaks the trail the other way. The history in the header names
+// the change after the new version, "0.49, of 4 October", and section 0 after
+// the old one, "From 0.48": two names for the one change, by design.
 describe('the last entry of section 0 starts from the version before the header', () => {
   const spec = readFileSync(join(root, 'docs/spec.md'), 'utf8')
 
@@ -3363,5 +3366,82 @@ describe('later/ is gone', () => {
       expect(parked).toContain(path)
       expect(board.next.action).not.toContain(path)
     }
+  })
+})
+
+// S96. `/spec --fast` asks every question that matters in one message and
+// stands in for the interview and the checkpoint of that run only. The hash
+// is sections 4 and 6 as they were at 49b5adc, the base of the slice: the
+// full interview stays as it is while the rest of the file moves.
+describe('skills/spec/SKILL.md has a fast lane', () => {
+  const skill = readFileSync(join(root, 'skills/spec/SKILL.md'), 'utf8')
+
+  function section(from: string, to?: string): string {
+    const start = skill.indexOf(`\n${from}`)
+    expect(start, `skills/spec/SKILL.md has no "${from}"`).toBeGreaterThan(-1)
+    if (to === undefined) return skill.slice(start)
+    const end = skill.indexOf(`\n${to}`, start + 1)
+    expect(end, `skills/spec/SKILL.md has no "${to}"`).toBeGreaterThan(-1)
+    return skill.slice(start, end)
+  }
+
+  const fast = (): string => section('## 9.')
+
+  it('section 1 takes --fast and the ground rule names the exception', () => {
+    expect(section('## 1.', '## 2.')).toContain('`--fast`')
+    expect(section('## Ground rules', '## 1.')).toContain('`--fast`')
+    expect(skill.split('\n---\n')[0]).toContain('--fast')
+  })
+
+  it('section 9 is the fast lane, one message, one line per question', () => {
+    const text = fast()
+    expect(text).toContain('`--fast`')
+    expect(text).toContain('`*question*: [recommended] short reason`')
+    expect(text).toContain('the only question message')
+  })
+
+  it('section 9 lists every question above four and cuts none', () => {
+    const text = fast()
+    expect(text).toContain('more than four')
+    expect(text).toContain('nothing is cut')
+  })
+
+  it('section 9 confirms an unmentioned line, and a bare "sì" every line', () => {
+    const text = fast()
+    expect(text).toContain('does not mention')
+    expect(text).toContain('bare "sì"')
+  })
+
+  it('section 9 follows up a vague answer once, with the vague lines alone', () => {
+    const text = fast()
+    expect(text).toContain('one follow-up')
+    expect(text).toContain('vague lines alone')
+    expect(text).toContain('"Decisions to confirm"')
+  })
+
+  it('section 9 goes through the refusals of 2 and the commit of 8', () => {
+    const text = fast()
+    expect(text).toContain('section 2')
+    expect(text).toContain('`docs(spec): <slug>`')
+    expect(text).toContain('section 8')
+  })
+
+  it('section 5 writes the defaults nobody was asked under ### Assumed', () => {
+    const text = section('## 5.', '## 6.')
+    expect(text).toContain('`### Assumed`')
+    expect(text).toContain('"Locked decisions"')
+  })
+
+  it('section 8 adds an Assumed: block to the approval commit', () => {
+    const text = section('## 8.', '## 9.')
+    expect(text).toContain('`Assumed:`')
+    expect(text).toMatch(/^Assumed:$/m)
+  })
+
+  it('sections 4 and 6 are byte for byte as at the base', () => {
+    const full = section('## 4.', '## 5.') + section('## 6.', '## 7.')
+    expect(createHash('sha256').update(full).digest('hex')).toBe(
+      '918fb67ea10434f3513c2baaade8d2741ea8ea946b428bd6ab0fcf970ed8e17c',
+    )
   })
 })
