@@ -1045,7 +1045,11 @@ describe('the policy block of .harness/AGENTS.md', () => {
     ).toContain(path)
   })
 
-  // S88: the seven paths a human merges, where the documents live now.
+  // S88: the seven paths a human merges, where the documents live now. A
+  // repo installed on the old layout keeps its docs/** gate paths on a rerun
+  // of stage local, which merges the block key by key and keeps the keys a
+  // repo has. That is the spec's decision of no migration: such a repo is set
+  // up again, and /harness-init does not move or rewrite its documents.
   it('templates/AGENTS.md names the seven human gate paths under .harness/docs/', () => {
     expect(
       block(readFileSync(join(templates, 'AGENTS.md'), 'utf8'))
