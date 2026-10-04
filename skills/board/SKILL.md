@@ -244,9 +244,9 @@ git ls-tree --name-only origin/<default branch> .harness/docs/backlog/ |
   sed -n 's#^\.harness/docs/backlog/S\([0-9][0-9]*\)-.*#\1#p' | sort -n | tail -1
 ```
 
-The skill writes `.harness/docs/backlog/S<NN>-<slug>.md` in the format of
-`.harness/docs/backlog/README.md`, in the language of the inbox, the frontmatter
-fields and the section headings as the README writes them:
+The skill writes `.harness/docs/backlog/S<NN>-<slug>.md` in the format of the
+`backlog/` section of `.harness/docs/README.md`, in the language of the inbox,
+the frontmatter fields and the section headings as the README writes them:
 
 - `status: todo`, `spec: inbox (<date of the line>)`, `blocked_by: none` or
   the slices without which it cannot be built, `human` and `tier` as `/slice`

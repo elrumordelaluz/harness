@@ -61,10 +61,10 @@ a whole board instead of one slice.
 
 Stop and say why, before opening a branch or a subagent, when:
 
-- `.harness/docs/backlog/` is missing: the repo has no harness. Say `/harness-init
+- `.harness/docs/README.md` is missing: the repo has no harness. Say `/harness-init
 local` and stop.
-- `.harness/docs/backlog/` holds no slice but its README: the board is `/slice`'s to
-  write, from a spec the human approved. Say so and stop.
+- `.harness/docs/backlog/` holds no slice, or is not there yet: the board is
+  `/slice`'s to write, from a spec the human approved. Say so and stop.
 - `package.json` has no `typecheck`, `test`, `format:check` and `build`
   script, all four. Name the ones missing and stop: the definition of done
   is those four green, and a slice cannot be finished against a contract the

@@ -193,9 +193,9 @@ Documents and rules that work without a server.
    Claude-only lines. If a CLAUDE.md with real content exists, move what is
    durable into AGENTS.md or `docs/` and leave the pointer.
 4. **`docs/`**: `codebase-map.md` written by reading the code, one screen
-   (template in `templates/docs/codebase-map.md`), then `intent/`, `specs/`,
-   `backlog/`, `decisions/`, `review-log/`, each with its README from
-   `templates/docs/`, and `inbox.md` from `templates/docs/inbox.md` and
+   (template in `templates/docs/codebase-map.md`), then `README.md` from
+   `templates/docs/README.md`, one section for each of `intent/`, `specs/`,
+   `backlog/`, `decisions/` and `review-log/`, and `inbox.md` from `templates/docs/inbox.md` and
    `parked.md` from `templates/docs/parked.md`, each written only if it is
    not there: their entries belong to the repo, and a rerun that overwrote
    them would throw away the one place the other skills are allowed to write
@@ -214,7 +214,7 @@ Documents and rules that work without a server.
    `tier.sh`), `scripts/ensure-hooks.sh`, `scripts/ensure-verdict.sh`,
    `scripts/prose.sh` (an em dash in an added line fails: style is a gate,
    so the judge never reads for it), `scripts/intent.sh` (`new <slug>`
-   writes the empty sections of `.harness/docs/intent/README.md`, `open` commits that
+   writes the empty sections the `intent/` section of `.harness/docs/README.md` lists, `open` commits that
    file alone; with `main` both on the default branch and the push is the
    approval, with `pr` on `intent/<slug>` and `open` opens its PR: the human
    types only the ten lines), `scripts/board.sh` (the board of the repo in

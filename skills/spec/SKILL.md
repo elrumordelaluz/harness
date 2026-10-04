@@ -49,8 +49,8 @@ the harness repo.
   only after an explicit confirmation of the decisions, and the skill never
   merges.
 - The skill is in English; the spec is in the language of the intent. The
-  section headings are the contract and stay as `.harness/docs/specs/README.md` writes
-  them.
+  section headings are the contract and stay as the `specs/` section of
+  `.harness/docs/README.md` writes them.
 - **The harness of the repo you are working in is not yours to fix.** A
   template behind, a line missing in `AGENTS.md`, a script that misbehaves:
   write one dated line in `.harness/docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
@@ -117,7 +117,7 @@ Without an argument, list the intents on the default branch (`git ls-tree
 no spec, and those with a draft, and ask which one: a single question. An
 intent with a line in `.harness/docs/parked.md` on the default branch, its own or its
 spec's, is left out of the list. If there is none, say that an intent is ten lines written by hand, quote the first
-line of `.harness/docs/intent/README.md`, and stop.
+line of the `intent/` section of `.harness/docs/README.md`, and stop.
 
 With a draft, and once the checks of 2 pass, resume. With `pr`, switch to
 `spec/<slug>`: an untracked draft travels with the switch. With `main`
@@ -167,13 +167,13 @@ origin/<default branch>:.harness/docs/intent/<slug>.md` fails: the spec would na
 - the intent is incomplete.
 
 The intent read for this check is the one on the default branch, the one the
-spec will stand on. It is complete when the three sections of `.harness/docs/intent/README.md`,
+spec will stand on. It is complete when the three sections the `intent/` section of `.harness/docs/README.md` lists,
 "Problem", "What success looks like" and "Out of scope", are all there and not
 empty, and "What success looks like" is a verifiable sentence: an outcome that
 someone can call true or false by looking at it, a behaviour, a number, a
 file, a command. "The board is clearer" is not verifiable; "`/board` fits in
 a screen of 40 lines with 30 slices" is. When it is not complete, name the
-section and quote its line from `.harness/docs/intent/README.md` verbatim, so that the
+section and quote its line from the `intent/` section of `.harness/docs/README.md` verbatim, so that the
 human reads the contract and not a paraphrase. Nothing more: no suggestion of
 what to write, because then the thesis would be the agent's.
 

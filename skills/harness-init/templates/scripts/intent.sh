@@ -4,8 +4,9 @@
 # depends on the docs_mode key of .harness/AGENTS.md on the default branch.
 # With `"docs_mode": "main"`:
 #   intent.sh new <slug>    on the default branch, brought up to date, write
-#                           .harness/docs/intent/<slug>.md with the three sections of
-#                           .harness/docs/intent/README.md, empty
+#                           .harness/docs/intent/<slug>.md with the three sections
+#                           the intent/ section of .harness/docs/README.md
+#                           lists, empty
 #   intent.sh open [<slug>] on the default branch: refuse a section that is
 #                           missing or empty and a branch that carries anything
 #                           else, format the file, commit it alone, push it
@@ -23,8 +24,8 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-# The sections of .harness/docs/intent/README.md, in order. tests/intent.test.ts holds
-# them equal to both copies of the README.
+# The sections the intent/ section of .harness/docs/README.md lists, in order.
+# tests/intent.test.ts holds them equal to both copies of the README.
 SECTIONS='Problem|What success looks like|Out of scope'
 
 die() {
@@ -134,7 +135,9 @@ pr_body() {
 new() {
   local slug="${1:-}"
   valid "$slug" || die "the slug is lowercase letters, digits and dashes, a letter first: '$slug'"
-  [ -d .harness/docs/intent ] || die "no .harness/docs/intent/ here: the repo has no harness yet, run /harness-init local"
+  # The one README says the documents are installed; intent/ itself is not
+  # there until its first file, because git does not track an empty folder.
+  [ -f .harness/docs/README.md ] || die "no .harness/docs/README.md here: the repo has no harness yet, run /harness-init local"
   # A switch carries uncommitted changes along, and half a slice would land on
   # the intent branch, or on the default branch the intent goes to. Untracked
   # files travel too, and that is the point: an intent begun before this
@@ -188,8 +191,9 @@ write_skeleton() {
   if [ -e "$1" ]; then
     echo "intent: $2, $1 was already there and is kept"
   else
+    mkdir -p "${1%/*}"
     tr '|' '\n' <<<"$SECTIONS" | awk 'NR > 1 { print "" } { print "## " $0 }' >"$1"
-    echo "intent: $2, write $1 (.harness/docs/intent/README.md says what goes in each section)"
+    echo "intent: $2, write $1 (the intent/ section of .harness/docs/README.md says what goes in each section)"
   fi
 }
 
@@ -203,12 +207,12 @@ edit() {
 
 # The intents on the default branch that origin does not have yet: written and
 # not committed, or committed and not pushed, which is where a refused push
-# leaves one. README.md is the folder's, never an intent.
+# leaves one. A README.md is a folder's, never an intent.
 pending() {
   {
     git status --porcelain --untracked-files=all -- .harness/docs/intent/ | cut -c4-
     git diff --no-renames --name-only "origin/$1...HEAD" -- .harness/docs/intent/
-  } | { grep -E '^\.harness/docs/intent/[^/]+\.md$' || true; } | { grep -vxF '.harness/docs/intent/README.md' || true; } | LC_ALL=C sort -u
+  } | { grep -E '^\.harness/docs/intent/[^/]+\.md$' || true; } | { grep -vE '/README\.md$' || true; } | LC_ALL=C sort -u
 }
 
 # With su main there is no branch and no PR: the file goes on the default
