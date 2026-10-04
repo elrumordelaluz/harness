@@ -1,7 +1,7 @@
 ---
 id: S86
 title: The scripts and the hooks read the policy block from `.harness/AGENTS.md`
-status: todo
+status: done
 blocked_by: S85
 tier: 2
 human: false
