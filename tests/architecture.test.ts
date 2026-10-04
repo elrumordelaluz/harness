@@ -1952,6 +1952,9 @@ describe('.claude/settings.json is the template without the verdict hook', () =>
         matcher: string
         hooks: Array<{ type: string; command: string }>
       }>
+      SessionStart?: Array<{
+        hooks: Array<{ type: string; command: string }>
+      }>
     }
     permissions: { allow: string[] }
   }
@@ -1981,6 +1984,23 @@ describe('.claude/settings.json is the template without the verdict hook', () =>
   it('this repo keeps ensure-hooks.sh and drops ensure-verdict.sh', () => {
     expect(commands(mine)).toEqual([
       '"$CLAUDE_PROJECT_DIR"/.harness/bin/ensure-hooks.sh',
+    ])
+  })
+
+  // S87: both run the bootstrap when a session starts, this repo included,
+  // where it only points core.hooksPath at .harness/bin/hooks. From the root
+  // of the project, because the session may start in a subdirectory, and with
+  // stderr on stdout, which Claude Code adds to the context of the session.
+  it.each([
+    ['the template', theirs],
+    ['this repo', mine],
+  ])('%s runs the bootstrap at SessionStart', (_, settings) => {
+    expect(
+      (settings.hooks.SessionStart ?? []).flatMap((entry) =>
+        entry.hooks.map((hook) => hook.command),
+      ),
+    ).toEqual([
+      '{ cd "$CLAUDE_PROJECT_DIR" && "$CLAUDE_PROJECT_DIR"/.harness/bootstrap.sh; } 2>&1 || true',
     ])
   })
 

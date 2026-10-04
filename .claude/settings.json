@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "{ cd \"$CLAUDE_PROJECT_DIR\" && \"$CLAUDE_PROJECT_DIR\"/.harness/bootstrap.sh; } 2>&1 || true"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash",
