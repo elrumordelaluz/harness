@@ -17,7 +17,7 @@
 | `docs/inbox.md`                                                                                     | `docs/inbox.md`, created if missing                       | local            |
 | `docs/parked.md`                                                                                    | `docs/parked.md`, created if missing                      | local            |
 | no file, the line `.claude/worktrees/`                                                              | `.gitignore`, appended if missing                         | local            |
-| no file, the entry of the stage                                                                     | `.harness/stamp.json` (tracked)                           | local, ci, judge |
+| no file, `pin`, written by all three, and the entry of the stage                                    | `.harness/stamp.json` (tracked)                           | local, ci, judge |
 | `github/ci.yml`                                                                                     | `.github/workflows/ci.yml`                                | ci               |
 | `github/pull_request_template.md`                                                                   | `.github/pull_request_template.md`                        | ci               |
 | `github/ruleset.json`                                                                               | `.github/ruleset.json` (input for `gh api`)               | ci               |
