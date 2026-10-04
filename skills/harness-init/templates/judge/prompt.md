@@ -60,19 +60,11 @@ Rules:
   nothing else goes in it.
 - You do not modify files, do not comment on the PR, do not merge. Your only
   output is the verdict object, valid against
-  `.github/judge/verdict.schema.json` (the action enforces the schema; run
-  from `/judge`, `scripts/judge.sh check` does). Fill `judge.role` with the
+  `.harness/bin/judge/verdict.schema.json` (the action enforces the schema;
+  run from `/judge`, `.harness/bin/judge.sh check` does). Fill `judge.role` with the
   role you were given, `judge.model` with the model you are running as and
   `judge.ts` with the current UTC time. Leave `pr`, `judge.where`, `head_sha`,
   `base_sha`, `cost`, `outcome` and `audit` out: the chain fills them (policy.sh,
   close.yml, the audit board), and `pr` in particular is not yours to guess,
   because run from `/judge` you are judging a branch before its PR exists.
   Nothing else in the final answer.
-
-## This repo
-
-{{Two or three short paragraphs on what carries more weight here than the
-line count suggests: the pure module, the single source of a permission or an
-invariant, the file the type checker does not cover. Written by harness-init
-judge from AGENTS.md and the codebase map. Drop the section if there is
-nothing to say.}}

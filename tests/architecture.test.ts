@@ -449,48 +449,25 @@ describe('this repo keeps its documents under .harness/docs/', () => {
 // the ones of today. PR #29 added a section to the PR template and the copy
 // stayed behind without anything turning red, because the files compared were
 // a list written in here. The list is now the templates themselves: a new
-// file under github/ or judge/ walks into the comparison on its own.
+// file under github/ walks into the comparison on its own.
 describe('.github matches the templates it was copied from', () => {
   // The destination comes from the folder structure, which is the convention
   // already and the one templates/README.md explains: a template of github/
   // that is a workflow goes under .github/workflows/, the others to the root
-  // of .github/, and judge/ keeps its name. No list of files in here.
+  // of .github/. No list of files in here.
   const copyOf = (template: string) => {
-    if (template.startsWith('judge/')) return `.github/${template}`
     const file = template.slice('github/'.length)
     return file.endsWith('.yml')
       ? `.github/workflows/${file}`
       : `.github/${file}`
   }
 
-  // The copies that on purpose are not equal to their template, with the
-  // reason next to them: the exception is read instead of being a hole in the
-  // comparison. Of the prompt, stage judge of /harness-init rewrites
-  // `## This repo` over the placeholder, so of that file everything above it
-  // is compared.
-  const partial: Record<string, string> = {
-    'judge/prompt.md':
-      '/harness-init judge writes its "## This repo" section over the template placeholder',
-  }
-
-  const commonPart = (text: string, what: string) => {
-    const cut = text.indexOf('## This repo')
-    expect(cut, `${what} has no "## This repo" section`).toBeGreaterThan(-1)
-    return text.slice(0, cut)
-  }
-
-  const comparable = (template: string, text: string, what: string) => {
-    if (template === 'judge/prompt.md') return commonPart(text, what)
-    return text
-  }
-
   // The ruleset is not copied under .github/: it lands in .harness/bin/,
   // linked here and fetched in a project repo, and stage ci applies it from
-  // there.
-  const copied = ['github', 'judge']
-    .flatMap((dir) =>
-      walk(join(templates, dir)).map((file) => `${dir}/${file}`),
-    )
+  // there. judge/ is not copied either: it lands in .harness/bin/judge/, and
+  // what the repo says to its judge is .harness/judge.md.
+  const copied = walk(join(templates, 'github'))
+    .map((file) => `github/${file}`)
     .filter((template) => template !== 'github/ruleset.json')
 
   it.each(copied)('%s', (template) => {
@@ -500,14 +477,12 @@ describe('.github matches the templates it was copied from', () => {
       existsSync(join(root, copy)),
       `${copy} is missing: run /harness-init ${stage} to copy skills/harness-init/templates/${template} into place`,
     ).toBe(true)
-    const why = partial[template]
     const here = readFileSync(join(root, copy), 'utf8')
     const there = readFileSync(join(templates, template), 'utf8')
-    const except = why ? ` above its "## This repo" section (${why})` : ''
     expect(
-      comparable(template, here, copy),
-      `${copy} drifted from skills/harness-init/templates/${template}${except}: run /harness-init ${stage} to copy it back, do not edit the copy`,
-    ).toBe(comparable(template, there, `templates/${template}`))
+      here,
+      `${copy} drifted from skills/harness-init/templates/${template}: run /harness-init ${stage} to copy it back, do not edit the copy`,
+    ).toBe(there)
   })
 
   // Stage ci fills `bypass_actors` in the ruleset it applies. The template
@@ -575,24 +550,63 @@ describe('.github matches the templates it was copied from', () => {
       ).toBe(true)
     },
   )
+})
 
-  // The part of the prompt that stays out of the comparison, watched from
-  // here: a copy identical to the template means the placeholder is back, and
-  // /harness-init judge never wrote the section of this repo.
-  it('has the "## This repo" section of judge/prompt.md filled in', () => {
-    const copy = readFileSync(join(root, '.github/judge/prompt.md'), 'utf8')
-    const why = `.github/judge/prompt.md is compared only above "## This repo" because ${partial['judge/prompt.md']}`
+// S90: the prompt and the schema are machinery, fetched into
+// .harness/bin/judge/ and the same in every repo. A line of the repo cannot
+// live in a file every fetch overwrites, so what the repo says to its judge is
+// a tracked file of its own, .harness/judge.md, and judge.sh bundle puts it
+// after the prompt.
+describe('the judge reads what the repo says about itself from .harness/judge.md', () => {
+  const prompt = readFileSync(join(templates, 'judge/prompt.md'), 'utf8')
+
+  it('the template prompt carries no line of a repo and no placeholder', () => {
     expect(
-      copy,
-      `${why}, so an identical copy means the placeholder is back`,
-    ).not.toBe(readFileSync(join(templates, 'judge/prompt.md'), 'utf8'))
-    expect(copy, `${why}, and that section is missing here`).toContain(
-      '## This repo',
-    )
+      prompt,
+      'skills/harness-init/templates/judge/prompt.md has a "## This repo" section: the lines of a repo go in .harness/judge.md',
+    ).not.toContain('## This repo')
     expect(
-      copy,
-      `${why}, and a placeholder is still unfilled here`,
-    ).not.toMatch(/\{\{/)
+      prompt,
+      'skills/harness-init/templates/judge/prompt.md has a placeholder: it is fetched as it is, nobody fills it',
+    ).not.toContain('{{')
+  })
+
+  // The skill of stage judge still says .github/judge/ in its section 4: S94
+  // rewrites that stage, and until then it is the one file left out.
+  const named = [
+    ...walk(templates).map((file) => `skills/harness-init/templates/${file}`),
+    ...readdirSync(join(root, 'skills'))
+      .map((skill) => `skills/${skill}/SKILL.md`)
+      .filter((file) => existsSync(join(root, file)))
+      .filter((file) => file !== 'skills/harness-init/SKILL.md'),
+  ]
+
+  it.each(named)('%s does not name .github/judge', (file) => {
+    expect(
+      readFileSync(join(root, file), 'utf8'),
+      `${file} names .github/judge: the prompt and the schema are in .harness/bin/judge/, the lines of the repo in .harness/judge.md`,
+    ).not.toContain('.github/judge')
+  })
+
+  it('this repo has .harness/judge.md and no .github/judge', () => {
+    expect(
+      existsSync(join(root, '.harness/judge.md')),
+      '.harness/judge.md is missing: it holds what the judge is told about this repo',
+    ).toBe(true)
+    expect(
+      existsSync(join(root, '.github/judge')),
+      '.github/judge is still here: the prompt and the schema are read from .harness/bin/judge/',
+    ).toBe(false)
+  })
+
+  it('templates/README.md sends judge.md to .harness/judge.md in stage judge', () => {
+    const row = readFileSync(join(templates, 'README.md'), 'utf8')
+      .split('\n')
+      .find((line) => line.startsWith('| `judge.md`'))
+    expect(row, 'templates/README.md has no row of judge.md').toBeDefined()
+    const columns = (row ?? '').split('|')
+    expect(columns[2]).toContain('`.harness/judge.md`')
+    expect(columns[3]?.trim()).toBe('judge')
   })
 })
 
@@ -2007,8 +2021,7 @@ describe('every skill carries the same harness guardrail', () => {
 // template: the row in templates/README.md is imposed by the describe at the
 // top of this file, which walks the tree of the templates. The difference
 // with the README is that the inbox carries data, the entries, which belong to that
-// repo and are not kept aligned: the comparison is on the header, as for
-// .github/judge/prompt.md above "## This repo".
+// repo and are not kept aligned: the comparison is on the header.
 describe('.harness/docs/inbox.md is a template plus the entries of this repo', () => {
   const template = readFileSync(join(templates, 'docs/inbox.md'), 'utf8')
   const mine = readFileSync(join(root, '.harness/docs/inbox.md'), 'utf8')
