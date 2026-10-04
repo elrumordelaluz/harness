@@ -1,7 +1,7 @@
 ---
 id: S88
 title: The documents of the harness live under `.harness/docs/`, in every script and skill and in this repo
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
