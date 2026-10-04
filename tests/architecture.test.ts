@@ -2906,6 +2906,17 @@ describe('.gitignore keeps the worktrees of /next out of the tree', () => {
       '.gitignore has no .claude/worktrees/ line: the worktrees of /next would show up as untracked files in the root',
     ).toContain('.claude/worktrees/')
   })
+
+  // S93: the machinery a project fetches is ignored there, and this repo
+  // carries the same line, which leaves its tracked links tracked.
+  it('ignores .harness/bin/', () => {
+    const lines = readFileSync(join(root, '.gitignore'), 'utf8')
+      .split('\n')
+      .map((line) => line.trim())
+    expect(lines, '.gitignore has no .harness/bin/ line').toContain(
+      '.harness/bin/',
+    )
+  })
 })
 
 // S30: the worktree of a slice starts from `origin/<default>`, and git takes
@@ -3269,6 +3280,275 @@ describe('stage local of /harness-init merges the policy block key by key', () =
       merge,
       `${file}: the rule does not say that \`version\` is what makes an orphan key visible, and an orphan nothing announces stays in the block for good`,
     ).toContain('the new `version` is what makes it visible')
+  })
+  // S93: the block lives in .harness/AGENTS.md, and the root AGENTS.md of a
+  // project has none for the merge to read.
+  it('reads the block of `.harness/AGENTS.md`', () => {
+    expect(
+      merge,
+      `${file}: the merge rule does not say the block it merges is the one of \`.harness/AGENTS.md\`, and a session looks for it in the root AGENTS.md of the project`,
+    ).toContain('`.harness/AGENTS.md`')
+  })
+})
+
+// S93. A project keeps its own AGENTS.md, CLAUDE.md and .claude/settings.json,
+// and stage local adds one block to each and writes everything else under
+// .harness/. The stage is prose a session follows: what is proved here is the
+// table of destinations, the fences the session copies, and that the sentences
+// that rewrote a project's files are gone.
+describe('stage local of /harness-init writes inside .harness/', () => {
+  const file = 'skills/harness-init/SKILL.md'
+  const skill = readFileSync(join(root, file), 'utf8')
+  const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
+
+  function between(text: string, from: string, to: string): string {
+    const at = text.indexOf(from)
+    if (at === -1) return ''
+    const rest = text.slice(at)
+    const end = rest.indexOf(to, from.length)
+    return end === -1 ? rest : rest.slice(0, end)
+  }
+
+  const stage = between(skill, '\n## 2. Stage `local`', '\n## ')
+  const fences = (lang: string): string[] =>
+    [
+      ...stage.matchAll(
+        new RegExp('```' + lang + '\\n([\\s\\S]*?)\\n\\s*```', 'g'),
+      ),
+    ].map((match) => (match[1] ?? '').replace(/^ {3}/gm, ''))
+
+  const outside = [
+    'AGENTS.md',
+    'CLAUDE.md',
+    '.claude/settings.json',
+    '.gitignore',
+  ]
+  const localRows = readFileSync(join(templates, 'README.md'), 'utf8')
+    .split('\n')
+    .filter((line) => line.startsWith('| '))
+    .slice(2)
+    .filter((line) =>
+      (line.split('|').at(-2) ?? '')
+        .split(',')
+        .map((name) => name.trim())
+        .includes('local'),
+    )
+
+  it('has rows of stage local in templates/README.md', () => {
+    expect(localRows.length).toBeGreaterThan(0)
+  })
+
+  it.each(localRows.map((row) => [row.split('|')[1]?.trim() ?? '', row]))(
+    'the row of %s lands under .harness/ or in a file a tool reads at the root',
+    (_, row) => {
+      const destinations = [
+        ...(row.split('|')[2] ?? '').matchAll(/`([^`]+)`/g),
+      ].map((match) => match[1] ?? '')
+      expect(destinations.length).toBeGreaterThan(0)
+      for (const destination of destinations) {
+        expect(
+          destination.startsWith('.harness/') || outside.includes(destination),
+          `templates/README.md: ${destination} is a destination of stage local outside .harness/`,
+        ).toBe(true)
+      }
+    },
+  )
+
+  it('writes .harness/AGENTS.md, .harness/bootstrap.sh and .harness/docs/, and tracks nothing under .harness/bin/', () => {
+    const destinations = localRows.map((row) => row.split('|')[2] ?? '')
+    for (const path of [
+      '`.harness/AGENTS.md`',
+      '`.harness/bootstrap.sh`',
+      '`.harness/stamp.json`',
+      '`.harness/docs/',
+    ]) {
+      expect(
+        destinations.some((destination) => destination.includes(path)),
+        `templates/README.md: no row of stage local lands in ${path}`,
+      ).toBe(true)
+    }
+    for (const destination of destinations.filter((d) =>
+      d.includes('.harness/bin/'),
+    )) {
+      expect(destination, 'a row under .harness/bin/ is not fetched').toContain(
+        'fetched',
+      )
+    }
+  })
+
+  it('gives the line .harness/bin/ to .gitignore, appended if missing', () => {
+    const row = localRows.find((line) =>
+      (line.split('|')[1] ?? '').includes('`.harness/bin/`'),
+    )
+    expect(
+      row,
+      'templates/README.md has no row for .harness/bin/',
+    ).toBeDefined()
+    expect(row ?? '').toContain('`.gitignore`, appended if missing')
+  })
+
+  it('templates/CLAUDE.md is the one line @.harness/AGENTS.md', () => {
+    expect(readFileSync(join(templates, 'CLAUDE.md'), 'utf8')).toBe(
+      '@.harness/AGENTS.md\n',
+    )
+  })
+
+  it('gives the ## Harness section in a fence, at most three lines that name .harness/AGENTS.md', () => {
+    const section = fences('markdown').find((text) =>
+      text.startsWith('## Harness\n'),
+    )
+    expect(
+      section,
+      `${file}: stage local has no markdown fence with the ## Harness section`,
+    ).toBeDefined()
+    const lines = (section ?? '')
+      .split('\n')
+      .slice(1)
+      .filter((line) => line.trim() !== '')
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.length).toBeLessThanOrEqual(3)
+    expect(lines.join('\n')).toContain('`.harness/AGENTS.md`')
+  })
+
+  it('stops on a core.hooksPath of the project before the first step that writes', () => {
+    const first = squash(between(stage, '\n1. **', '\n2. **'))
+    expect(
+      first,
+      `${file}: the first step of stage local does not read core.hooksPath`,
+    ).toContain('git config --get core.hooksPath')
+    expect(first).toContain('`.harness/bin/hooks`')
+    expect(first).toContain('stop')
+    expect(first).toContain('names the value')
+  })
+
+  it('runs the bootstrap and adds no prepare script', () => {
+    expect(stage).toContain('.harness/bootstrap.sh')
+    expect(stage).not.toMatch(/"prepare":/)
+  })
+
+  it('knows stage local is done from .harness/', () => {
+    const row =
+      skill.split('\n').find((line) => line.startsWith('| Stage ')) ?? ''
+    const local = row.slice(0, row.indexOf('`ci`'))
+    expect(local).toContain('`.harness/AGENTS.md`')
+    expect(local).toContain('`.harness/stamp.json`')
+    expect(local).not.toContain('`.githooks/`')
+  })
+
+  it('merges no AGENTS.md section by section and moves nothing out of a CLAUDE.md', () => {
+    const text = squash(skill)
+    expect(text).not.toContain('section by section')
+    expect(text).not.toContain('move what is durable')
+  })
+
+  it('names .harness/ in the ground rule of what must be tracked', () => {
+    const rule = squash(
+      skill
+        .slice(skill.indexOf('## Ground rules'), skill.indexOf('## 0. Detect'))
+        .split(/\n- /)
+        .find((part) => part.includes('must be tracked in git')) ?? '',
+    )
+    expect(rule, `${file}: no ground rule on what must be tracked`).not.toBe('')
+    expect(rule).toContain('`.harness/`')
+    for (const old of ['`scripts/`', '`.githooks/`', '`docs/`']) {
+      expect(rule).not.toContain(old)
+    }
+  })
+
+  describe('the jq filter that merges .claude/settings.json', () => {
+    const filter = fences('jq')[0]
+    const harness = readFileSync(
+      join(templates, 'settings.json'),
+      'utf8',
+    ).replace(/\{\{pm\}\}/g, 'pnpm')
+    type Hook = { type: string; command: string }
+    type Settings = {
+      env?: Record<string, string>
+      hooks?: Record<string, Array<{ matcher?: string; hooks: Hook[] }>>
+      permissions?: { allow?: string[]; deny?: string[] }
+    }
+    const template = JSON.parse(harness) as Settings
+
+    function merge(settings: string): Settings {
+      const dir = mkdtempSync(join(tmpdir(), 'settings-merge-'))
+      writeFileSync(join(dir, 'harness.json'), harness)
+      writeFileSync(join(dir, 'merge.jq'), filter ?? '')
+      writeFileSync(join(dir, 'settings.json'), settings)
+      return JSON.parse(
+        execFileSync(
+          'jq',
+          [
+            '--slurpfile',
+            'harness',
+            join(dir, 'harness.json'),
+            '-f',
+            join(dir, 'merge.jq'),
+            join(dir, 'settings.json'),
+          ],
+          { encoding: 'utf8' },
+        ),
+      ) as Settings
+    }
+
+    const commands = (settings: Settings, event: string): string[] =>
+      (settings.hooks?.[event] ?? []).flatMap((entry) =>
+        entry.hooks.map((hook) => hook.command),
+      )
+
+    const project: Settings = {
+      env: { FOO: 'bar' },
+      hooks: {
+        PreToolUse: [
+          {
+            matcher: 'Bash',
+            hooks: [{ type: 'command', command: './tools/guard.sh' }],
+          },
+        ],
+      },
+      permissions: {
+        allow: ['Bash(make lint*)', 'Bash(pnpm test*)'],
+        deny: ['Bash(rm -rf*)'],
+      },
+    }
+
+    it('is in a jq fence of stage local', () => {
+      expect(filter, `${file}: stage local has no jq fence`).toBeDefined()
+    })
+
+    it.each([
+      ['an empty file', {}],
+      ['the template itself', template],
+      ['a settings file of the project', project],
+    ])('on %s keeps what was there and adds the harness once', (_, input) => {
+      const once = merge(JSON.stringify(input))
+      const twice = merge(JSON.stringify(once))
+      expect(twice, 'a second run changes the file').toEqual(once)
+
+      const before = input as Settings
+      if (before.env) expect(once.env).toEqual(before.env)
+      for (const entry of before.permissions?.allow ?? [])
+        expect(once.permissions?.allow).toContain(entry)
+      if (before.permissions?.deny)
+        expect(once.permissions?.deny).toEqual(before.permissions.deny)
+      for (const event of Object.keys(before.hooks ?? {}))
+        for (const command of commands(before, event))
+          expect(commands(once, event)).toContain(command)
+
+      for (const event of ['SessionStart', 'PreToolUse'])
+        for (const command of commands(template, event))
+          expect(
+            commands(once, event).filter((c) => c === command),
+            `${command} is not in ${event} exactly once`,
+          ).toHaveLength(1)
+      for (const entry of template.permissions?.allow ?? [])
+        expect(
+          (once.permissions?.allow ?? []).filter((e) => e === entry),
+        ).toHaveLength(1)
+    })
+
+    it('on the template itself gives the template back', () => {
+      expect(merge(harness)).toEqual(template)
+    })
   })
 })
 
