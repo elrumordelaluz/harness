@@ -40,8 +40,8 @@ sees to that, and a head judged here is never judged again by anyone.
 - **The prompt is the harness's**, `.harness/bin/judge/prompt.md`, fetched and
   the same in every repo, and the schema sits next to it,
   `.harness/bin/judge/verdict.schema.json`. What the repo says to its judge
-  is `.harness/judge.md`, tracked, which the bundle puts right after the
-  prompt. Never a paraphrase written here: if the repo tuned its judge, it did
+  is `.harness/judge.md`, tracked, which the bundle reads from the base, never
+  from the branch under review, and puts right after the prompt. Never a paraphrase written here: if the repo tuned its judge, it did
   so in `.harness/judge.md`, and this skill runs the tuned one.
 - The judge **runs once per PR**, one pass per role, after the code
   (ADR-0003). It does not modify anything. A `high` or `medium` finding that
