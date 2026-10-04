@@ -327,9 +327,12 @@ hook is copied: the bootstrap fetches them into `.harness/bin/`, ignored.
 ## 3. Stage `ci`
 
 Deterministic gates on the server. No LLM in this stage. Outside `.harness/`
-it writes the workflow and the PR template, and touches no file the project
-wrote: the scripts it needs, `tier.sh` and `test-weakening.sh`, come with the
-fetch into `.harness/bin/`, as do the hooks of stage `local`.
+it writes the workflow and the PR template, and rewrites no line of a file
+the project wrote. The one file of the project it adds to is a PR template
+already there, which keeps its text and gets two sections appended under a
+marker (step 3), because `tier.sh` reads the boxes only there. The scripts it
+needs, `tier.sh` and `test-weakening.sh`, come with the fetch into
+`.harness/bin/`, as do the hooks of stage `local`.
 
 1. **Labels**, idempotent with `gh label create --force`: `tier:0` to `tier:3`,
    `human-gate`, `tests-weakened`, `needs-human`, and one per judge and
