@@ -1,7 +1,7 @@
 ---
 id: S94
 title: A full install writes a closed list of paths outside `.harness/` and never edits a file of the project
-status: todo
+status: done
 blocked_by: S90, S93
 tier: 2
 human: false
