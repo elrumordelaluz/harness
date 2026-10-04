@@ -260,6 +260,10 @@ From 0.52, from SPEC-harness-in-one-folder:
 
 - The judge prompt and the verdict schema are machinery: `judge.sh` reads them from `.harness/bin/judge/`, fetched, and the prompt of the template has no `## This repo` section left to fill. What a repo says to its judge, the pure module, the single source of an invariant, the file the type checker does not cover, is `.harness/judge.md`, tracked, which `judge.sh bundle` reads from the merge base, never from the branch under review, and puts right after the prompt under a heading of its own, and leaves out when the file is not there. `.github/judge/` is gone, here too. `ensure-verdict.sh` knows the stage is installed from `.harness/judge.md`, the file stage judge writes, or from the `judge` entry of `.harness/stamp.json`, which a repo that ran the stage before the file existed already has, since `.harness/bin/judge/` comes with every fetch (5.5, 6.1, 7.1).
 
+From 0.53, from SPEC-harness-in-one-folder:
+
+- Every stage of `/harness-init` writes `pin` in `.harness/stamp.json`, `origin`, `sha` and `date`, next to `harness` and its own entry under `stages`, merged with `jq` like the rest of the file: the pin moves to the commit the stage runs from, so an upgrade of the harness is one line of diff to review, and the entry of a stage not run again can lag it. `pin.origin` is the origin of the checkout with no credentials and in its `https://` form, `git@github.com:owner/repo.git` and `ssh://git@github.com/owner/repo.git` alike, so a teammate and a CI runner fetch it with no key; `harness` keeps the form the checkout has. From a dirty checkout or from no git repo the pin stays byte for byte as it was, because a sha every clone will fetch has to exist on the remote, the entry of the stage keeps its `dirty` mark or its nulls, the install goes on, and the hand-back names the pin that was not moved and why. A clean commit never pushed is not checked: the skill says to push it first. A test runs the snippet of the skill on disposable checkouts (5.1).
+
 ## 1. Principles
 
 Ten rules, each with the source that holds it up. The rest of the document applies them.
@@ -538,10 +542,6 @@ Seven skills in place of nine. The old tdd, commit-conventions and session-start
 | `/board`        | session-start/end    | session opening             | backlog, open PRs         | state in one screen                | to be written                                   |
 
 The writing order is `/spec`, `/slice`, `/next`, because the first real flow (the multi-writer slice of Tipoff, the harness on Docket) starts there, and the old grill-me, write-prd and prd-to-issues are not to be used as stopgaps: they produce a PRD instead of a SPEC and an `afk` flag instead of `human`, and the chain downstream would read the wrong files. Then `/judge`, `/audit`, `/board`.
-
-From 0.53, from SPEC-harness-in-one-folder:
-
-- Every stage of `/harness-init` writes `pin` in `.harness/stamp.json`, `origin`, `sha` and `date`, next to `harness` and its own entry under `stages`, merged with `jq` like the rest of the file: the pin moves to the commit the stage runs from, so an upgrade of the harness is one line of diff to review, and the entry of a stage not run again can lag it. `pin.origin` is the origin of the checkout with no credentials and in its `https://` form, `git@github.com:owner/repo.git` and `ssh://git@github.com/owner/repo.git` alike, so a teammate and a CI runner fetch it with no key; `harness` keeps the form the checkout has. From a dirty checkout or from no git repo the pin stays byte for byte as it was, because a sha every clone will fetch has to exist on the remote, the entry of the stage keeps its `dirty` mark or its nulls, the install goes on, and the hand-back names the pin that was not moved and why. A clean commit never pushed is not checked: the skill says to push it first. A test runs the snippet of the skill on disposable checkouts (5.1).
 
 ### 5.1 `/harness-init`
 

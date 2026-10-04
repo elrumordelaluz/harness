@@ -3612,6 +3612,16 @@ describe('the last entry of section 0 starts from the version before the header'
     ).toBe(previous(spec))
   })
 
+  // F1 of the judgement of S92: an entry put after section 0 still passed
+  // the check above, which reads the last heading wherever it stands.
+  it('every "From" heading stands in section 0', () => {
+    const rest = spec.slice(spec.indexOf('\n## 1. '))
+    expect(
+      [...rest.matchAll(/^From (0\.\d+),/gm)].map((match) => match[1]),
+      'a "From" entry stands after section 0 of docs/spec.md',
+    ).toEqual([])
+  })
+
   it('the check bites on a heading named after the new version', () => {
     const text =
       '> A draft, version 0.37 of 2026-09-25.\n\nFrom 0.37, from x:\n'
