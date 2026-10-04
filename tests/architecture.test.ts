@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { policyBlock } from './agents.js'
+import { folders, folderSection } from './docs.js'
 import { validate, type Schema } from './schema.js'
 
 const root = resolve(import.meta.dirname, '..')
@@ -812,21 +813,51 @@ describe('the workflows that act on a merge look at the default branch', () => {
   })
 })
 
-// The same dragon, in .harness/docs/. This repo has the READMEs of the five folders
-// from stage local, like every project, and they are copies written by hand
-// in two places: whoever changes the contract of the backlog in one of the
-// two alone leaves this repo with one rule and installs a different version
-// of it everywhere else.
-describe('.harness/docs/*/README.md matches the templates it was copied from', () => {
-  const dirs = readdirSync(join(templates, 'docs')).filter((name) =>
-    statSync(join(templates, 'docs', name)).isDirectory(),
-  )
+// The same dragon, in .harness/docs/. This repo has the one README of the
+// documents from stage local, like every project, and it is a copy written by
+// hand in two places: whoever changes the contract of the backlog in one of
+// the two alone leaves this repo with one rule and installs a different
+// version of it everywhere else. S89 made the five READMEs of the folders one,
+// with a section per folder, and a README of a folder that comes back is a
+// second contract nobody compares.
+describe('.harness/docs/README.md matches the template it was copied from', () => {
+  const template = join(templates, 'docs/README.md')
 
-  it.each(dirs)('.harness/docs/%s/README.md', (dir) => {
+  it('is equal to skills/harness-init/templates/docs/README.md', () => {
     expect(
-      readFileSync(join(root, '.harness/docs', dir, 'README.md'), 'utf8'),
-      `.harness/docs/${dir}/README.md drifted from skills/harness-init/templates/docs/${dir}/README.md: change both, the template is what /harness-init local installs elsewhere`,
-    ).toBe(readFileSync(join(templates, 'docs', dir, 'README.md'), 'utf8'))
+      readFileSync(join(root, '.harness/docs/README.md'), 'utf8'),
+      '.harness/docs/README.md drifted from skills/harness-init/templates/docs/README.md: change both, the template is what /harness-init local installs elsewhere',
+    ).toBe(readFileSync(template, 'utf8'))
+  })
+
+  it.each(folders)('has a section for %s/', (folder) => {
+    expect(
+      folderSection(readFileSync(template, 'utf8'), folder).trim(),
+      `skills/harness-init/templates/docs/README.md has no "## ${folder}/" section, or an empty one`,
+    ).not.toBe('')
+  })
+
+  it.each(
+    folders.flatMap((folder) => [
+      `skills/harness-init/templates/docs/${folder}/README.md`,
+      `.harness/docs/${folder}/README.md`,
+    ]),
+  )('%s is gone', (file) => {
+    expect(
+      existsSync(join(root, file)),
+      `${file} is back: what it says belongs in its section of the one README`,
+    ).toBe(false)
+  })
+
+  it('no file under skills/ names the README of a folder', () => {
+    const old = /docs\/(intent|specs|backlog|decisions|review-log)\/README\.md/
+    const named = walk(join(root, 'skills')).filter((file) =>
+      old.test(readFileSync(join(root, 'skills', file), 'utf8')),
+    )
+    expect(
+      named,
+      'these files still send a reader to the README of a folder: the section of .harness/docs/README.md is where it is now',
+    ).toEqual([])
   })
 })
 
@@ -1793,11 +1824,12 @@ describe('the root AGENTS.md sends the agent to .harness/AGENTS.md', () => {
 // The ninth user story of .harness/docs/specs/SPEC-spec-skill.md: "Un test strutturale
 // fallisce se le sezioni del template in skills/spec/templates/SPEC.md e la
 // lista nel README di .harness/docs/specs/ divergono". The template is what /spec
-// writes, the README of .harness/docs/specs/ is the contract in the repos where the
-// skill is not there: if they say different sections or fields, /slice reads
-// a spec the contract does not describe. The READMEs are two, the one of this
-// repo and the one /harness-init local copies elsewhere, and both hold.
-describe('the spec template and the .harness/docs/specs README say the same sections', () => {
+// writes, the specs/ section of .harness/docs/README.md is the contract in the
+// repos where the skill is not there: if they say different sections or
+// fields, /slice reads a spec the contract does not describe. The READMEs are
+// two, the one of this repo and the one /harness-init local copies elsewhere,
+// and both hold.
+describe('the spec template and the specs/ section of .harness/docs/README.md say the same sections', () => {
   const template = readFileSync(
     join(root, 'skills/spec/templates/SPEC.md'),
     'utf8',
@@ -1811,8 +1843,8 @@ describe('the spec template and the .harness/docs/specs README say the same sect
     ),
   ].map((match) => match[1] ?? '')
   const readmes = [
-    '.harness/docs/specs/README.md',
-    'skills/harness-init/templates/docs/specs/README.md',
+    '.harness/docs/README.md',
+    'skills/harness-init/templates/docs/README.md',
   ]
 
   it('the template has a frontmatter and its sections', () => {
@@ -1827,9 +1859,12 @@ describe('the spec template and the .harness/docs/specs README say the same sect
     '%s lists the sections of the template, in order',
     (file) => {
       const list = /Sections: ([^.]+)\./.exec(
-        readFileSync(join(root, file), 'utf8'),
+        folderSection(readFileSync(join(root, file), 'utf8'), 'specs'),
       )?.[1]
-      expect(list, `${file} has no "Sections: ..." sentence`).toBeDefined()
+      expect(
+        list,
+        `the specs/ section of ${file} has no "Sections: ..." sentence`,
+      ).toBeDefined()
       expect(
         (list ?? '').split(',').map((section) => section.trim()),
         `${file} and skills/spec/templates/SPEC.md list different sections`,
@@ -1840,11 +1875,14 @@ describe('the spec template and the .harness/docs/specs README say the same sect
   it.each(readmes)(
     '%s names every field of the template frontmatter',
     (file) => {
-      const readme = readFileSync(join(root, file), 'utf8')
+      const readme = folderSection(
+        readFileSync(join(root, file), 'utf8'),
+        'specs',
+      )
       for (const field of fields) {
         expect(
           readme,
-          `${file} does not name the frontmatter field \`${field}\``,
+          `the specs/ section of ${file} does not name the frontmatter field \`${field}\``,
         ).toMatch(new RegExp('`' + field + '[`:]'))
       }
     },
@@ -1965,10 +2003,10 @@ describe('every skill carries the same harness guardrail', () => {
 })
 
 // The inbox is where what the skill does not repair ends up. It goes into the
-// repos of the projects like the READMEs of the folders, so it is a template:
-// the row in templates/README.md is imposed by the describe at the top of
-// this file, which walks the tree of the templates. The difference with the
-// READMEs is that the inbox carries data, the entries, which belong to that
+// repos of the projects like the README of the documents, so it is a
+// template: the row in templates/README.md is imposed by the describe at the
+// top of this file, which walks the tree of the templates. The difference
+// with the README is that the inbox carries data, the entries, which belong to that
 // repo and are not kept aligned: the comparison is on the header, as for
 // .github/judge/prompt.md above "## This repo".
 describe('.harness/docs/inbox.md is a template plus the entries of this repo', () => {
@@ -2426,20 +2464,20 @@ describe('/board and /next read the claim of a slice from the remote', () => {
 
   // From `Eligible:` to the end of the line and not the whole line: the
   // paragraph says the claim just above, and names the branch anyway.
-  it('.harness/docs/backlog/README.md says it in the Eligible line', () => {
-    const line = readFileSync(
-      join(root, '.harness/docs/backlog/README.md'),
-      'utf8',
+  it('the backlog/ section of .harness/docs/README.md says it in the Eligible line', () => {
+    const line = folderSection(
+      readFileSync(join(root, '.harness/docs/README.md'), 'utf8'),
+      'backlog',
     )
       .split('\n')
       .find((row) => row.includes('Eligible:'))
     expect(
       line,
-      '.harness/docs/backlog/README.md has no Eligible line to read',
+      'the backlog/ section of .harness/docs/README.md has no Eligible line to read',
     ).toBeDefined()
     expect(
       (line ?? '').slice((line ?? '').indexOf('Eligible:')),
-      'the Eligible line of .harness/docs/backlog/README.md does not name the branch: the contract in the repos of the projects still has three points',
+      'the Eligible line of .harness/docs/README.md does not name the branch: the contract in the repos of the projects still has three points',
     ).toContain('slice/S<NN>-')
   })
 })

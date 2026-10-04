@@ -67,12 +67,12 @@ type Run = {
 function run(
   comments: Comment[],
   env: Record<string, string> = {},
-  opts: { again?: Comment[] } = {},
+  opts: { again?: Comment[]; out?: string } = {},
 ): Run & { runs: Run[]; posted: string; calls: string; summary: string } {
   const dir = mkdtempSync(join(tmpdir(), 'review-log-'))
   const log = join(dir, 'gh.log')
   writeFileSync(log, '')
-  const out = join(dir, 'verdicts.jsonl')
+  const out = join(dir, opts.out ?? 'verdicts.jsonl')
   const bodies = join(dir, 'comments.txt')
   const summary = join(dir, 'summary.md')
   const once = (cs: Comment[]): Run => {
@@ -341,6 +341,19 @@ describe('review-log.sh, a verdict that arrives late', () => {
     expect(r.status, r.stderr).toBe(0)
     expect(r.lines).toHaveLength(2)
     expect(r.raw).toBe(r.runs[0]?.raw)
+  })
+
+  // S89: review-log/ has no README of its own any more, so a fresh install
+  // has no folder until the first verdict. close.yml passes the path under
+  // .harness/docs/, and the script makes the folder instead of failing.
+  it('writes the first line where .harness/docs/review-log/ is not there yet', () => {
+    const r = run(
+      [{ login: 'harness-app', body: judgeBody('correctness', verdict) }],
+      {},
+      { out: '.harness/docs/review-log/verdicts.jsonl' },
+    )
+    expect(r.status, r.stderr).toBe(0)
+    expect(r.lines).toHaveLength(1)
   })
 
   it('appends the verdict the log does not have and leaves the rest byte for byte', () => {

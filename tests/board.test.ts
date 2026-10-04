@@ -6,7 +6,13 @@
 // `gh` is the stub in tests/fixtures/bin, which answers `pr list` from
 // STUB_PRS and fails the call named by STUB_FAIL.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -103,6 +109,9 @@ type Options = {
   // the lines of .harness/docs/parked.md, written under its header; no file when
   // undefined: S74
   parked?: string[]
+  // no .harness/docs/backlog/ at all, the fresh install of S89, where git does
+  // not track a folder that has no file yet
+  noBacklog?: boolean
 }
 
 function board(opts: Options = {}): {
@@ -114,11 +123,14 @@ function board(opts: Options = {}): {
 } {
   const dir = mkdtempSync(join(tmpdir(), 'board-'))
   execFileSync('git', ['init', '-b', 'main', '-q'], { cwd: dir })
-  mkdirSync(join(dir, '.harness/docs/backlog'), { recursive: true })
-  writeFileSync(
-    join(dir, '.harness/docs/backlog/README.md'),
-    'One slice per file.\n',
-  )
+  mkdirSync(join(dir, '.harness/docs'), { recursive: true })
+  if (!opts.noBacklog) {
+    mkdirSync(join(dir, '.harness/docs/backlog'), { recursive: true })
+    writeFileSync(
+      join(dir, '.harness/docs/backlog/README.md'),
+      'One slice per file.\n',
+    )
+  }
   for (const s of opts.slices ?? []) {
     writeFileSync(
       join(dir, `.harness/docs/backlog/${s.id}-a-slice.md`),
@@ -800,6 +812,18 @@ describe('an empty section is a line that says so', () => {
     expect(lines).toContain('Slices  0 done, 0 open  no open slices')
     expect(lines).toContain('Inbox  0 lines  inbox empty')
     expect(lines).toContain('Open PRs  no open PRs')
+  })
+
+  // S89: the folders have no README of their own any more, so a fresh install
+  // has no backlog/ and no decisions/ until their first file. The board of
+  // that repo is the empty board, not an error.
+  it('reads a fresh install, with no backlog/ and no decisions/, as empty', () => {
+    const { lines, status, stderr, dir } = board({ noBacklog: true })
+    expect(existsSync(join(dir, '.harness/docs/backlog'))).toBe(false)
+    expect(existsSync(join(dir, '.harness/docs/decisions'))).toBe(false)
+    expect(status, stderr).toBe(0)
+    expect(lines).toContain('Slices  0 done, 0 open  no open slices')
+    expect(lines).toContain('Plan  no plan in force')
   })
 
   it('keeps the Slice head with the done count when nothing is open', () => {

@@ -18,8 +18,9 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 LIST=.harness/docs/parked.md
-# The sections of .harness/docs/intent/README.md, the check of intent.sh open: parking
-# says a document was written and waits, and a skeleton was never written.
+# The sections the intent/ section of .harness/docs/README.md lists, the check
+# of intent.sh open: parking says a document was written and waits, and a
+# skeleton was never written.
 SECTIONS='Problem|What success looks like|Out of scope'
 
 die() {
@@ -160,7 +161,7 @@ park() {
   esac
   [ -n "$(printf '%s' "$why" | tr -d ' \t')" ] || die "the why is empty: say in one line why $path waits"
   case "$path" in
-    .harness/docs/intent/README.md | .harness/docs/specs/README.md) die "only an intent of .harness/docs/intent/ or a spec of .harness/docs/specs/ is parked, not $path" ;;
+    */README.md) die "only an intent of .harness/docs/intent/ or a spec of .harness/docs/specs/ is parked, not $path" ;;
     .harness/docs/intent/*/* | .harness/docs/specs/*/*) die "only an intent of .harness/docs/intent/ or a spec of .harness/docs/specs/ is parked, not $path" ;;
     .harness/docs/intent/*.md | .harness/docs/specs/*.md) ;;
     *) die "only an intent of .harness/docs/intent/ or a spec of .harness/docs/specs/ is parked, not $path" ;;

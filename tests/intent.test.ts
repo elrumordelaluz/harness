@@ -19,13 +19,11 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { brokenPolicies, withPolicy } from './agents.js'
+import { folderSection } from './docs.js'
 
 const root = resolve(import.meta.dirname, '..')
 const bin = join(root, 'tests/fixtures/bin')
-const readme = readFileSync(
-  join(root, '.harness/docs/intent/README.md'),
-  'utf8',
-)
+const readme = readFileSync(join(root, '.harness/docs/README.md'), 'utf8')
 const template = readFileSync(
   join(root, 'skills/harness-init/templates/AGENTS.md'),
   'utf8',
@@ -66,7 +64,7 @@ const suPr = withPolicy(template, (block) => {
   block.docs_mode = 'pr'
 })
 
-// A bare origin whose main carries the intent README, the script with the
+// A bare origin whose main carries the README of the documents, the script with the
 // reading of .harness/AGENTS.md it sources, and `base`, and a clone of it to
 // work in. Next to them, a bin with a pnpm that runs the real Prettier and
 // logs the call. `file` is where the default block goes, so a case can put it
@@ -85,7 +83,7 @@ function repo(
   identity(seed)
   write(seed, {
     [file]: suPr,
-    '.harness/docs/intent/README.md': readme,
+    '.harness/docs/README.md': readme,
     ...base,
   })
   mkdirSync(join(seed, '.harness/bin'), { recursive: true })
@@ -187,21 +185,31 @@ describe('intent.sh new', () => {
 
   // The skeleton is the README's contract written out: if the two drift, an
   // intent made with the script fails the check /spec reads the README for.
+  // The contract is the intent/ section of the one README, S89.
   it.each([
-    '.harness/docs/intent/README.md',
-    'skills/harness-init/templates/docs/intent/README.md',
-  ])('writes the sections %s lists, in order', (file) => {
-    const sections = [
-      ...readFileSync(join(root, file), 'utf8').matchAll(/^ {4}## (.+)$/gm),
-    ].map((match) => (match[1] ?? '').trim())
-    expect(sections.length, `${file} lists no "## " section`).toBeGreaterThan(0)
-    const { dir } = repo()
-    expect(run(dir, ['new', 'sezioni']).status).toBe(0)
-    const written = [
-      ...read(dir, '.harness/docs/intent/sezioni.md').matchAll(/^## (.+)$/gm),
-    ].map((match) => match[1])
-    expect(written).toEqual(sections)
-  })
+    '.harness/docs/README.md',
+    'skills/harness-init/templates/docs/README.md',
+  ])(
+    'writes the sections the intent/ section of %s lists, in order',
+    (file) => {
+      const sections = [
+        ...folderSection(
+          readFileSync(join(root, file), 'utf8'),
+          'intent',
+        ).matchAll(/^ {4}## (.+)$/gm),
+      ].map((match) => (match[1] ?? '').trim())
+      expect(
+        sections.length,
+        `the intent/ section of ${file} lists no "## " section`,
+      ).toBeGreaterThan(0)
+      const { dir } = repo()
+      expect(run(dir, ['new', 'sezioni']).status).toBe(0)
+      const written = [
+        ...read(dir, '.harness/docs/intent/sezioni.md').matchAll(/^## (.+)$/gm),
+      ].map((match) => match[1])
+      expect(written).toEqual(sections)
+    },
+  )
 
   // The mode comes from the docs_mode key and from nothing else: with the
   // block on pr the flow is the team's, whatever the prose around it says.
@@ -287,10 +295,10 @@ describe('intent.sh new', () => {
   // the intent branch without anyone asking.
   it('refuses a working tree with changes and names them', () => {
     const { dir } = repo()
-    write(dir, { '.harness/docs/intent/README.md': 'changed\n' })
+    write(dir, { '.harness/docs/README.md': 'changed\n' })
     const result = run(dir, ['new', 'dirty'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('.harness/docs/intent/README.md')
+    expect(result.stderr).toContain('.harness/docs/README.md')
     expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
   })
 
@@ -303,13 +311,24 @@ describe('intent.sh new', () => {
     expect(read(dir, '.harness/docs/intent/draft.md')).toBe(filled)
   })
 
-  it('stops in a repo without .harness/docs/intent/ and names the stage that adds it', () => {
+  it('stops in a repo without .harness/docs/README.md and names the stage that adds it', () => {
     const { dir } = repo()
     git(dir, 'rm', '-q', '-r', '.harness/docs')
     git(dir, 'commit', '-q', '-m', 'no docs')
     const result = run(dir, ['new', 'nodocs'])
     expect(result.status).not.toBe(0)
     expect(result.stderr).toContain('/harness-init local')
+  })
+
+  // With the README of the folder gone, git does not track an empty
+  // intent/: a fresh install has the one README and no folder yet, and the
+  // first intent is the file that makes it.
+  it('writes the first intent where .harness/docs/intent/ is not there yet', () => {
+    const { dir } = repo()
+    expect(existsSync(join(dir, '.harness/docs/intent'))).toBe(false)
+    const result = run(dir, ['new', 'first'])
+    expect(result.status, result.stderr).toBe(0)
+    expect(read(dir, '.harness/docs/intent/first.md')).toBe(skeleton)
   })
 })
 
@@ -547,10 +566,10 @@ describe('intent.sh new, with docs_mode main', () => {
 
   it('refuses a working tree with changes and names them', () => {
     const { dir } = repo(suMain)
-    write(dir, { '.harness/docs/intent/README.md': 'changed\n' })
+    write(dir, { '.harness/docs/README.md': 'changed\n' })
     const result = run(dir, ['new', 'dirty'])
     expect(result.status).not.toBe(0)
-    expect(result.stderr).toContain('.harness/docs/intent/README.md')
+    expect(result.stderr).toContain('.harness/docs/README.md')
   })
 })
 

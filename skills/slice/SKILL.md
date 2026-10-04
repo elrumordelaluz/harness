@@ -71,7 +71,7 @@ ADR-0003 rereads it.
   of its PR.
 - The skill is in English; the slices are in the language of the spec. The
   frontmatter fields and the section headings are the contract and stay as
-  `.harness/docs/backlog/README.md` writes them.
+  the `backlog/` section of `.harness/docs/README.md` writes them.
 - **The harness of the repo you are working in is not yours to fix.** A
   template behind, a line missing in `AGENTS.md`, a script that misbehaves:
   write one dated line in `.harness/docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
@@ -230,7 +230,8 @@ Before cutting, and without reporting it:
 - `.harness/docs/codebase-map.md`, and how the repo tests: the runner, where the tests
   live, an existing test next to each module the spec touches, so that the
   test plan names files that fit;
-- `.harness/docs/backlog/README.md`: the format of a slice is the one written there;
+- the `backlog/` section of `.harness/docs/README.md`: the format of a slice is
+  the one written there;
 - the modules of "Modules touched", with Read, Grep and Glob: a touchpoint is
   a path that exists, or a new file marked as new;
 - the slices already on the default branch and on the remote `backlog/*`
@@ -287,8 +288,8 @@ For each slice:
   size alone is two slices.
 - **spec**: the path of the spec.
 
-Each file follows `.harness/docs/backlog/README.md`, with `status: todo`, and its
-sections hold:
+Each file follows the `backlog/` section of `.harness/docs/README.md`, with
+`status: todo`, and its sections hold:
 
 - **Goal**: what lands and who sees it, a few lines, for someone who never
   read the spec.

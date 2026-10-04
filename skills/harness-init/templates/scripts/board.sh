@@ -197,8 +197,9 @@ fi
 # last. The spec is not a key of a slice in the JSON: it is read to tell an
 # approved spec that no slice names.
 # A value keeps neither a trailing comment nor trailing spaces: the skeleton in
-# .harness/docs/backlog/README.md carries its legend as a comment, and a repo that
-# copied it must not read `todo # todo | blocked | done` as a status.
+# the backlog/ section of .harness/docs/README.md carries its legend as a
+# comment, and a repo that copied it must not read `todo # todo | blocked |
+# done` as a status.
 slices_tsv=""
 if [ ${#files[@]} -gt 0 ]; then
   slices_tsv="$(awk '
