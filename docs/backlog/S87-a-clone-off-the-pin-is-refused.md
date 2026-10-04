@@ -1,7 +1,7 @@
 ---
 id: S87
 title: A session bootstraps the clone, and a clone off the pin cannot commit
-status: todo
+status: done
 blocked_by: S85
 tier: 2
 human: false
