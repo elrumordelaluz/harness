@@ -2614,6 +2614,35 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
       expect(skill, `the skill does not name ${name}`).toContain(name)
     }
   })
+  // S102: the inbox is the issues, and the skill writes no line of the file.
+  // Its description and the places it writes say so, and no command of the
+  // skill commits or stages `.harness/docs/inbox.md`.
+  it('answers issues and writes no line of .harness/docs/inbox.md', () => {
+    const text = readFileSync(file, 'utf8')
+    const description = squash(/^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '')
+    expect(description, 'the description does not speak of issues').toContain(
+      'issue of the inbox',
+    )
+    expect(
+      description,
+      'the description does not rule out .harness/docs/inbox.md',
+    ).toContain('never .harness/docs/inbox.md')
+    const places = squash(
+      /- \*\*Four places are written[\s\S]*?(?=\n- \*\*)/.exec(text)?.[0] ?? '',
+    )
+    expect(places, 'the places written do not name the issues').toContain(
+      'gh issue comment',
+    )
+    const skill = squash(text)
+    for (const write of [
+      'docs(inbox)',
+      'git add .harness/docs/inbox.md',
+      '-- .harness/docs/inbox.md',
+      'INBOX_MSG',
+    ]) {
+      expect(skill, `the skill still says ${write}`).not.toContain(write)
+    }
+  })
 })
 
 // S34. The skills give the commit subject as a model, in a block the session
