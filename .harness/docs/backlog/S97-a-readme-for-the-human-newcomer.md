@@ -1,7 +1,7 @@
 ---
 id: S97
 title: Stage local installs a README for the human who meets the harness first
-status: todo
+status: done
 blocked_by: none
 tier: 1
 human: false
