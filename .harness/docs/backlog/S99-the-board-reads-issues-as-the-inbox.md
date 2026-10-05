@@ -1,7 +1,7 @@
 ---
 id: S99
 title: An issue a collaborator opens is a row of the Inbox on the board
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
