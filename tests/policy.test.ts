@@ -575,6 +575,43 @@ describe('policy.sh, a policy that crashed', () => {
   })
 })
 
+// A merge GitHub refuses, a branch behind the default branch or anything
+// else, comes after the verdict is stored and posted: it is not a crash, and
+// the PR must not ask for a second judgement on the same head (ADR-0003).
+describe('policy.sh, a merge GitHub refuses', () => {
+  const refused = (opts: Options = {}) =>
+    policy(verdict(), { fail: 'pr merge', ...opts })
+
+  it('keeps the approve and says nothing of a crash', () => {
+    const run = refused()
+    expect(labelled(run.calls, 'judge:correctness:approve')).toBe(true)
+    expect(labelled(run.calls, 'judge:correctness:crashed')).toBe(false)
+    expect(
+      run.calls.filter((c) =>
+        c.includes('--remove-label judge:correctness:approve'),
+      ),
+    ).toHaveLength(1)
+    expect(run.comments.join('\n')).not.toMatch(/nothing was stored/)
+    expect(run.comments.join('\n')).not.toMatch(/Run \/judge again/)
+  })
+
+  it('says on the PR that the merge was refused and why, and notifies', () => {
+    const run = refused({ ntfy: 'topic' })
+    const refusal = run.comments.filter((c) => /merge refused/.test(c))
+    expect(refusal).toHaveLength(1)
+    expect(refusal[0]).toContain('gh: stub failure')
+    expect(notified(run.calls)).toHaveLength(1)
+    expect(notified(run.calls)[0]).toContain('merge refused')
+    expect(notified(run.calls)[0]).toContain('ntfy.sh/topic')
+  })
+
+  it('exits non-zero and says so on stderr', () => {
+    const run = refused()
+    expect(run.status).not.toBe(0)
+    expect(run.stderr).toContain('policy: merge refused')
+  })
+})
+
 const notified = (calls: string[]) => calls.filter((c) => c.startsWith('curl '))
 
 describe('policy.sh, a judge that crashed', () => {
