@@ -9,7 +9,7 @@ description: >
   "what do I do next", or when a session starts in a repo that has the
   harness. Writes only the issues of the inbox through gh, a slice in
   .harness/docs/backlog/ and the skeleton of intent.sh new: never code, never a
-  spec, never AGENTS.md, never .harness/docs/inbox.md.
+  spec, never AGENTS.md.
 ---
 
 # Board
@@ -37,8 +37,7 @@ in decision 6 of ADR-0002, the documents on main in ADR-0003.
   becomes; `.harness/docs/intent/<slug>.md`, the skeleton `.harness/bin/intent.sh new`
   writes; and the file of a slice already written, for its `blocked_by` field
   and its `## Blocked` section alone, where 6 takes an ADR out with the human's
-  yes. Never code, never a spec, never `AGENTS.md`, never
-  `.harness/docs/inbox.md`, never anything else of a slice already there,
+  yes. Never code, never a spec, never `AGENTS.md`, never anything else of a slice already there,
   never the rest of the board.
 - **One issue, one question, one answer.** Never two issues in a message,
   never two answers in a commit, never an issue half answered: the board run
@@ -63,8 +62,7 @@ in decision 6 of ADR-0002, the documents on main in ADR-0003.
   file an issue with `gh issue create -R <owner/name>` on the repo of
   `pin.origin` of `.harness/stamp.json`, its `https://` URL cut to
   `<owner>/<name>`, on the current repo with no `-R` when the field is
-  missing, and carry on with what is there; no line of
-  `.harness/docs/inbox.md`. On another repo than the current one the body says
+  missing, and carry on with what is there. On another repo than the current one the body says
   the defect of the harness and nothing else: no code, data, path or secret of
   the project. Never rerun `/harness-init`, never edit a script, a hook, a
   workflow or the `AGENTS.md` of that repo: the fix belongs to the harness repo
@@ -73,7 +71,7 @@ in decision 6 of ADR-0002, the documents on main in ADR-0003.
   the hand-back and carry on.
 - **An issue of the skill's own is filed, not asked.** What the guardrail
   above asks for is an issue the skill files when it sees the fault, with
-  `gh issue create`, never a line in `.harness/docs/inbox.md`: it rides in no
+  `gh issue create`: it rides in no
   commit, it waits for no yes, and the next `/board` asks about it like any
   other. The hand-back of 7 lists the numbers.
 

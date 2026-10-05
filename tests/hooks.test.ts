@@ -188,7 +188,7 @@ describe('pre-commit on main, with docs_mode main', () => {
 
   // This repo widens the documents with docs_extra_paths: here the prose of
   // the skills is a document too (ADR-0003, decision 4).
-  it.each(['skills/judge/SKILL.md', '.harness/docs/inbox.md', 'docs/spec.md'])(
+  it.each(['skills/judge/SKILL.md', '.harness/docs/parked.md', 'docs/spec.md'])(
     'lets %s through, a path of docs_extra_paths',
     (file) => {
       const { dir } = repo()
@@ -419,8 +419,11 @@ describe('pre-push to main', () => {
     const { dir, origin } = repo()
     expect(commit(dir, intent).status).toBe(0)
     expect(
-      commit(dir, { '.harness/docs/inbox.md': '- riga\n' }, 'docs(inbox): riga')
-        .status,
+      commit(
+        dir,
+        { '.harness/docs/parked.md': '- riga\n' },
+        'docs(parked): riga',
+      ).status,
     ).toBe(0)
     const result = run(dir, ['push', '-q', 'origin', 'main'])
     expect(result.status, result.stderr).toBe(0)

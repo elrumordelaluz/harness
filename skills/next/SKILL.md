@@ -52,8 +52,7 @@ a whole board instead of one slice.
   file an issue with `gh issue create -R <owner/name>` on the repo of
   `pin.origin` of `.harness/stamp.json`, its `https://` URL cut to
   `<owner>/<name>`, on the current repo with no `-R` when the field is
-  missing, and carry on with what is there; no line of
-  `.harness/docs/inbox.md`. On another repo than the current one the body says
+  missing, and carry on with what is there. On another repo than the current one the body says
   the defect of the harness and nothing else: no code, data, path or secret of
   the project. Never rerun `/harness-init`, never edit a script, a hook, a
   workflow or the `AGENTS.md` of that repo: the fix belongs to the harness repo
@@ -244,10 +243,7 @@ worktree path>. Work only on that slice.
    missing, with the slice id, the PR if there is one and what you saw in
    the body. With -R the body says the defect of the harness and nothing
    else: no code, data, path or secret of the project. Put its number in
-   your report, and carry on. Never in .harness/docs/inbox.md on your branch:
-   that file is a human-merge path, a PR that touches it gets human-gate
-   and the policy does not merge it, and the judge reads it as out of
-   scope.
+   your report, and carry on.
 
 If you cannot finish honestly, because a test would have to be weakened,
 because a decision the slice does not cover is needed, or because a

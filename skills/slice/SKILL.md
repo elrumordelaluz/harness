@@ -77,8 +77,7 @@ ADR-0003 rereads it.
   file an issue with `gh issue create -R <owner/name>` on the repo of
   `pin.origin` of `.harness/stamp.json`, its `https://` URL cut to
   `<owner>/<name>`, on the current repo with no `-R` when the field is
-  missing, and carry on with what is there; no line of
-  `.harness/docs/inbox.md`. On another repo than the current one the body says
+  missing, and carry on with what is there. On another repo than the current one the body says
   the defect of the harness and nothing else: no code, data, path or secret of
   the project. Never rerun `/harness-init`, never edit a script, a hook, a
   workflow or the `AGENTS.md` of that repo: the fix belongs to the harness repo
@@ -340,8 +339,8 @@ A change: rewrite the files, show the board again, ask again. A change that
 adds or drops a criterion of the spec is not a change to the board: the spec
 is approved and does not reopen, so say it, and the human either keeps the
 board or takes the short road. A change of mind that fits one line, a layer
-in the wrong order, a label, a default, is a line in `.harness/docs/inbox.md` that
-becomes a slice with `spec: inbox (<date>)` (ADR-0002, decision 6): no
+in the wrong order, a label, a default, is an issue of the repo that `/board`
+turns into a slice with `spec: issue #<n>` (ADR-0002, decision 6): no
 interview. A new intent is for what needs one.
 
 ## 7. Close: the commit

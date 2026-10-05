@@ -506,9 +506,9 @@ describe('the templates and the skills call the machinery under .harness/bin/', 
 
 // S88: the documents of the harness live under `.harness/docs/`, so a
 // project keeps its `docs/` for itself. A template, a skill or the spec
-// template that still named one of the eight paths at the root of `docs/`
+// template that still named one of the seven paths at the root of `docs/`
 // would read and write where no repo keeps them any more. The match wants
-// `docs/` at the start of a path: `templates/docs/inbox.md` is where a
+// `docs/` at the start of a path: `templates/docs/parked.md` is where a
 // template lives. templates/README.md says where stage local writes, and that
 // is S93.
 const documentPaths = [
@@ -517,7 +517,6 @@ const documentPaths = [
   'backlog',
   'decisions',
   'review-log',
-  'inbox.md',
   'parked.md',
   'codebase-map.md',
 ]
@@ -552,7 +551,7 @@ describe('the templates and the skills name the documents under .harness/docs/',
       false,
     )
     expect(
-      oldDocument.test('skills/harness-init/templates/docs/inbox.md'),
+      oldDocument.test('skills/harness-init/templates/docs/parked.md'),
     ).toBe(false)
     expect(oldDocument.test('`docs/spec.md` and `docs/assets/`')).toBe(false)
   })
@@ -1375,12 +1374,12 @@ describe('the policy block of .harness/AGENTS.md', () => {
     ).toContain(path)
   })
 
-  // S88: the seven paths a human merges, where the documents live now. A
+  // S88: the six paths a human merges, where the documents live now. A
   // repo installed on the old layout keeps its docs/** gate paths on a rerun
   // of stage local, which merges the block key by key and keeps the keys a
   // repo has. That is the spec's decision of no migration: such a repo is set
   // up again, and /harness-init does not move or rewrite its documents.
-  it('templates/AGENTS.md names the seven human gate paths under .harness/docs/', () => {
+  it('templates/AGENTS.md names the six human gate paths under .harness/docs/', () => {
     expect(
       block(readFileSync(join(templates, 'AGENTS.md'), 'utf8'))
         .human_gate_paths,
@@ -1390,7 +1389,6 @@ describe('the policy block of .harness/AGENTS.md', () => {
       '.harness/docs/backlog/**',
       '.harness/docs/decisions/**',
       '.harness/docs/review-log/**',
-      '.harness/docs/inbox.md',
       '.harness/docs/parked.md',
     ])
   })
@@ -2272,8 +2270,8 @@ describe('every skill carries the same harness guardrail', () => {
     'misbehaves: file an issue with `gh issue create -R <owner/name>` on the',
     'repo of `pin.origin` of `.harness/stamp.json`, its `https://` URL cut to',
     '`<owner>/<name>`, on the current repo with no `-R` when the field is',
-    'missing, and carry on with what is there; no line of',
-    '`.harness/docs/inbox.md`. On another repo than the current one the body',
+    'missing, and carry on with what is there. On another repo than the',
+    'current one the body',
     'says the defect of the harness and nothing else: no code, data, path or',
     'secret of the project. Never rerun `/harness-init`, never edit a',
     'script, a hook, a workflow or the `AGENTS.md` of that repo: the fix',
@@ -2305,29 +2303,62 @@ describe('every skill carries the same harness guardrail', () => {
   })
 })
 
-// The inbox is where what the skill does not repair ends up. It goes into the
-// repos of the projects like the README of the documents, so it is a
-// template: the row in templates/README.md is imposed by the describe at the
-// top of this file, which walks the tree of the templates. The difference
-// with the README is that the inbox carries data, the entries, which belong to that
-// repo and are not kept aligned: the comparison is on the header.
-describe('.harness/docs/inbox.md is a template plus the entries of this repo', () => {
-  const template = readFileSync(join(templates, 'docs/inbox.md'), 'utf8')
-  const mine = readFileSync(join(root, '.harness/docs/inbox.md'), 'utf8')
-  const entry = /^- \d{4}-\d{2}-\d{2}: /m
-
-  it('the template carries no entry: a new repo starts empty', () => {
+// S104: the inbox is the open issues of the repo, and the file that held it
+// is gone from the templates, from this repo and from the row that installed
+// it. A repo on the old layout starts over with /harness-init: nothing
+// migrates, so nothing here reads the file either.
+describe('.harness/docs/inbox.md is gone', () => {
+  it('neither the template nor this repo has the file', () => {
     expect(
-      entry.test(template),
-      'skills/harness-init/templates/docs/inbox.md has an entry in it: the entries belong to the repo, the template is the header',
+      existsSync(join(templates, 'docs/inbox.md')),
+      'skills/harness-init/templates/docs/inbox.md is still there',
+    ).toBe(false)
+    expect(
+      existsSync(join(root, '.harness/docs/inbox.md')),
+      '.harness/docs/inbox.md is still there',
     ).toBe(false)
   })
 
-  it('.harness/docs/inbox.md opens with the template', () => {
+  it('templates/README.md has no row of docs/inbox.md', () => {
     expect(
-      mine.startsWith(template),
-      '.harness/docs/inbox.md drifted from skills/harness-init/templates/docs/inbox.md: change the template, the header is what /harness-init local installs elsewhere',
-    ).toBe(true)
+      readFileSync(join(templates, 'README.md'), 'utf8'),
+      'templates/README.md still installs docs/inbox.md',
+    ).not.toContain('`docs/inbox.md`')
+  })
+
+  it('stage local of /harness-init does not copy it', () => {
+    expect(
+      readFileSync(join(root, 'skills/harness-init/SKILL.md'), 'utf8'),
+      'skills/harness-init/SKILL.md still copies templates/docs/inbox.md',
+    ).not.toContain('templates/docs/inbox.md')
+  })
+})
+
+// S104: the files a skill or a session reads to know where the inbox is. A
+// path to the file left in one of them sends a run to write a line nobody
+// reads, and `spec: inbox (` would ask /slice or /board for a source that is
+// an issue now.
+describe('no reader names .harness/docs/inbox.md', () => {
+  const files = [
+    ...walk(join(root, 'skills')).map((file) => `skills/${file}`),
+    '.harness/AGENTS.md',
+    '.harness/docs/README.md',
+    '.harness/docs/codebase-map.md',
+  ]
+
+  it('skills/harness-init/templates/docs/README.md is among them', () => {
+    expect(files).toContain('skills/harness-init/templates/docs/README.md')
+  })
+
+  it.each(files)('%s', (file) => {
+    const hit = readFileSync(join(root, file), 'utf8')
+      .split('\n')
+      .find(
+        (line) =>
+          line.includes('.harness/docs/inbox.md') ||
+          line.includes('spec: inbox ('),
+      )
+    expect(hit, `${file} still names the inbox file`).toBeUndefined()
   })
 })
 
@@ -2371,23 +2402,32 @@ describe('.harness/docs/parked.md is a template plus the entries of this repo', 
   })
 })
 
-// S09 lets through on main a commit made only of the paths of the human gate.
-// A line of inbox is written by a skill in the middle of a run: if the path
-// is not among those, the hook stops it and the skill jams exactly where it
-// was supposed to carry on.
-describe('.harness/AGENTS.md lets a line of inbox land', () => {
+// S104: a line of inbox was a commit on main, so its path sat among those
+// the hook lets through. The inbox is the issues now, and a path left in the
+// block would gate a file no repo has.
+describe('.harness/AGENTS.md no longer gates the inbox file', () => {
   it.each([
     ['.harness/AGENTS.md', join(root, '.harness/AGENTS.md')],
     ['skills/harness-init/templates/AGENTS.md', join(templates, 'AGENTS.md')],
-  ])('%s names .harness/docs/inbox.md in human_gate_paths', (_name, path) => {
-    expect(
-      policyBlock(readFileSync(path, 'utf8')).human_gate_paths,
-      'a skill cannot commit the line it was told to write',
-    ).toContain('.harness/docs/inbox.md')
-  })
+  ])(
+    '%s names .harness/docs/inbox.md neither in the block nor in Human gates',
+    (_name, path) => {
+      const text = readFileSync(path, 'utf8')
+      expect(
+        JSON.stringify(policyBlock(text)),
+        'the policy block still names the inbox file',
+      ).not.toContain('inbox.md')
+      const gates = /## Human gates\n([\s\S]*?)\n## /.exec(text)?.[1]
+      expect(gates, `${path} has no Human gates section`).toBeDefined()
+      expect(
+        gates,
+        'the Human gates prose still names the inbox file',
+      ).not.toContain('inbox.md')
+    },
+  )
 })
 
-// S74: the line of .harness/docs/parked.md lands on main the way a line of inbox does,
+// S74: the line of .harness/docs/parked.md lands on main as a document of the gate,
 // or the pre-commit hook refuses the commit of park.sh.
 describe('.harness/AGENTS.md lets a line of parked land', () => {
   it.each([
@@ -2661,8 +2701,8 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
     )
     expect(
       description,
-      'the description does not rule out .harness/docs/inbox.md',
-    ).toContain('never .harness/docs/inbox.md')
+      'the description still names the inbox file, which is gone',
+    ).not.toContain('inbox.md')
     const places = squash(
       /- \*\*Four places are written[\s\S]*?(?=\n- \*\*)/.exec(text)?.[0] ?? '',
     )
@@ -4485,6 +4525,38 @@ describe('the last entry of section 0 starts from the version before the header'
     const text =
       '> A draft, version 0.37 of 2026-09-25.\n\nFrom 0.37, from x:\n'
     expect(last(text)).not.toBe(previous(text))
+  })
+})
+
+// S104: the spec of the chain says the inbox is the open issues wherever it
+// named the file. Section 0 keeps the entries that quote the file, because
+// they record what was true then; the rest of the document is what is true.
+describe('docs/spec.md says the inbox is the open issues', () => {
+  const spec = readFileSync(join(root, 'docs/spec.md'), 'utf8')
+  const body = spec.slice(spec.indexOf('\n## 1. '))
+  const section = (heading: string): string =>
+    /([\s\S]*?)(?=\n### |\n## )/.exec(
+      body.slice(body.indexOf(`\n### ${heading} `) + 1),
+    )?.[1] ?? ''
+
+  it('names no inbox file after section 0', () => {
+    const hits = body
+      .split('\n')
+      .filter((line) => /inbox\.md|inbox \(/.test(line))
+    expect(hits, 'docs/spec.md still names the inbox file').toEqual([])
+  })
+
+  it('5.7 reads the open issues', () => {
+    const board = section('5.7')
+    expect(board, 'docs/spec.md has no 5.7').not.toBe('')
+    expect(board).toContain('open issues')
+    expect(board).toContain('`spec: issue #<n>`')
+  })
+
+  it('the last entry of section 0 cites decision 6 of ADR-0002', () => {
+    const zero = spec.slice(0, spec.indexOf('\n## 1. '))
+    const last = zero.slice(zero.lastIndexOf('\nFrom 0.'))
+    expect(last).toContain('decision 6 of ADR-0002')
   })
 })
 

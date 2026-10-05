@@ -614,14 +614,14 @@ describe('intent.sh new, with docs_mode main', () => {
   it('moves to the default branch, brought up to date, from wherever it runs', () => {
     const { dir } = repo(suMain)
     git(dir, 'switch', '-q', '-c', 'slice/S01-x')
-    elsewhere(dir, { '.harness/docs/inbox.md': '- riga\n' })
+    elsewhere(dir, { '.harness/docs/parked.md': '- riga\n' })
     const result = run(dir, ['new', 'altrove'])
     expect(result.status, result.stderr).toBe(0)
     expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
     expect(git(dir, 'rev-parse', 'HEAD')).toBe(
       git(dir, 'rev-parse', 'origin/main'),
     )
-    expect(read(dir, '.harness/docs/inbox.md')).toBe('- riga\n')
+    expect(read(dir, '.harness/docs/parked.md')).toBe('- riga\n')
   })
 
   it('refuses a slug whose intent is already on the default branch', () => {
@@ -775,7 +775,7 @@ describe('intent.sh open, with docs_mode main', () => {
 
   it('lands on top of what reached the default branch meanwhile', () => {
     const { dir, origin } = written()
-    elsewhere(dir, { '.harness/docs/inbox.md': '- riga\n' })
+    elsewhere(dir, { '.harness/docs/parked.md': '- riga\n' })
     const result = run(dir, ['open'])
     expect(result.status, result.stderr).toBe(0)
     expect(git(dir, 'log', '-1', '--format=%s', 'HEAD^')).toBe(
