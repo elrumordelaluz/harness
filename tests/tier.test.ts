@@ -576,11 +576,11 @@ describe('tier.sh, who may merge', () => {
     expect(contract.tier).toBe(1)
 
     const gate = tier(
-      { '.harness/docs/inbox.md': null, 'notes/inbox.md': body(5) },
+      { '.harness/docs/parked.md': null, 'notes/parked.md': body(5) },
       {},
-      { base: { '.harness/docs/inbox.md': body(5) } },
+      { base: { '.harness/docs/parked.md': body(5) } },
     )
-    expect(gate.why).toMatch(/human-gate: \.harness\/docs\/inbox\.md/)
+    expect(gate.why).toMatch(/human-gate: \.harness\/docs\/parked\.md/)
 
     const sensitive = tier(
       { 'src/foo.sh': null, '.harness/bin/foo.sh': body(5) },

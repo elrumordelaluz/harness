@@ -257,11 +257,11 @@ hook is copied: the bootstrap fetches them into `.harness/bin/`, ignored.
 6. **`.harness/docs/`**: `codebase-map.md` written by reading the code, one screen
    (template in `templates/docs/codebase-map.md`), then `README.md` from
    `templates/docs/README.md`, one section for each of `intent/`, `specs/`,
-   `backlog/`, `decisions/` and `review-log/`, and `inbox.md` from `templates/docs/inbox.md` and
-   `parked.md` from `templates/docs/parked.md`, each written only if it is
-   not there: their entries belong to the repo, and a rerun that overwrote
-   them would throw away the one place the other skills are allowed to write
-   and the list of what waits on purpose. Next to them `.harness/README.md`
+   `backlog/`, `decisions/` and `review-log/`, and `parked.md` from
+   `templates/docs/parked.md`, written only if it is not there: its entries
+   belong to the repo, and a rerun that overwrote it would throw away the
+   list of what waits on purpose. The inbox is no file: it is the open
+   issues of the repo, and 11 makes its labels. Next to them `.harness/README.md`
    from `templates/harness/README.md`, the page for the human who meets the
    harness first, also written only if it is not there: a team may rewrite it
    for its own newcomers. The project's own `docs/`, if it has one, stays as
