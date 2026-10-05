@@ -1,7 +1,7 @@
 ---
 id: S100
 title: A label takes an issue off the board, and another lets an outsider's in
-status: todo
+status: done
 blocked_by: S99
 tier: 2
 human: false
