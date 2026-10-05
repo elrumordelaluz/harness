@@ -1,7 +1,7 @@
 ---
 id: S101
 title: An issue already turned into a slice is not asked about again
-status: todo
+status: done
 blocked_by: S99
 tier: 2
 human: false
