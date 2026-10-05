@@ -1,7 +1,7 @@
 ---
 id: S102
 title: Lionel answers an issue on /board with one word, via, slice, intent or skip
-status: todo
+status: done
 blocked_by: S100
 tier: 2
 human: false
