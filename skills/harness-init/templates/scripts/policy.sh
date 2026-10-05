@@ -43,6 +43,10 @@
 #   merge                             -> squash when automerge is on, only
 #                                        once ci has passed on the PR head, and
 #                                        never past a higher tier ci labelled
+#   merge that GitHub refuses         -> the verdict and its label stay, one
+#                                        comment with the refusal, the
+#                                        notification and a non-zero exit: not
+#                                        a crash, nothing to judge again
 # The notification (ntfy, NTFY_TOPIC) leaves from here, with the verdict in
 # hand, at every escalation: even when needs-human was already on the PR,
 # which raises no label event. needs-human never comes off by this script:
@@ -77,7 +81,8 @@ automerge="${HARNESS_AUTOMERGE:-off}"
 # failure into a crash comment is even installed.
 comment="$(mktemp)"
 other_file="$(mktemp)"
-trap 'rm -f "$comment" "$other_file"' EXIT
+refusal="$(mktemp)"
+trap 'rm -f "$comment" "$other_file" "$refusal"' EXIT
 pr_url="$(gh pr view "$pr" --json url -q .url 2>/dev/null || true)"
 # Where a commit of the PR is linked from: the repo the PR lives in.
 repo_url="${pr_url%/pull/*}"
@@ -461,7 +466,20 @@ policy: $decision" ;;
     # --auto needs auto-merge enabled on the repo (GitHub Pro, or a public
     # repo). Without it merge now: ci was just read green, on the head the
     # decision was made for.
+    # A merge GitHub refuses, a branch behind or anything else, is not a
+    # crash: the verdict is stored and posted, and the head is judged once, so
+    # asking for /judge again would be false twice. These two calls sit
+    # outside the ERR trap, the PR says why and the run exits non-zero.
     gh pr merge "$pr" --squash --auto --match-head-commit "$current" 2>/dev/null ||
-      gh pr merge "$pr" --squash --match-head-commit "$current" ;;
+      gh pr merge "$pr" --squash --match-head-commit "$current" 2>"$refusal" || {
+      trap - ERR
+      why="$(cat "$refusal")"
+      gh pr comment "$pr" --body "GitHub refused the merge of \`${current:0:7}\`: the judgement above stands, the merge is yours.
+policy: merge refused
+$why" || echo "policy: could not say on the PR that the merge was refused" >&2
+      notify "PR #$pr: merge refused" "$why"
+      echo "policy: merge refused, $why" >&2
+      exit 1
+    } ;;
 esac
 echo "policy: $decision" >&2
