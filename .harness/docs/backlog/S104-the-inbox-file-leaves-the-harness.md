@@ -1,7 +1,7 @@
 ---
 id: S104
 title: The inbox file is gone, and the spec of the chain says the inbox is the issues
-status: todo
+status: done
 blocked_by: S101, S102, S103
 tier: 2
 human: false
