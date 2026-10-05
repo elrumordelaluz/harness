@@ -1074,6 +1074,53 @@ describe('board.sh, the inbox is the open issues', () => {
     ).toContain('has no inbox_accept_label')
   })
 
+  // S101. A slice names the issue it came from in `spec: issue #<n>`, and the
+  // issue stays open until the PR of the slice closes it: the board leaves it
+  // off, whatever the status of the slice, so it is not asked about again.
+  it('leaves out an open issue that a slice names in spec: issue #<n>', () => {
+    for (const status of ['todo', 'done']) {
+      const slices = [
+        { id: 'S07', title: 'From an issue', status, spec: 'issue #7' },
+      ]
+      const inbox = [
+        issue(7, 'Waiting on its slice'),
+        issue(70, 'Not named by any slice'),
+      ]
+      const { lines, status: exit } = board({ slices, inbox })
+      expect(exit).toBe(0)
+      expect(lines).toContain('Inbox  1 issues')
+      expect(section(lines, 'Inbox')).toEqual([
+        expect.stringMatching(/#70 +Not named by any slice$/),
+      ])
+      expect(lines.join('\n')).not.toContain('Waiting on its slice')
+      const data = JSON.parse(board({ slices, inbox, json: true }).stdout)
+      expect(
+        data.inbox.map((entry: { number: number }) => entry.number),
+      ).toEqual([70])
+    }
+  })
+
+  it('keeps an issue whose number is only inside another spec: value', () => {
+    const slices = [
+      {
+        id: 'S08',
+        title: 'From an audit',
+        status: 'todo',
+        spec: 'audit (PR #7)',
+      },
+      { id: 'S09', title: 'Another issue', status: 'todo', spec: 'issue #77' },
+    ]
+    const inbox = [issue(7, 'Still on the board')]
+    const { lines } = board({ slices, inbox })
+    expect(section(lines, 'Inbox')).toEqual([
+      expect.stringMatching(/#7 +Still on the board$/),
+    ])
+    const data = JSON.parse(board({ slices, inbox, json: true }).stdout)
+    expect(data.inbox.map((entry: { number: number }) => entry.number)).toEqual(
+      [7],
+    )
+  })
+
   it('gives the count of issues as the fact of read the inbox', () => {
     const { lines } = board({
       inbox: [issue(11, 'One'), issue(12, 'Two'), issue(13, 'Three')],

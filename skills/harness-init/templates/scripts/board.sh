@@ -34,7 +34,9 @@
 #              over it. The outsiders still waiting are one row under the
 #              others, `<n> issues from outside, waiting for <label>`, with no
 #              title, and no row when there are none. A block the board cannot
-#              read is the one row of the reason policy_why gives.
+#              read is the one row of the reason policy_why gives. An issue
+#              a slice names in `spec: issue #<n>` is not a row, whatever the
+#              status of the slice: it waits on the PR that closes it.
 #   Open PRs   number, tier label, judge label and title, from `gh pr list`.
 #   Waiting on a human
 #              the open PRs labelled human-gate, needs-human or tier:3, the
@@ -216,7 +218,8 @@ fi
 # A value keeps neither a trailing comment nor trailing spaces: the skeleton in
 # the backlog/ section of .harness/docs/README.md carries its legend as a
 # comment, and a repo that copied it must not read `todo # todo | blocked |
-# done` as a status.
+# done` as a status. The one `#` that is not a comment is the number of
+# `spec: issue #<n>`, kept whole when the value starts with it.
 slices_tsv=""
 if [ ${#files[@]} -gt 0 ]; then
   slices_tsv="$(awk '
@@ -240,7 +243,13 @@ if [ ${#files[@]} -gt 0 ]; then
       sub(/:.*/, "", key)
       value = $0
       sub(/^[^:]*:[ \t]*/, "", value)
+      head = ""
+      if (match(value, /^issue #[0-9]+/)) {
+        head = substr(value, 1, RLENGTH)
+        value = substr(value, RLENGTH + 1)
+      }
       sub(/[ \t]+#.*$/, "", value)
+      value = head value
       sub(/[ \t]+$/, "", value)
       gsub(/\t/, " ", value)
       if (key == "id") id = value
@@ -288,6 +297,10 @@ slices="$(printf '%s' "$slices_tsv" | jq -R -s --argjson branches "$branches" '
   })')"
 slice_specs="$(printf '%s' "$slices_tsv" | jq -R -s '
   split("\n") | map(select(length > 0)) | map(split("\t")[5] // "")')"
+# The issues a slice came from, the numbers of `spec: issue #<n>` read as the
+# whole field: `audit (PR #7)` names no issue.
+claimed="$(printf '%s' "$slice_specs" | jq -c '
+  [.[] | capture("^issue #(?<n>[0-9]+)$")? | .n | tonumber]')"
 
 # The inbox is the open issues of the repo, one call and one page of 100:
 # a check of each author against the collaborators would be one call each
@@ -306,6 +319,11 @@ slice_specs="$(printf '%s' "$slices_tsv" | jq -R -s '
 # action of /board, so those are counted and never printed. A block the board
 # cannot read is no exit 1: the Inbox says why, and nothing of the issues is
 # printed, since none of them can be told apart.
+# An issue a slice names in `spec: issue #<n>` is not the inbox either,
+# whatever the status of the slice: it stays open until the PR of the slice
+# closes it, and the board does not ask about it again. A slice done with its
+# issue still open is a PR that did not close it, and reopening is a human's
+# call on GitHub.
 inbox_why=""
 skip_labels='[]'
 accept_label=""
@@ -328,11 +346,13 @@ inbox_outside=0
 if [ -z "$inbox_why" ] && command -v gh >/dev/null 2>&1; then
   if open_issues="$(gh api 'repos/{owner}/{repo}/issues?state=open&per_page=100' 2>/dev/null)"; then
     if read_issues="$(printf '%s' "$open_issues" | jq -c \
-      --argjson skip "$skip_labels" --arg accept "$accept_label" '
+      --argjson skip "$skip_labels" --arg accept "$accept_label" \
+      --argjson claimed "$claimed" '
       if type != "array" then error("not a list") else . end
       | length as $count
       | [.[] | select(type == "object")
           | select(has("pull_request") | not)
+          | select(.number as $n | $claimed | index([$n]) | not)
           | .labels = [(.labels // [])[] | if type == "object" then .name else . end]
           | select(any(.labels[]; . as $label | $skip | index([$label])) | not)
           | .inside = (.author_association == "OWNER"

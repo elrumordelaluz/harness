@@ -1028,6 +1028,23 @@ describe('.harness/docs/README.md matches the template it was copied from', () =
     ).toBe(false)
   })
 
+  // S101: a slice cut from an issue names it in `spec:`, and the board reads
+  // that form to leave the issue off the Inbox.
+  it.each([
+    'skills/harness-init/templates/docs/README.md',
+    '.harness/docs/README.md',
+  ])('%s lists issue #<n> among the sources of spec:', (file) => {
+    const backlog = folderSection(
+      readFileSync(join(root, file), 'utf8'),
+      'backlog',
+    )
+    expect(
+      backlog,
+      `the backlog/ section of ${file} does not name \`issue #<n>\` among the sources of spec`,
+    ).toContain('`issue #<n>`')
+    expect(backlog).toMatch(/for example `issue #\d+`/)
+  })
+
   it('no file under skills/ names the README of a folder', () => {
     const old = /docs\/(intent|specs|backlog|decisions|review-log)\/README\.md/
     const named = walk(join(root, 'skills')).filter((file) =>
