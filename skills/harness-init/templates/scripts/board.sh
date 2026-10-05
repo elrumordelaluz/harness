@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The board of the repo in one screen, for whoever opens a cold session: the
-# slices of .harness/docs/backlog/ that are still open, the lines of .harness/docs/inbox.md, the
-# open PRs, what waits for a human, the plan in force and the next action, in
+# slices of .harness/docs/backlog/ that are still open, the open issues of the
+# repo, the open PRs, what waits for a human, the plan in force and the next action, in
 # forty lines and without a grep. The screen is computed here and not by the
 # skill, because from a terminal it costs no tokens and a rule is only
 # testable when a program applies it.
@@ -24,7 +24,9 @@
 #   Slices     the count of the done ones in the head, then one row per slice
 #              that is not done: id, status, blocked_by, tier, human, title.
 #              The done are not listed: they would eat the screen.
-#   Inbox      one row per line of .harness/docs/inbox.md, its date and its text.
+#   Inbox      one row per open issue a collaborator wrote, its date, its
+#              number and its title, oldest first, from one call to `gh api`;
+#              the head says `100+` when the answer filled its page of 100.
 #   Open PRs   number, tier label, judge label and title, from `gh pr list`.
 #   Waiting on a human
 #              the open PRs labelled human-gate, needs-human or tier:3, the
@@ -42,7 +44,7 @@
 # The last line is `next action: <action>, because <rule>: <fact>`.
 # The screen is forty lines, and the script counts its own: a board that
 # would pass forty gives rows up in a fixed order, and only then. First the
-# Inbox, from its newest line back and only the rows needed: the oldest lines
+# Inbox, from its newest issue back and only the rows needed: the oldest issues
 # stay, as many as fit, with one row under them, `and <n> more`, and the head
 # keeps the full count. Then, with the Inbox down to its head and that row,
 # the open slices that cannot be taken, a blocked one, one held by an ADR, one
@@ -84,7 +86,8 @@
 # the pin is not a sha and a date. The screen says the four in as many lines, and `-` for
 # the stage that is null.
 # `prs` is null when `gh` could not answer and [] when there are none,
-# which are two different facts. `slices` keeps the done ones, which only the
+# which are two different facts, and so is `inbox`, one entry per issue with
+# `number`, `title`, `date` (the day of `created_at`), `labels` and `url`. `slices` keeps the done ones, which only the
 # screen leaves out.
 # The rows are printed as the frontmatter has them, with two exceptions: an
 # `ADR-<nnnn>` in blocked_by is printed `held by ADR-<nnnn>`, after the slice
@@ -272,23 +275,40 @@ slices="$(printf '%s' "$slices_tsv" | jq -R -s --argjson branches "$branches" '
 slice_specs="$(printf '%s' "$slices_tsv" | jq -R -s '
   split("\n") | map(select(length > 0)) | map(split("\t")[5] // "")')"
 
-# One entry per line, `- <YYYY-MM-DD>: <text>`, as .harness/docs/inbox.md says: the
-# prose above the list is not an entry, and a closed line is removed and not
-# ticked, so what is in the file is what is open.
-inbox_tsv=""
-if [ -f .harness/docs/inbox.md ]; then
-  inbox_tsv="$(awk '
-    /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]:/ {
-      text = substr($0, 14)
-      sub(/^[ \t]+/, "", text)
-      gsub(/\t/, " ", text)
-      printf "%s\t%s\n", substr($0, 3, 10), text
-    }
-  ' .harness/docs/inbox.md)"
+# The inbox is the open issues of the repo, one call and one page of 100:
+# a check of each author against the collaborators would be one call each
+# against the rate limit, and `author_association` is the field policy.sh
+# already trusts on comments. The endpoint answers the PRs too, the entries
+# with a `pull_request` key. A title is data a person wrote and is printed as
+# such: its control characters, tabs and newlines among them, are flattened
+# here so it stays one row. The order is by `created_at`, oldest first, which
+# is what the forty line cut keeps. null and [] are two facts, as for `prs`,
+# and the two reads are independent: one can fail and the other answer.
+inbox="null"
+inbox_full=false
+if command -v gh >/dev/null 2>&1; then
+  if open_issues="$(gh api 'repos/{owner}/{repo}/issues?state=open&per_page=100' 2>/dev/null)"; then
+    if read_issues="$(printf '%s' "$open_issues" | jq -c '
+      if type != "array" then error("not a list") else . end
+      | { full: (length >= 100),
+          inbox: ([.[] | select(type == "object")
+            | select(has("pull_request") | not)
+            | select(.author_association == "OWNER"
+                or .author_association == "MEMBER"
+                or .author_association == "COLLABORATOR")]
+            | sort_by(.created_at, .number)
+            | map({
+                number,
+                title: ((.title // "") | tostring | gsub("[[:cntrl:]]"; " ")),
+                date: ((.created_at // "") | tostring | .[0:10]),
+                labels: [(.labels // [])[] | if type == "object" then .name else . end],
+                url: (.html_url // null)
+              })) }' 2>/dev/null)" && [ -n "$read_issues" ]; then
+      inbox="$(printf '%s' "$read_issues" | jq '.inbox')"
+      inbox_full="$(printf '%s' "$read_issues" | jq '.full')"
+    fi
+  fi
 fi
-inbox="$(printf '%s' "$inbox_tsv" | jq -R -s '
-  split("\n") | map(select(length > 0)) | map(split("\t"))
-  | map({ date: .[0], text: (.[1] // "") })')"
 
 # One entry per line of .harness/docs/parked.md, `- <YYYY-MM-DD>: <path>: <why>`, in
 # the form of the inbox: the path is the text up to the first `: `, the why is
@@ -607,7 +627,8 @@ board="$(jq -n \
     else {
         action: "read the inbox",
         rule: "no other rule",
-        fact: "\($inbox | length) lines"
+        fact: (if $inbox == null then "gh not available"
+               else "\($inbox | length) issues" end)
       }
     end) as $next
   | { harness: $harness, slices: $slices, prs: $prs, inbox: $inbox,
@@ -635,7 +656,8 @@ fi
 # are. An ADR row carries its id and the slices in the column of the labels,
 # so the title starts where the other titles do, and it is the only row whose
 # last column can be empty, when the ADR has no file to take a title from.
-printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels$eligible_def"'
+printf '%s' "$board" | jq -r --argjson specs "$specs" --argjson full "$inbox_full" \
+  "$human_labels$eligible_def"'
   def num: ltrimstr("S") | tonumber? // 0;
   def pad($n): tostring | . + ((" " * ($n - length)) // "");
   def cut($n): tostring | if length > $n then .[0:$n - 3] + "..." else . end;
@@ -705,14 +727,17 @@ printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels$eligible_de
         end)
     end)
   + [""]
-  + (if (.inbox | length) == 0 then ["Inbox  0 lines  inbox empty"] else
-      ["Inbox  \(.inbox | length) lines"]
+  + (if .inbox == null then ["Inbox", "  gh not available"]
+    elif (.inbox | length) == 0 and ($full | not) then
+      ["Inbox  0 issues  inbox empty"] else
+      ["Inbox  " + (if $full then "100+" else "\(.inbox | length)" end) + " issues"]
       + (.inbox
         | if $keep == null then . else
             to_entries | sort_by(.value.date, .key) | .[0:$keep]
             | sort_by(.key) | map(.value)
           end
-        | map("  " + (.date | pad(12)) + (.text | cut(86))))
+        | map("  " + (.date | pad(12)) + ("#" + (.number | tostring) | pad(7))
+            + (.title | cut(79))))
       + (if $keep == null then []
          else ["  and \((.inbox | length) - $keep) more"] end)
     end)
@@ -787,9 +812,9 @@ printf '%s' "$board" | jq -r --argjson specs "$specs" "$human_labels$eligible_de
   + [""]
   + [.next | "next action: \(.action), because \(.rule): " as $head
       | $head + (.fact | cut([100 - ($head | length), 20] | max))];
-  # The oldest inbox lines are the oldest by date, a line of the file before
-  # one of the same day, and they are printed in the order of the file. A cut
-  # costs the row of the count, so an inbox of one line has nothing to give.
+  # The oldest inbox issues are the oldest by date, read in the order of
+  # `created_at`, and they are printed in that order. A cut costs the row of
+  # the count, so an inbox of one issue has nothing to give.
   (screen(null; false) | length) as $lines
   | (.inbox | length) as $inbox
   | if $lines <= 40 then screen(null; false)
