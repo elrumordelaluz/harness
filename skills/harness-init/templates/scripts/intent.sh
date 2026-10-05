@@ -3,16 +3,20 @@
 # else. Two commands, because the writing happens in between. What they do
 # depends on the docs_mode key of .harness/AGENTS.md on the default branch.
 # With `"docs_mode": "main"`:
-#   intent.sh new <slug>    on the default branch, brought up to date, write
+#   intent.sh new <slug> [--issue <n>]
+#                           on the default branch, brought up to date, write
 #                           .harness/docs/intent/<slug>.md with the three sections
 #                           the intent/ section of .harness/docs/README.md
-#                           lists, empty
+#                           lists, empty; with --issue, the line
+#                           `Source: #<n> <url>` above them, for the issue
+#                           /board answered with `intent`
 #   intent.sh open [<slug>] on the default branch: refuse a section that is
 #                           missing or empty and a branch that carries anything
 #                           else, format the file, commit it alone, push it
 #                           and print the sha; the commit is the approval
 # With `"docs_mode": "pr"`, the team's flow:
-#   intent.sh new <slug>    cut intent/<slug> from the remote's default branch
+#   intent.sh new <slug> [--issue <n>]
+#                           cut intent/<slug> from the remote's default branch
 #                           and write the same file there
 #   intent.sh open          from intent/<slug>: the same checks, then commit,
 #                           push, open the PR or name the one already open; the
@@ -81,7 +85,8 @@ default_branch() {
 }
 
 # The sections of $1 that are missing or have no text under them, one per
-# line. A section runs from its "## " heading to the next "# " or "## ".
+# line. A section runs from its "## " heading to the next "# " or "## ", so
+# the Source line above the first one belongs to none and counts for none.
 empty_sections() {
   awk -v want="$SECTIONS" '
     BEGIN { n = split(want, w, "|"); for (i = 1; i <= n; i++) seen[w[i]] = 0 }
@@ -133,8 +138,16 @@ pr_body() {
 }
 
 new() {
-  local slug="${1:-}"
+  local slug="${1:-}" issue= source=
   valid "$slug" || die "the slug is lowercase letters, digits and dashes, a letter first: '$slug'"
+  shift
+  if [ "$#" -gt 0 ]; then
+    [ "$#" = 2 ] && [ "$1" = --issue ] || die "after the slug only --issue <n>: '$*'"
+    issue="$2"
+    case "$issue" in
+      '' | *[!0123456789]*) die "--issue takes the number of an issue: '$issue'" ;;
+    esac
+  fi
   # The one README says the documents are installed; intent/ itself is not
   # there until its first file, because git does not track an empty folder.
   [ -f .harness/docs/README.md ] || die "no .harness/docs/README.md here: the repo has no harness yet, run /harness-init local"
@@ -155,9 +168,17 @@ $dirty"
   if git cat-file -e "origin/$base:.harness/docs/specs/SPEC-$slug.md" 2>/dev/null; then
     die ".harness/docs/specs/SPEC-$slug.md is already on $base: pick another slug"
   fi
+  # The url read before anything moves: an issue gh cannot see leaves the
+  # human where they were, with no skeleton that names it wrong.
+  if [ -n "$issue" ]; then
+    local url
+    url="$(gh issue view "$issue" --json url --jq .url)" && [ -n "$url" ] ||
+      die "gh cannot read the url of issue #$issue, and the Source line needs it"
+    source="Source: #$issue $url"
+  fi
   if [ "$flow" = main ]; then
     on_default "$base"
-    write_skeleton "$file" "on $base"
+    write_skeleton "$file" "on $base" "$source"
     echo "intent: then .harness/bin/intent.sh open $slug"
     edit "$file"
     return 0
@@ -168,7 +189,7 @@ $dirty"
     die "the branch intent/$slug exists: someone is writing this intent"
   fi
   git switch -q --no-track -c "intent/$slug" "origin/$base"
-  write_skeleton "$file" "on intent/$slug"
+  write_skeleton "$file" "on intent/$slug" "$source"
   echo "intent: then .harness/bin/intent.sh open"
   edit "$file"
 }
@@ -192,7 +213,10 @@ write_skeleton() {
     echo "intent: $2, $1 was already there and is kept"
   else
     mkdir -p "${1%/*}"
-    tr '|' '\n' <<<"$SECTIONS" | awk 'NR > 1 { print "" } { print "## " $0 }' >"$1"
+    {
+      [ -z "${3:-}" ] || printf '%s\n\n' "$3"
+      tr '|' '\n' <<<"$SECTIONS" | awk 'NR > 1 { print "" } { print "## " $0 }'
+    } >"$1"
     echo "intent: $2, write $1 (the intent/ section of .harness/docs/README.md says what goes in each section)"
   fi
 }
@@ -309,10 +333,13 @@ $others"
 }
 
 case "${1:-}" in
-  new) new "${2:-}" ;;
+  new)
+    shift
+    new "$@"
+    ;;
   open) open_pr "${2:-}" ;;
   *)
-    echo "usage: intent.sh new <slug> | intent.sh open [<slug>]" >&2
+    echo "usage: intent.sh new <slug> [--issue <n>] | intent.sh open [<slug>]" >&2
     exit 2
     ;;
 esac

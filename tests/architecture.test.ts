@@ -2494,7 +2494,7 @@ describe('/spec, /slice and /board read docs_mode, and say both modes', () => {
   const skills: Array<[string, string]> = [
     ['spec', 'docs(spec): <slug>'],
     ['slice', 'docs(backlog): <slug>'],
-    ['board', 'docs(backlog): s<NN> from the inbox'],
+    ['board', 'docs(backlog): s<NN> from issue #<n>'],
   ]
 
   it.each(skills)(
@@ -2593,20 +2593,80 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
     ).toContain(`\`${name}\``)
   })
 
-  // S38: the fourth answer does not close a line of inbox, it closes an ADR
+  // S38: the question on an ADR does not close an issue, it closes an ADR
   // in `blocked_by`, and its commit is the only place where a slice already
-  // written changes by the hand of this skill.
+  // written changes by the hand of this skill. S102: the four answers on an
+  // issue leave it in a state the next board reads, through gh and the one
+  // commit of `slice`.
   it('names the commits of the four answers and the two commands of intent.sh', () => {
     const skill = squash(readFileSync(file, 'utf8'))
     for (const name of [
-      'docs(inbox): <why>',
-      'docs(backlog): s<NN> from the inbox',
+      'gh issue close',
+      '--reason',
+      'gh issue comment',
+      '--add-label',
+      'spec: issue #<',
+      'docs(backlog): s<NN> from issue #<n>',
       'docs(backlog): take ADR-<nnnn> out of blocked_by',
-      'spec: inbox (<',
-      '.harness/bin/intent.sh new <slug>',
+      '.harness/bin/intent.sh new <slug> --issue <n>',
       'intent.sh open',
     ]) {
       expect(skill, `the skill does not name ${name}`).toContain(name)
+    }
+  })
+  // S102: the inbox is the issues, and the skill writes no line of the file.
+  // Its description and the places it writes say so, and no command of the
+  // skill commits or stages `.harness/docs/inbox.md`. The guardrail on the
+  // harness of the repo still says its dated line in that file, and it is not
+  // this case's: the paragraph is word for word the same in five skills, held
+  // so by `every skill carries the same harness guardrail`, and it moves in
+  // all five at once, to `gh issue create`, with S103.
+  // S102: the accept label vouches for the author of an issue and for
+  // nobody who comments on it, so the read of 4 keeps the comments of the
+  // collaborators, the trust board.sh gives an author, and drops the rest.
+  it('reads the comments of an issue by collaborators only', () => {
+    const skill = squash(readFileSync(file, 'utf8'))
+    expect(
+      skill,
+      'the skill reads every comment of an issue: an outsider can comment on an accepted one',
+    ).not.toContain('`gh issue view <n> --json title,body,comments`')
+    for (const name of [
+      '.authorAssociation',
+      '"OWNER"',
+      '"MEMBER"',
+      '"COLLABORATOR"',
+    ]) {
+      expect(
+        skill,
+        `the read of an issue does not filter its comments on ${name}`,
+      ).toContain(name)
+    }
+  })
+
+  it('answers issues and writes no line of .harness/docs/inbox.md', () => {
+    const text = readFileSync(file, 'utf8')
+    const description = squash(/^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '')
+    expect(description, 'the description does not speak of issues').toContain(
+      'issue of the inbox',
+    )
+    expect(
+      description,
+      'the description does not rule out .harness/docs/inbox.md',
+    ).toContain('never .harness/docs/inbox.md')
+    const places = squash(
+      /- \*\*Four places are written[\s\S]*?(?=\n- \*\*)/.exec(text)?.[0] ?? '',
+    )
+    expect(places, 'the places written do not name the issues').toContain(
+      'gh issue comment',
+    )
+    const skill = squash(text)
+    for (const write of [
+      'docs(inbox)',
+      'git add .harness/docs/inbox.md',
+      '-- .harness/docs/inbox.md',
+      'INBOX_MSG',
+    ]) {
+      expect(skill, `the skill still says ${write}`).not.toContain(write)
     }
   })
 })
@@ -2620,17 +2680,57 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
 describe('the commit subjects the skills give as a model pass commitlint', () => {
   const commitlint = join(root, '.harness/bin/commitlint.sh')
   const types = 'feat|fix|chore|docs|style|refactor|test|perf|revert|build|ci'
-  const model = new RegExp(`^(${types})\\([a-z0-9-]+\\): `)
+  // Every occurrence on a line, up to the backtick, the quote or the end of
+  // the line that closes it.
+  const model = new RegExp(
+    `(?<![\\w-])(?:${types})\\([a-z0-9-]+\\): [^\`"]*`,
+    'g',
+  )
+  const marker = '<!-- not a commit model -->'
+  const models = (text: string): Array<{ line: number; text: string }> =>
+    text.split('\n').flatMap((row, index) =>
+      row.includes(marker)
+        ? []
+        : [...row.matchAll(model)].map((match) => ({
+            line: index + 1,
+            text: match[0].trimEnd(),
+          })),
+    )
 
   const subjects = readdirSync(join(root, 'skills'))
     .map((skill) => join('skills', skill, 'SKILL.md'))
     .filter((file) => existsSync(join(root, file)))
     .flatMap((file) =>
-      readFileSync(join(root, file), 'utf8')
-        .split('\n')
-        .map((text, index) => ({ file, line: index + 1, text }))
-        .filter((row) => model.test(row.text)),
+      models(readFileSync(join(root, file), 'utf8')).map((row) => ({
+        file,
+        ...row,
+      })),
     )
+
+  // S102: a model in prose, in backticks or in the title of a command, is
+  // copied as much as one on a line of its own, and the collector reads it
+  // where it is. A hit that is not a model is skipped by the marker on its
+  // line and by nothing else.
+  it('reads a model inline, in backticks and in a quoted title', () => {
+    const text = [
+      'with one commit of its own, `docs(spec): close the questions of <slug>`, pushed',
+      'gh pr create --title "docs(backlog): <slug>" --body-file -',
+      'fix(board): take the line out',
+    ].join('\n')
+    expect(models(text)).toEqual([
+      { line: 1, text: 'docs(spec): close the questions of <slug>' },
+      { line: 2, text: 'docs(backlog): <slug>' },
+      { line: 3, text: 'fix(board): take the line out' },
+    ])
+  })
+
+  it('skips a hit only where the marker is on its line', () => {
+    const text = [
+      'a `feat(x): Not A Model` that names the form <!-- not a commit model -->',
+      'a `feat(x): Still A Model` with no marker',
+    ].join('\n')
+    expect(models(text)).toEqual([{ line: 2, text: 'feat(x): Still A Model' }])
+  })
 
   it.each(subjects)('$file:$line', ({ file, line, text }) => {
     // The placeholder becomes a word and not a single letter: after
@@ -2653,13 +2753,6 @@ describe('the commit subjects the skills give as a model pass commitlint', () =>
       ok,
       `${file}:${line} is a commit subject a session copies, and commitlint refuses it as "${message}": ${stderr}`,
     ).toBe(true)
-  })
-
-  it('reads the models of every skill that commits', () => {
-    expect(
-      subjects.length,
-      'fewer than the ten subject models of board, slice and spec: a model has moved out of the reach of this test, and the next wrong one lands on a session instead of on CI',
-    ).toBeGreaterThanOrEqual(10)
   })
 
   // S62. A model subject is prose too: every run copies it into `git log`,
