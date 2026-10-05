@@ -649,6 +649,48 @@ describe('tier.sh, a policy block it cannot read', () => {
     },
   )
 
+  // S100. Version 2 is the one the harness reads, and there is no reading of
+  // 1 left: a repo set up before the inbox keys says so by its version, the
+  // way such a repo writes it, with the two keys absent, and starts over.
+  it('gives 3 to a block at version 1, naming the version and the stage', () => {
+    const run = tier(
+      { '.harness/bin/foo.sh': body(5) },
+      {},
+      {
+        base: {
+          '.harness/AGENTS.md': withPolicy(agents, (block) => {
+            block.version = 1
+            delete block.inbox_skip_labels
+            delete block.inbox_accept_label
+          }),
+        },
+      },
+    )
+    expect(run.tier).toBe(3)
+    expect(run.why).toMatch(/version 1/)
+    expect(run.why).toContain('/harness-init local')
+  })
+
+  it.each(['inbox_skip_labels', 'inbox_accept_label'])(
+    'gives 3 to a block at version 2 without %s, naming it',
+    (key) => {
+      const run = tier(
+        { '.harness/bin/foo.sh': body(5) },
+        {},
+        {
+          base: {
+            '.harness/AGENTS.md': withPolicy(agents, (block) => {
+              delete block[key]
+            }),
+          },
+        },
+      )
+      expect(run.tier).toBe(3)
+      expect(run.why).toMatch(new RegExp(`has no ${key}`))
+      expect(run.why).toContain('/harness-init local')
+    },
+  )
+
   // S86. The block lives in .harness/AGENTS.md alone: a valid one in the root
   // AGENTS.md, with no .harness/AGENTS.md at the base ref, is read as no
   // block at all, and no transitional reading of the root file opens it.

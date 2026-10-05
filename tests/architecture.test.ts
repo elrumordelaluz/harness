@@ -1106,7 +1106,7 @@ describe('.harness/README.md matches the template it was copied from', () => {
 })
 
 // S39. The contract leaves the prose: under a fixed heading the
-// .harness/AGENTS.md of this repo and its template carry a `json` fence with the eight keys the programs of the chain read,
+// .harness/AGENTS.md of this repo and its template carry a `json` fence with the ten keys the programs of the chain read,
 // and scripts/policy-lines.sh extracts it and passes it to jq. The heading,
 // the fence and the names of the keys are the contract: translating the prose
 // around them does not touch them. Here the block is read with jq and not
@@ -1123,6 +1123,8 @@ describe('the policy block of .harness/AGENTS.md', () => {
     'docs_extra_paths',
     'max_lines',
     'max_files',
+    'inbox_skip_labels',
+    'inbox_accept_label',
   ]
   const lists = [
     'sensitive_paths',
@@ -1161,7 +1163,7 @@ describe('the policy block of .harness/AGENTS.md', () => {
   }
 
   it.each(agentsFiles)(
-    '%s carries the block under the fixed heading, and jq reads the eight keys',
+    '%s carries the block under the fixed heading, and jq reads the ten keys',
     (_name, path) => {
       expect(Object.keys(block(readFileSync(path, 'utf8'))).sort()).toEqual(
         [...keys].sort(),
@@ -1177,7 +1179,7 @@ describe('the policy block of .harness/AGENTS.md', () => {
   // is the second half: an Italian word inside the fence almost always arrives
   // with an accent on it.
   it.each(agentsFiles)(
-    '%s: the raw fence spells the eight keys in order, in ascii',
+    '%s: the raw fence spells the ten keys in order, in ascii',
     (_name, path) => {
       const raw = fence(readFileSync(path, 'utf8'))
       expect(
@@ -1185,7 +1187,7 @@ describe('the policy block of .harness/AGENTS.md', () => {
           .split('\n')
           .map((line) => /^ {2}"([^"]+)":/.exec(line)?.[1])
           .filter((key): key is string => key !== undefined),
-        'a key of the policy block was renamed, reordered or translated: these eight names in this order are what tier.sh, the git hooks and intent.sh ask jq for',
+        'a key of the policy block was renamed, reordered or translated: these ten names in this order are what tier.sh, the git hooks and intent.sh ask jq for',
       ).toEqual(keys)
       expect(
         raw,
@@ -1196,7 +1198,7 @@ describe('the policy block of .harness/AGENTS.md', () => {
 
   it.each(agentsFiles)('%s gives every key a value of its type', (_, path) => {
     const parsed = block(readFileSync(path, 'utf8'))
-    expect(parsed.version).toBe(1)
+    expect(parsed.version).toBe(2)
     expect(['main', 'pr']).toContain(parsed.docs_mode)
     expect(typeof parsed.max_lines, 'max_lines is not a number').toBe('number')
     expect(typeof parsed.max_files, 'max_files is not a number').toBe('number')
@@ -1211,6 +1213,42 @@ describe('the policy block of .harness/AGENTS.md', () => {
       }
     }
   })
+
+  // S100: the two keys board.sh reads to shape the inbox, a list of labels
+  // that take an issue off the board and the one label that lets the issue
+  // of an outsider in. The first skip label is the one /board and stage
+  // local apply, so the list is never empty.
+  it.each(agentsFiles)(
+    '%s names harness:skip and harness:accept for the inbox',
+    (_, path) => {
+      const parsed = block(readFileSync(path, 'utf8'))
+      expect(parsed.inbox_skip_labels).toEqual(['harness:skip'])
+      expect(parsed.inbox_accept_label).toBe('harness:accept')
+    },
+  )
+
+  // The prose says what the two keys do, outside the fence, so whoever reads
+  // the policy reads the rule board.sh applies.
+  it.each(agentsFiles)(
+    '%s says in its prose what the two inbox keys do',
+    (_, path) => {
+      const text = readFileSync(path, 'utf8')
+      const prose = text
+        .split('\n## ')
+        .filter(
+          (part) =>
+            part.startsWith('Review policy\n') ||
+            part.startsWith('Human gates\n'),
+        )
+        .join('\n')
+      expect(prose, `${path}: no prose names inbox_skip_labels`).toContain(
+        '`inbox_skip_labels`',
+      )
+      expect(prose, `${path}: no prose names inbox_accept_label`).toContain(
+        '`inbox_accept_label`',
+      )
+    },
+  )
 
   // The dragon of the backticks dies here: the globs sit in JSON strings, and
   // the block rewritten by Prettier parses key by key the same. With the
@@ -3250,7 +3288,7 @@ describe('a subagent of /next kills only the processes it started', () => {
 // on Tipoff are the reason AGENTS.md is not the template, and by the third
 // project it would do it in silence. The merge is carried out by the skill
 // and not by a script, so the text is the program and this case is the only
-// thing that keeps it honest. The eight keys are read from the block of the
+// thing that keeps it honest. The ten keys are read from the block of the
 // template instead of being written out here: a new key in there that stage
 // `local` does not name is red the same day.
 describe('stage local of /harness-init merges the policy block key by key', () => {
@@ -3290,11 +3328,11 @@ describe('stage local of /harness-init merges the policy block key by key', () =
     ).not.toBe('')
   })
 
-  it('reads the keys from the block of the template, and they are eight', () => {
+  it('reads the keys from the block of the template, and they are ten', () => {
     expect(
       keys.length,
-      'the policy block of skills/harness-init/templates/AGENTS.md no longer has eight keys: the rule in the skill has to name the ones it has now',
-    ).toBe(8)
+      'the policy block of skills/harness-init/templates/AGENTS.md no longer has ten keys: the rule in the skill has to name the ones it has now',
+    ).toBe(10)
   })
 
   it.each(keys)('names `%s`', (key) => {
@@ -3351,6 +3389,28 @@ describe('stage local of /harness-init merges the policy block key by key', () =
       `${file}: the merge rule does not say the block it merges is the one of \`.harness/AGENTS.md\`, and a session looks for it in the root AGENTS.md of the project`,
     ).toContain('`.harness/AGENTS.md`')
   })
+})
+
+// S100. The labels of the two inbox keys exist before the first /board, and
+// the issues already open at install carry the first skip label, so the
+// first board of a repo starts empty instead of asking about each in turn.
+describe('stage local of /harness-init creates the inbox labels', () => {
+  const file = 'skills/harness-init/SKILL.md'
+  const skill = readFileSync(join(root, file), 'utf8')
+  const at = skill.indexOf('\n## 2. Stage `local`')
+  const rest = at === -1 ? '' : skill.slice(at + 1)
+  const end = rest.indexOf('\n## ')
+  const stage = end === -1 ? rest : rest.slice(0, end)
+
+  it.each(['gh label create', 'inbox_skip_labels', 'inbox_accept_label'])(
+    'names %s in the section of stage local',
+    (needle) => {
+      expect(
+        stage,
+        `${file}: stage local does not name ${needle}, and the labels the board reads are never created`,
+      ).toContain(needle)
+    },
+  )
 })
 
 // S93. A project keeps its own AGENTS.md, CLAUDE.md and .claude/settings.json,

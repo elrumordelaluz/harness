@@ -220,7 +220,8 @@ hook is copied: the bootstrap fetches them into `.harness/bin/`, ignored.
    `.harness/AGENTS.md`, is merged key by key, never
    by judgement, reading its fence against the one in `templates/AGENTS.md`:
    `version`, `docs_mode`, `sensitive_paths`, `never_tier_0`,
-   `human_gate_paths`, `docs_extra_paths`, `max_lines`, `max_files`. A key
+   `human_gate_paths`, `docs_extra_paths`, `max_lines`, `max_files`,
+   `inbox_skip_labels`, `inbox_accept_label`. A key
    that is there stays as it is, whatever it says; a key that is missing
    arrives from the template; `version` is the only one the template always
    overwrites. `docs_mode` never changes by the hand of this skill, not even
@@ -315,7 +316,21 @@ hook is copied: the bootstrap fetches them into `.harness/bin/`, ignored.
     hook, or from the bootstrap run by hand. With no pin, which a first
     install from a dirty checkout leaves, the bootstrap refuses: the
     hand-back says so.
-11. **Verify**: `git ls-files .harness` lists `.harness/AGENTS.md`,
+11. **Labels**: the inbox is the open issues of the repo, and the two inbox
+    keys of the block name the labels `board.sh` reads. Every label of
+    `inbox_skip_labels` and the one of `inbox_accept_label` that
+    `gh label list` does not show is created with `gh label create <name>`,
+    before any issue is labelled. Then, in the run that created the first
+    label of `inbox_skip_labels`, that label goes on every issue open at
+    this moment, `gh issue edit <n> --add-label <name>`, the PRs left out:
+    whatever was open before the harness is history and not the inbox, and
+    the first board of the repo starts empty instead of asking about each
+    issue in turn. A rerun that finds the label already there creates
+    nothing and labels nothing, so an issue filed after the install stays on
+    the board. The hand-back prints how many issues were labelled. Without `gh`, or with a `gh` that cannot answer,
+    the stage says so in the hand-back and goes on: the labels are made by
+    the next run.
+12. **Verify**: `git ls-files .harness` lists `.harness/AGENTS.md`,
     `.harness/stamp.json`, `.harness/bootstrap.sh` and files under
     `.harness/docs/`, and nothing under `.harness/bin/`; `git diff` on
     `AGENTS.md`, `CLAUDE.md` and `.claude/settings.json` shows only added
@@ -324,7 +339,8 @@ hook is copied: the bootstrap fetches them into `.harness/bin/`, ignored.
     non-zero exit; stage a whitespace change, confirm the pre-commit hook runs
     on `git commit --dry-run` is not enough (hooks do not run on dry runs), so
     make and immediately amend or reset a throwaway commit on the harness branch.
-12. **Hand back**: branch `harness/local`, the diff summary, the line
+13. **Hand back**: branch `harness/local`, the diff summary, the count of
+    the issues step 11 labelled, the line
     "next: `/harness-init ci`, on top of this branch". No PR yet.
 
 ## 3. Stage `ci`

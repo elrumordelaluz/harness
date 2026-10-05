@@ -27,6 +27,14 @@
 #   Inbox      one row per open issue a collaborator wrote, its date, its
 #              number and its title, oldest first, from one call to `gh api`;
 #              the head says `100+` when the answer filled its page of 100.
+#              The two inbox keys of the policy block of .harness/AGENTS.md
+#              shape it: an issue with a label of `inbox_skip_labels` is not a
+#              row, and one by an author outside the collaborators is a row
+#              only with the label of `inbox_accept_label`, the skip winning
+#              over it. The outsiders still waiting are one row under the
+#              others, `<n> issues from outside, waiting for <label>`, with no
+#              title, and no row when there are none. A block the board cannot
+#              read is the one row of the reason policy_why gives.
 #   Open PRs   number, tier label, judge label and title, from `gh pr list`.
 #   Waiting on a human
 #              the open PRs labelled human-gate, needs-human or tier:3, the
@@ -87,7 +95,8 @@
 # the stage that is null.
 # `prs` is null when `gh` could not answer and [] when there are none,
 # which are two different facts, and so is `inbox`, one entry per issue with
-# `number`, `title`, `date` (the day of `created_at`), `labels` and `url`. `slices` keeps the done ones, which only the
+# `number`, `title`, `date` (the day of `created_at`), `labels` and `url`, null
+# too when the policy block cannot be read. `slices` keeps the done ones, which only the
 # screen leaves out.
 # The rows are printed as the frontmatter has them, with two exceptions: an
 # `ADR-<nnnn>` in blocked_by is printed `held by ADR-<nnnn>`, after the slice
@@ -111,6 +120,11 @@ for arg in ${@+"$@"}; do
   esac
 done
 
+# The reading of the policy block lives next to this script, found by its own
+# path before the cd, as tier.sh finds it, with no dirname: the board asks
+# for nothing beyond bash, jq, awk and git.
+case "$0" in */*) here="${0%/*}" ;; *) here=. ;; esac
+here="$(cd "$here" && pwd)"
 cd "$(git rev-parse --show-toplevel)"
 
 # Which commit of the harness this repo installed, and when: one entry per
@@ -284,28 +298,61 @@ slice_specs="$(printf '%s' "$slices_tsv" | jq -R -s '
 # here so it stays one row. The order is by `created_at`, oldest first, which
 # is what the forty line cut keeps. null and [] are two facts, as for `prs`,
 # and the two reads are independent: one can fail and the other answer.
+# Which issues are the inbox is the policy block's to say: a label of
+# `inbox_skip_labels` takes an issue off the board and leaves it open, and the
+# label of `inbox_accept_label`, which only a collaborator can put, lets the
+# issue of an outsider in. The skip wins. An outsider without the label is
+# text nobody vouched for, and a title on the board is what steers the next
+# action of /board, so those are counted and never printed. A block the board
+# cannot read is no exit 1: the Inbox says why, and nothing of the issues is
+# printed, since none of them can be told apart.
+inbox_why=""
+skip_labels='[]'
+accept_label=""
+if [ ! -f "$here/policy-lines.sh" ]; then
+  inbox_why="no .harness/bin/policy-lines.sh next to this script: run /harness-init local"
+else
+  . "$here/policy-lines.sh"
+  agents=""
+  if [ -f .harness/AGENTS.md ]; then agents="$(<.harness/AGENTS.md)"; fi
+  inbox_why="$(policy_why "$agents")"
+  if [ -z "$inbox_why" ]; then
+    skip_labels="$(policy_fence "$agents" | jq -c '[.inbox_skip_labels | if type == "array" then .[] else . end | tostring]')"
+    accept_label="$(policy_json "$agents" '.inbox_accept_label | tostring')"
+  fi
+fi
+
 inbox="null"
 inbox_full=false
-if command -v gh >/dev/null 2>&1; then
+inbox_outside=0
+if [ -z "$inbox_why" ] && command -v gh >/dev/null 2>&1; then
   if open_issues="$(gh api 'repos/{owner}/{repo}/issues?state=open&per_page=100' 2>/dev/null)"; then
-    if read_issues="$(printf '%s' "$open_issues" | jq -c '
+    if read_issues="$(printf '%s' "$open_issues" | jq -c \
+      --argjson skip "$skip_labels" --arg accept "$accept_label" '
       if type != "array" then error("not a list") else . end
-      | { full: (length >= 100),
-          inbox: ([.[] | select(type == "object")
-            | select(has("pull_request") | not)
-            | select(.author_association == "OWNER"
-                or .author_association == "MEMBER"
-                or .author_association == "COLLABORATOR")]
+      | length as $count
+      | [.[] | select(type == "object")
+          | select(has("pull_request") | not)
+          | .labels = [(.labels // [])[] | if type == "object" then .name else . end]
+          | select(any(.labels[]; . as $label | $skip | index([$label])) | not)
+          | .inside = (.author_association == "OWNER"
+              or .author_association == "MEMBER"
+              or .author_association == "COLLABORATOR"
+              or any(.labels[]; . == $accept))]
+      | { full: ($count >= 100),
+          outside: map(select(.inside | not)) | length,
+          inbox: (map(select(.inside))
             | sort_by(.created_at, .number)
             | map({
                 number,
                 title: ((.title // "") | tostring | gsub("[[:cntrl:]]"; " ")),
                 date: ((.created_at // "") | tostring | .[0:10]),
-                labels: [(.labels // [])[] | if type == "object" then .name else . end],
+                labels,
                 url: (.html_url // null)
               })) }' 2>/dev/null)" && [ -n "$read_issues" ]; then
       inbox="$(printf '%s' "$read_issues" | jq '.inbox')"
       inbox_full="$(printf '%s' "$read_issues" | jq '.full')"
+      inbox_outside="$(printf '%s' "$read_issues" | jq '.outside')"
     fi
   fi
 fi
@@ -538,6 +585,7 @@ board="$(jq -n \
   --argjson slices "$slices" \
   --argjson prs "$prs" \
   --argjson inbox "$inbox" \
+  --arg inbox_why "$inbox_why" \
   --argjson steps "$steps" \
   --arg adr "$plan_adr" \
   --argjson specs "$specs" \
@@ -627,7 +675,8 @@ board="$(jq -n \
     else {
         action: "read the inbox",
         rule: "no other rule",
-        fact: (if $inbox == null then "gh not available"
+        fact: (if $inbox == null and $inbox_why != "" then $inbox_why
+               elif $inbox == null then "gh not available"
                else "\($inbox | length) issues" end)
       }
     end) as $next
@@ -657,6 +706,7 @@ fi
 # so the title starts where the other titles do, and it is the only row whose
 # last column can be empty, when the ADR has no file to take a title from.
 printf '%s' "$board" | jq -r --argjson specs "$specs" --argjson full "$inbox_full" \
+  --arg inbox_why "$inbox_why" --argjson outside "$inbox_outside" --arg accept "$accept_label" \
   "$human_labels$eligible_def"'
   def num: ltrimstr("S") | tonumber? // 0;
   def pad($n): tostring | . + ((" " * ($n - length)) // "");
@@ -727,7 +777,8 @@ printf '%s' "$board" | jq -r --argjson specs "$specs" --argjson full "$inbox_ful
         end)
     end)
   + [""]
-  + (if .inbox == null then ["Inbox", "  gh not available"]
+  + (if .inbox == null and $inbox_why != "" then ["Inbox", "  " + ($inbox_why | cut(98))]
+    elif .inbox == null then ["Inbox", "  gh not available"]
     elif (.inbox | length) == 0 and ($full | not) then
       ["Inbox  0 issues  inbox empty"] else
       ["Inbox  " + (if $full then "100+" else "\(.inbox | length)" end) + " issues"]
@@ -741,6 +792,8 @@ printf '%s' "$board" | jq -r --argjson specs "$specs" --argjson full "$inbox_ful
       + (if $keep == null then []
          else ["  and \((.inbox | length) - $keep) more"] end)
     end)
+  + (if .inbox == null or $outside == 0 then []
+     else ["  \($outside) issues from outside, waiting for " + ($accept | cut(60))] end)
   + [""]
   + (if .prs == null then ["Open PRs", "  gh not available"]
      elif (.prs | length) == 0 then ["Open PRs  no open PRs"] else

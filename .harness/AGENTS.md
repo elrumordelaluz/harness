@@ -30,15 +30,16 @@ The criteria of the slice green with the tests written first; suite, typecheck, 
 
 - Human merge by path: `.harness/docs/intent/**`, `.harness/docs/specs/**`, `.harness/docs/backlog/**`, `.harness/docs/decisions/**`, `.harness/docs/review-log/**`, `.harness/docs/inbox.md`, `.harness/docs/parked.md`. The tier says how much scrutiny is needed, `human_gate_paths` says who merges: CI turns it into the `human-gate` label, neither `automerge.yml` nor `policy.sh` merges it, not even at tier 0, and only a human takes the label off.
 - Documents: on main. The paths of `human_gate_paths` plus those of `docs_extra_paths`, `docs/spec.md`, `.harness/docs/codebase-map.md`, `skills/**/SKILL.md` and `skills/spec/templates/SPEC.md`, are committed straight on main: whoever writes them has the human in the room and the yes is the approval (ADR-0003). The git hooks do not read this line: they read `docs_mode`, and on main a commit made only of those paths goes through, and nothing else.
+- Inbox: the open issues of the repo, as `/board` reads them. An issue with any label of `inbox_skip_labels` stays open and leaves the board, and the first of the list is the label the harness puts on one. An issue by an author who is not a collaborator reaches the board only once a collaborator puts the label of `inbox_accept_label` on it, since only triage access can add a label; until then the board prints how many wait and never their titles. A skip label wins over the accept label.
 - Intent and spec: explicit approval in the conversation, then the commit. Board: the board printed and one question, then the commit. Tier 2 with an open `high` or `needs-human`, and tier 3: human merge. Audit: three automatic PRs a week, in Docket.
 
 ## Policy block
 
-What the programs read. The two sections above explain the policy to whoever reads it; this block says it, and this is where it changes: `.harness/bin/policy-lines.sh` cuts the fence out and hands it to `jq`, and `tier.sh`, the git hooks, `intent.sh` and `park.sh` read it from this file and from no other, the root `AGENTS.md` included. The globs live in JSON strings, without backticks. Every key is required: taking one out does not widen the rule, it stops whoever reads it.
+What the programs read. The two sections above explain the policy to whoever reads it; this block says it, and this is where it changes: `.harness/bin/policy-lines.sh` cuts the fence out and hands it to `jq`, and `tier.sh`, the git hooks, `intent.sh`, `park.sh` and `board.sh` read it from this file and from no other, the root `AGENTS.md` included. The globs live in JSON strings, without backticks. Every key is required: taking one out does not widen the rule, it stops whoever reads it.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "docs_mode": "main",
   "sensitive_paths": [
     ".harness/AGENTS.md",
@@ -82,7 +83,9 @@ What the programs read. The two sections above explain the policy to whoever rea
     "skills/spec/templates/SPEC.md"
   ],
   "max_lines": 200,
-  "max_files": 8
+  "max_files": 8,
+  "inbox_skip_labels": ["harness:skip"],
+  "inbox_accept_label": "harness:accept"
 }
 ```
 

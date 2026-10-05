@@ -15,6 +15,8 @@ export type PolicyBlock = {
   docs_extra_paths: string[]
   max_lines: number
   max_files: number
+  inbox_skip_labels: string[]
+  inbox_accept_label: string
 }
 
 // The block as it is. It throws instead of failing an expectation: the
@@ -29,7 +31,7 @@ export function policyBlock(text: string): PolicyBlock {
 }
 
 // The four ways the block can be unreadable, from S40: no fence at all, a
-// fence jq refuses, one of the eight keys missing, a version this harness has
+// fence jq refuses, one of the ten keys missing, a version this harness has
 // never read. They are one fault with four faces, every reader of the block
 // has to stop on all four, and the list lives here so tier.sh, the git hooks,
 // intent.sh and park.sh are held to the same fixtures.
@@ -69,9 +71,9 @@ export function brokenPolicies(text: string): BrokenPolicy[] {
     {
       name: 'a version it does not know',
       agents: withPolicy(text, (block) => {
-        block.version = 2
+        block.version = 3
       }),
-      fault: /version 2/,
+      fault: /version 3/,
     },
   ]
 }

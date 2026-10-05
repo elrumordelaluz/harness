@@ -18,10 +18,17 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { withPolicy } from './agents.js'
 
 const root = resolve(import.meta.dirname, '..')
 const script = join(root, '.harness/bin/board.sh')
 const bin = join(root, 'tests/fixtures/bin')
+// The .harness/AGENTS.md a repo gets from stage local, the one whose policy
+// block board.sh reads for the labels of the inbox: S100.
+const template = readFileSync(
+  join(root, 'skills/harness-init/templates/AGENTS.md'),
+  'utf8',
+)
 
 // A PATH with everything the script needs and no `gh` at all, whatever the
 // machine: the tools are symlinked in by their real path, so the case means
@@ -118,6 +125,9 @@ type Options = {
   // no .harness/docs/backlog/ at all, the fresh install of S89, where git does
   // not track a folder that has no file yet
   noBacklog?: boolean
+  // .harness/AGENTS.md, the template of stage local when undefined and no
+  // file when null: S100
+  agents?: string | null
 }
 
 function board(opts: Options = {}): {
@@ -169,6 +179,9 @@ function board(opts: Options = {}): {
         ? opts.stamp
         : `${JSON.stringify(opts.stamp, null, 2)}\n`,
     )
+  }
+  if (opts.agents !== null) {
+    writeFileSync(join(dir, '.harness/AGENTS.md'), opts.agents ?? template)
   }
   if (opts.harnessRepo) {
     mkdirSync(join(dir, 'skills/harness-init/templates'), { recursive: true })
@@ -827,7 +840,11 @@ describe('board.sh, the inbox is the open issues', () => {
     ]
     const { lines } = board({ inbox })
     expect(lines).toContain('Inbox  1 issues')
-    expect(section(lines, 'Inbox')).toHaveLength(1)
+    // S100: the outsiders are one row of their count, never a title.
+    expect(section(lines, 'Inbox')).toEqual([
+      expect.stringMatching(/#8 +From a member$/),
+      '  4 issues from outside, waiting for harness:accept',
+    ])
     expect(lines.join('\n')).not.toContain('From outside')
     const data = JSON.parse(board({ inbox, json: true }).stdout)
     expect(data.inbox.map((entry: { number: number }) => entry.number)).toEqual(
@@ -907,6 +924,154 @@ describe('board.sh, the inbox is the open issues', () => {
     expect(section(lines, 'Inbox')[0]).toMatch(
       /#10 +a title with a tab and a second line$/,
     )
+  })
+
+  // S100. A skip label takes an issue off the board and leaves it open; the
+  // accept label, which only a collaborator can put, lets the issue of an
+  // outsider in. Until then the outsiders are a count, never a title.
+  it('leaves out an issue by a collaborator that carries a skip label', () => {
+    const agents = withPolicy(template, (block) => {
+      block.inbox_skip_labels = ['harness:skip', 'discussion']
+    })
+    const inbox = [
+      issue(30, 'Kept', { labels: ['bug'] }),
+      issue(31, 'An epic that stays open', { labels: ['harness:skip'] }),
+      issue(32, 'A discussion', { labels: ['discussion', 'bug'] }),
+    ]
+    const { lines, status } = board({ inbox, agents })
+    expect(status).toBe(0)
+    expect(lines).toContain('Inbox  1 issues')
+    expect(section(lines, 'Inbox')).toHaveLength(1)
+    expect(lines.join('\n')).not.toContain('An epic that stays open')
+    expect(lines.join('\n')).not.toContain('A discussion')
+    const data = JSON.parse(board({ inbox, agents, json: true }).stdout)
+    expect(data.inbox.map((entry: { number: number }) => entry.number)).toEqual(
+      [30],
+    )
+  })
+
+  it('counts the issues from outside without the accept label, and prints no title', () => {
+    const inbox = [
+      issue(40, 'From a member'),
+      issue(41, 'Crafted text from outside', { association: 'NONE' }),
+      issue(42, 'More text from outside', { association: 'CONTRIBUTOR' }),
+    ]
+    const { lines, status } = board({ inbox })
+    expect(status).toBe(0)
+    expect(lines).toContain('Inbox  1 issues')
+    expect(section(lines, 'Inbox')).toEqual([
+      expect.stringMatching(/#40 +From a member$/),
+      '  2 issues from outside, waiting for harness:accept',
+    ])
+    expect(lines.join('\n')).not.toContain('text from outside')
+    const data = JSON.parse(board({ inbox, json: true }).stdout)
+    expect(data.inbox.map((entry: { number: number }) => entry.number)).toEqual(
+      [40],
+    )
+  })
+
+  it('prints no line of outsiders when there is none', () => {
+    const { lines } = board({ inbox: [issue(43, 'From a member')] })
+    expect(lines.join('\n')).not.toContain('issues from outside')
+    expect(board({ inbox: [] }).lines.join('\n')).not.toContain(
+      'issues from outside',
+    )
+  })
+
+  it('lists the issue of an outsider that carries the accept label', () => {
+    const inbox = [
+      issue(44, 'Vouched for by a collaborator', {
+        association: 'NONE',
+        labels: ['harness:accept'],
+      }),
+    ]
+    const { lines } = board({ inbox })
+    expect(section(lines, 'Inbox')).toEqual([
+      expect.stringMatching(/#44 +Vouched for by a collaborator$/),
+    ])
+    const data = JSON.parse(board({ inbox, json: true }).stdout)
+    expect(data.inbox.map((entry: { number: number }) => entry.number)).toEqual(
+      [44],
+    )
+  })
+
+  it('leaves out an issue with both the accept and a skip label: the skip wins', () => {
+    const inbox = [
+      issue(45, 'Accepted and skipped', {
+        association: 'NONE',
+        labels: ['harness:accept', 'harness:skip'],
+      }),
+      issue(46, 'A member, accepted and skipped', {
+        labels: ['harness:accept', 'harness:skip'],
+      }),
+    ]
+    const { lines } = board({ inbox })
+    expect(lines).toContain('Inbox  0 issues  inbox empty')
+    expect(lines.join('\n')).not.toContain('Accepted and skipped')
+    expect(lines.join('\n')).not.toContain('issues from outside')
+    const data = JSON.parse(board({ inbox, json: true }).stdout)
+    expect(data.inbox).toEqual([])
+  })
+
+  it('reads the labels from the block, not a name written in the script', () => {
+    const agents = withPolicy(template, (block) => {
+      block.inbox_skip_labels = ['wontfix']
+      block.inbox_accept_label = 'triaged'
+    })
+    const inbox = [
+      issue(47, 'Skipped here', { labels: ['wontfix'] }),
+      issue(48, 'Not skipped here', { labels: ['harness:skip'] }),
+      issue(49, 'Triaged outsider', {
+        association: 'NONE',
+        labels: ['triaged'],
+      }),
+      issue(50, 'Untriaged outsider', {
+        association: 'NONE',
+        labels: ['harness:accept'],
+      }),
+    ]
+    const { lines } = board({ inbox, agents })
+    expect(section(lines, 'Inbox')).toEqual([
+      expect.stringMatching(/#48 +Not skipped here$/),
+      expect.stringMatching(/#49 +Triaged outsider$/),
+      '  1 issues from outside, waiting for triaged',
+    ])
+  })
+
+  // The board never turns a file it reads into an exit 1: a block it cannot
+  // read is the reason policy_why gives, in the Inbox section, and the rest of
+  // the screen is the same. No title is printed, since none can be told apart.
+  it('prints the reason in the Inbox section when the block cannot be read', () => {
+    const inbox = [issue(51, 'A title that is not printed')]
+    const prs = JSON.stringify([pr(34, 'An open PR', ['tier:1'])])
+    for (const agents of [
+      null,
+      withPolicy(template, (block) => {
+        delete block.inbox_accept_label
+      }),
+    ]) {
+      const { lines, status } = board({ inbox, prs, agents })
+      expect(status).toBe(0)
+      const rows = section(lines, 'Inbox')
+      expect(rows).toHaveLength(1)
+      expect(rows[0]).toMatch(/run \/harness-init local$/)
+      expect(lines.join('\n')).not.toContain('A title that is not printed')
+      expect(section(lines, 'Open PRs')).toHaveLength(1)
+      const json = board({ inbox, prs, agents, json: true })
+      expect(json.status).toBe(0)
+      expect(JSON.parse(json.stdout).inbox).toBeNull()
+    }
+    expect(
+      section(
+        board({
+          inbox,
+          agents: withPolicy(template, (block) => {
+            delete block.inbox_accept_label
+          }),
+        }).lines,
+        'Inbox',
+      )[0],
+    ).toContain('has no inbox_accept_label')
   })
 
   it('gives the count of issues as the fact of read the inbox', () => {
