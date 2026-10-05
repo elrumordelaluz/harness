@@ -330,6 +330,50 @@ describe('intent.sh new', () => {
     expect(result.status, result.stderr).toBe(0)
     expect(read(dir, '.harness/docs/intent/first.md')).toBe(skeleton)
   })
+
+  // /board answers an issue with `intent`: the skeleton names the issue it
+  // comes from, so whoever writes the ten lines rereads it from the file.
+  it('with --issue writes the Source line of the issue above the three sections', () => {
+    const { dir } = repo()
+    const url = 'https://github.test/o/r/issues/12'
+    const result = run(dir, ['new', 'from-issue', '--issue', '12'], {
+      STUB_ISSUE_URL: url,
+    })
+    expect(result.status, result.stderr).toBe(0)
+    expect(read(dir, '.harness/docs/intent/from-issue.md')).toBe(
+      `Source: #12 ${url}\n\n${skeleton}`,
+    )
+    expect(logs(dir).gh).toContain('issue view 12 --json url')
+  })
+
+  it.each([
+    [['--issue']],
+    [['--issue', '']],
+    [['--issue', 'x12']],
+    [['--other', '12']],
+  ])('refuses %j after the slug and touches nothing', (extra) => {
+    const { dir } = repo()
+    const result = run(dir, ['new', 'from-issue', ...extra])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('--issue')
+    expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
+    expect(existsSync(join(dir, '.harness/docs/intent/from-issue.md'))).toBe(
+      false,
+    )
+  })
+
+  it('refuses an issue whose url gh cannot read, and touches nothing', () => {
+    const { dir } = repo()
+    const result = run(dir, ['new', 'from-issue', '--issue', '12'], {
+      STUB_FAIL: 'issue view',
+    })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('#12')
+    expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
+    expect(existsSync(join(dir, '.harness/docs/intent/from-issue.md'))).toBe(
+      false,
+    )
+  })
 })
 
 describe('intent.sh open', () => {
@@ -544,6 +588,29 @@ describe('intent.sh new, with docs_mode main', () => {
     expect(result.stdout).toContain('.harness/bin/intent.sh open export-pdf')
   })
 
+  it('with --issue writes the Source line of the issue above the three sections', () => {
+    const { dir } = repo(suMain)
+    const url = 'https://github.test/o/r/issues/12'
+    const result = run(dir, ['new', 'from-issue', '--issue', '12'], {
+      STUB_ISSUE_URL: url,
+    })
+    expect(result.status, result.stderr).toBe(0)
+    expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main')
+    const file = read(dir, '.harness/docs/intent/from-issue.md')
+    expect(file.split('\n')[0]).toBe(`Source: #12 ${url}`)
+    expect(file).toBe(`Source: #12 ${url}\n\n${skeleton}`)
+  })
+
+  it('refuses --issue without a number', () => {
+    const { dir } = repo(suMain)
+    const result = run(dir, ['new', 'from-issue', '--issue'])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('--issue')
+    expect(existsSync(join(dir, '.harness/docs/intent/from-issue.md'))).toBe(
+      false,
+    )
+  })
+
   it('moves to the default branch, brought up to date, from wherever it runs', () => {
     const { dir } = repo(suMain)
     git(dir, 'switch', '-q', '-c', 'slice/S01-x')
@@ -607,6 +674,46 @@ describe('intent.sh open, with docs_mode main', () => {
     expect(result.stdout).toContain(git(dir, 'rev-parse', '--short', 'HEAD'))
     expect(result.stdout).toContain('/spec .harness/docs/intent/export-pdf.md')
     expect(logs(dir).gh).toBe('')
+  })
+
+  // The Source line /board's `intent` answer puts above the sections is
+  // not a section: open neither counts it nor drops it.
+  it('commits an intent that opens with the Source line of its issue, the line kept', () => {
+    const { dir, origin } = repo(suMain)
+    const url = 'https://github.test/o/r/issues/12'
+    expect(
+      run(dir, ['new', 'export-pdf', '--issue', '12'], { STUB_ISSUE_URL: url })
+        .status,
+    ).toBe(0)
+    write(dir, {
+      '.harness/docs/intent/export-pdf.md': `Source: #12 ${url}\n\n${filled}`,
+    })
+    const result = run(dir, ['open', 'export-pdf'])
+    expect(result.status, result.stderr).toBe(0)
+    expect(git(dir, 'log', '-1', '--format=%s')).toBe(
+      'docs(intent): export-pdf',
+    )
+    const committed = git(
+      dir,
+      'show',
+      'HEAD:.harness/docs/intent/export-pdf.md',
+    )
+    expect(committed.split('\n')[0]).toBe(`Source: #12 ${url}`)
+    expect(committed).toContain('## Problem')
+    expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(
+      git(dir, 'rev-parse', 'HEAD'),
+    )
+  })
+
+  it('refuses an empty section of an intent that opens with the Source line', () => {
+    const { dir, origin } = repo(suMain)
+    expect(run(dir, ['new', 'half', '--issue', '12']).status).toBe(0)
+    const before = git(origin, 'rev-parse', 'refs/heads/main')
+    const result = run(dir, ['open', 'half'])
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('Problem')
+    expect(result.stderr).not.toContain('Source')
+    expect(git(origin, 'rev-parse', 'refs/heads/main')).toBe(before)
   })
 
   it('takes the slug when named', () => {
