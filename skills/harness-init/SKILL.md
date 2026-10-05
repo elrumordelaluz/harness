@@ -260,8 +260,11 @@ hook is copied: the bootstrap fetches them into `.harness/bin/`, ignored.
    `parked.md` from `templates/docs/parked.md`, each written only if it is
    not there: their entries belong to the repo, and a rerun that overwrote
    them would throw away the one place the other skills are allowed to write
-   and the list of what waits on purpose. The project's own `docs/`, if it
-   has one, stays as it is.
+   and the list of what waits on purpose. Next to them `.harness/README.md`
+   from `templates/harness/README.md`, the page for the human who meets the
+   harness first, also written only if it is not there: a team may rewrite it
+   for its own newcomers. The project's own `docs/`, if it has one, stays as
+   it is.
 7. **`.claude/settings.json`**, tracked, merged with the hooks and the
    allowlist of `templates/settings.json`: the `SessionStart` hook that runs
    `.harness/bootstrap.sh`, the two `PreToolUse` hooks and the allowlist for
