@@ -20,8 +20,10 @@
 # a repo mounted from an older template that says the same version keeps
 # working, and a block that says a version this script has never read stops
 # its readers, since a key read wrong is worse than a key not read at all.
-POLICY_VERSIONS='1'
-POLICY_KEYS='version docs_mode sensitive_paths never_tier_0 human_gate_paths docs_extra_paths max_lines max_files'
+# Version 2 added the two keys of the inbox, and 1 is not read any more: a
+# repo at 1 starts over with stage local, which writes the keys it lacks.
+POLICY_VERSIONS='2'
+POLICY_KEYS='version docs_mode sensitive_paths never_tier_0 human_gate_paths docs_extra_paths max_lines max_files inbox_skip_labels inbox_accept_label'
 
 # The json fence under `## Policy block`, cut by awk. The one place that reads
 # the file: everything else here and in tier.sh asks for a key. The heading
@@ -60,8 +62,10 @@ policy_tool_missing() {
 }
 
 # Why the block cannot be read, one line, empty when it can. Four faults with
-# one answer: no fence at all, a fence jq refuses, a key missing, a version
-# this script does not know. Whoever reads the block stops on all four and
+# one answer: no fence at all, a fence jq refuses, a version this script does
+# not know, a key missing. The version comes before the keys: a block of an
+# older version lacks the keys that came after it, and its version is the
+# fault worth naming. Whoever reads the block stops on all four and
 # says which one it is, because a rule half read is a rule applied wrong: a
 # missing key does not widen anything, it leaves a list empty, and an empty
 # list is a gate that catches nothing. Every message of the four names the
@@ -84,19 +88,21 @@ policy_why() {
     echo "the policy block is not valid json: run /harness-init local"
     return 0
   fi
+  version="$(printf '%s\n' "$fence" | jq -r 'if has("version") then .version else empty end')"
+  if [ -n "$version" ]; then
+    case " $POLICY_VERSIONS " in
+      *" $version "*) ;;
+      *)
+        echo "the policy block says version $version and this harness reads $POLICY_VERSIONS: run /harness-init local"
+        return 0
+        ;;
+    esac
+  fi
   missing="$(printf '%s\n' "$fence" | jq -r --arg want "$POLICY_KEYS" '($want | split(" ")) - keys_unsorted | join(", ")')"
   if [ -n "$missing" ]; then
     echo "the policy block has no $missing: run /harness-init local"
     return 0
   fi
-  version="$(printf '%s\n' "$fence" | jq -r '.version')"
-  case " $POLICY_VERSIONS " in
-    *" $version "*) ;;
-    *)
-      echo "the policy block says version $version and this harness reads $POLICY_VERSIONS: run /harness-init local"
-      return 0
-      ;;
-  esac
 }
 
 # First pattern of $2 (one per line) that matches $1, empty when none does.

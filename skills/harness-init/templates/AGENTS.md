@@ -40,20 +40,21 @@ read sits in "Policy block", and that is where it is changed.
 - Human merge by path: `.harness/docs/intent/**`, `.harness/docs/specs/**`, `.harness/docs/backlog/**`, `.harness/docs/decisions/**`, `.harness/docs/review-log/**`, `.harness/docs/inbox.md`, `.harness/docs/parked.md`.
 - The tier says how much scrutiny is needed, `human_gate_paths` says who merges: CI turns it into the `human-gate` label, neither `automerge.yml` nor `policy.sh` merges it, not even at tier 0, and only a human removes the label.
 - Documents: on main. The files of `human_gate_paths` go on main with a commit, without a PR: the human's yes in the conversation is the approval and the commit is the record. The git hooks do not read this line: they read `docs_mode`, and with `main` they let through on main a commit made only of those files; on a team the key says `pr`, and the approval goes back to being the merge.
+- Inbox: the open issues of the repo, as `/board` reads them. An issue with any label of `inbox_skip_labels` stays open and leaves the board, and the first of the list is the label the harness puts on one. An issue by an author who is not a collaborator reaches the board only once a collaborator puts the label of `inbox_accept_label` on it, since only triage access can add a label; until then the board prints how many wait and never their titles. A skip label wins over the accept label.
 - Intent and spec: explicit approval. Board: review before the first PR. Tier 2 with an open `high` or `needs-human`, and tier 3: human merge. Audit: three automatic PRs a week.
 
 ## Policy block
 
 What the programs read. The two paragraphs above explain it in prose, this
 block states it: `.harness/bin/policy-lines.sh` extracts the fence and passes
-it to `jq`, and `tier.sh`, the git hooks, `intent.sh` and `park.sh` read it
+it to `jq`, and `tier.sh`, the git hooks, `intent.sh`, `park.sh` and `board.sh` read it
 from this file, `.harness/AGENTS.md`, and from no other. The globs sit in JSON
 strings, without backticks. Every key is required: whoever
 removes one does not widen the rule, they stop whoever reads it.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "docs_mode": "main",
   "sensitive_paths": [
     ".harness/stamp.json",
@@ -89,7 +90,9 @@ removes one does not widen the rule, they stop whoever reads it.
   ],
   "docs_extra_paths": [],
   "max_lines": 200,
-  "max_files": 8
+  "max_files": 8,
+  "inbox_skip_labels": ["harness:skip"],
+  "inbox_accept_label": "harness:accept"
 }
 ```
 
