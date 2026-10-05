@@ -1,7 +1,7 @@
 ---
 id: S102
 title: Lionel answers an issue on /board with one word, via, slice, intent or skip
-status: blocked
+status: todo
 blocked_by: S100
 tier: 2
 human: false
@@ -54,7 +54,3 @@ From the spec, binding here:
 - `gh issue *` joins the allowlist with S103; until it lands the session asks for each call, which does not block this slice.
 
 Manual check for the PR: run `/board` in this repo with one test issue open, answer `skip`, see the label and the comment on GitHub and the issue gone from the next board.
-
-## Blocked
-
-With the four answers on issues, `skills/board/SKILL.md` loses its three `docs(inbox):` model subjects, the skills hold 7 models, and `tests/architecture.test.ts` asserts at least 10 ("reads the models of every skill that commits"): may that floor go to 7, or must the count hold some other way?
