@@ -52,5 +52,6 @@ From the spec, binding here:
 - The question on an ADR in `blocked_by` (the fourth question of the skill today) stays as it is, with its commit.
 - With `docs_mode` on `pr` the skill still stops after the screen; the answers here are for `main`.
 - `gh issue *` joins the allowlist with S103; until it lands the session asks for each call, which does not block this slice.
+- Decided by Lionel on 2026-10-05, after the first run blocked on it: the floor of ten in `reads the models of every skill that commits` goes, and no smaller number takes its place. The collector of the model subjects in `tests/architecture.test.ts` stops reading only lines that start with `type(scope): ` and reads every occurrence of the pattern in a `SKILL.md`, inline and in backticks included, and every one passes `commitlint.sh`. A model can no longer hide from the check by moving into prose, which is what the floor guarded, and a model removed on purpose, like the three `docs(inbox):` of this slice, changes no number. A hit that is not a model to copy is skipped only by a marker written next to it, never by a count.
 
 Manual check for the PR: run `/board` in this repo with one test issue open, answer `skip`, see the label and the comment on GitHub and the issue gone from the next board.
