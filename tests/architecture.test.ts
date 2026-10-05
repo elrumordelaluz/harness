@@ -2621,6 +2621,28 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
   // this case's: the paragraph is word for word the same in five skills, held
   // so by `every skill carries the same harness guardrail`, and it moves in
   // all five at once, to `gh issue create`, with S103.
+  // S102: the accept label vouches for the author of an issue and for
+  // nobody who comments on it, so the read of 4 keeps the comments of the
+  // collaborators, the trust board.sh gives an author, and drops the rest.
+  it('reads the comments of an issue by collaborators only', () => {
+    const skill = squash(readFileSync(file, 'utf8'))
+    expect(
+      skill,
+      'the skill reads every comment of an issue: an outsider can comment on an accepted one',
+    ).not.toContain('`gh issue view <n> --json title,body,comments`')
+    for (const name of [
+      '.authorAssociation',
+      '"OWNER"',
+      '"MEMBER"',
+      '"COLLABORATOR"',
+    ]) {
+      expect(
+        skill,
+        `the read of an issue does not filter its comments on ${name}`,
+      ).toContain(name)
+    }
+  })
+
   it('answers issues and writes no line of .harness/docs/inbox.md', () => {
     const text = readFileSync(file, 'utf8')
     const description = squash(/^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '')
