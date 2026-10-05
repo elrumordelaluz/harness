@@ -41,6 +41,7 @@
       "Bash(git push*)",
       "Bash(gh pr *)",
       "Bash(gh label *)",
+      "Bash(gh issue *)",
       "Bash(gh run *)",
       "Bash(.harness/bin/tier.sh*)",
       "Bash(.harness/bin/test-weakening.sh*)",
