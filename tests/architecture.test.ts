@@ -2616,7 +2616,11 @@ describe('skills/board/SKILL.md wraps board.sh and closes the inbox', () => {
   })
   // S102: the inbox is the issues, and the skill writes no line of the file.
   // Its description and the places it writes say so, and no command of the
-  // skill commits or stages `.harness/docs/inbox.md`.
+  // skill commits or stages `.harness/docs/inbox.md`. The guardrail on the
+  // harness of the repo still says its dated line in that file, and it is not
+  // this case's: the paragraph is word for word the same in five skills, held
+  // so by `every skill carries the same harness guardrail`, and it moves in
+  // all five at once, to `gh issue create`, with S103.
   it('answers issues and writes no line of .harness/docs/inbox.md', () => {
     const text = readFileSync(file, 'utf8')
     const description = squash(/^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '')
