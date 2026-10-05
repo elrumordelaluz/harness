@@ -1,15 +1,17 @@
 // Behaviour of .harness/bin/board.sh, the screen someone reads when they open a
-// cold session: the slices of .harness/docs/backlog/ that are still open, the lines of
-// .harness/docs/inbox.md and the open PRs, and the same data as one object under
-// --json. Each case is a throwaway git repo whose docs/ the test writes, so
-// the test covers the shell on real files and not a port of its rules, and
+// cold session: the slices of .harness/docs/backlog/ that are still open, the
+// open issues of the repo and the open PRs, and the same data as one object
+// under --json. Each case is a throwaway git repo whose docs/ the test writes,
+// so the test covers the shell on real files and not a port of its rules, and
 // `gh` is the stub in tests/fixtures/bin, which answers `pr list` from
-// STUB_PRS and fails the call named by STUB_FAIL.
+// STUB_PRS, `gh api` on the issues from STUB_ISSUES and fails the call named
+// by STUB_FAIL.
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs'
@@ -89,7 +91,11 @@ type Options = {
   slices?: Slice[]
   // branch names under refs/remotes/origin/, the claim of a slice: S29
   branches?: string[]
-  inbox?: string[]
+  // the answer of the issues endpoint, serialized into STUB_ISSUES: S99
+  inbox?: unknown[]
+  // the lines of the old .harness/docs/inbox.md, which the board no longer
+  // reads; no file when undefined: S99
+  inboxFile?: string[]
   // file name in .harness/docs/decisions/ to its content
   decisions?: Record<string, string>
   specs?: Spec[]
@@ -167,13 +173,14 @@ function board(opts: Options = {}): {
   if (opts.harnessRepo) {
     mkdirSync(join(dir, 'skills/harness-init/templates'), { recursive: true })
   }
-  const lines = opts.inbox ?? []
-  writeFileSync(
-    join(dir, '.harness/docs/inbox.md'),
-    `# Inbox\n\nThe prose at the top, which is not an entry.\n\n${lines
-      .map((line) => `${line}\n`)
-      .join('')}`,
-  )
+  if (opts.inboxFile !== undefined) {
+    writeFileSync(
+      join(dir, '.harness/docs/inbox.md'),
+      `# Inbox\n\nThe prose at the top, which is not an entry.\n\n${opts.inboxFile
+        .map((line) => `${line}\n`)
+        .join('')}`,
+    )
+  }
   if (opts.parked !== undefined) {
     writeFileSync(
       join(dir, '.harness/docs/parked.md'),
@@ -224,6 +231,7 @@ function board(opts: Options = {}): {
       GH_LOG: log,
       GH_COMMENTS: join(dir, 'comments.txt'),
       STUB_PRS: opts.prs ?? '[]',
+      STUB_ISSUES: JSON.stringify(opts.inbox ?? []),
       ...(opts.fail === undefined ? {} : { STUB_FAIL: opts.fail }),
     },
   })
@@ -296,6 +304,35 @@ const pr = (number: number, title: string, labels: string[]): unknown => ({
   number,
   title,
   labels: labels.map((name) => ({ name })),
+})
+
+// One entry of the issues endpoint as GitHub answers it, a collaborator's
+// issue by default. `pr` makes it the entry of a PR, which the endpoint
+// returns with the issues: S99.
+const issue = (
+  number: number,
+  title: string,
+  {
+    association = 'MEMBER',
+    labels = [],
+    date = '2026-09-16',
+    pr = false,
+  }: {
+    association?: string
+    labels?: string[]
+    date?: string
+    pr?: boolean
+  } = {},
+): unknown => ({
+  number,
+  title,
+  html_url: `https://github.test/o/r/issues/${number}`,
+  created_at: `${date}T09:30:00Z`,
+  author_association: association,
+  labels: labels.map((name) => ({ name })),
+  ...(pr
+    ? { pull_request: { url: `https://api.github.test/o/r/pulls/${number}` } }
+    : {}),
 })
 
 // S56: the first line of the screen says which commit of the harness each
@@ -702,23 +739,183 @@ describe('the Slice section counts the done and lists the rest', () => {
   })
 })
 
-describe('the Inbox section lists the open lines', () => {
-  it('prints the date and the text of every line', () => {
+describe('the Inbox section lists the open issues', () => {
+  it('prints the date, the number and the title of every issue', () => {
     const { stdout } = board({
       inbox: [
-        '- 2026-09-15: the `role` of a verdict does not reach the review log',
-        '- 2026-09-16: the tier line in the AGENTS.md template is old',
+        issue(12, 'the `role` of a verdict does not reach the review log', {
+          date: '2026-09-15',
+        }),
+        issue(13, 'the tier line in the AGENTS.md template is old', {
+          date: '2026-09-16',
+        }),
       ],
     })
     expect(stdout).toContain('2026-09-15')
+    expect(stdout).toContain('#12')
     expect(stdout).toContain('the `role` of a verdict')
     expect(stdout).toContain('2026-09-16')
+    expect(stdout).toContain('#13')
     expect(stdout).toContain('the tier line')
   })
+})
 
-  it('does not take the prose of the file for a line', () => {
-    const { stdout } = board({})
-    expect(stdout).not.toContain('The prose at the top')
+// S99. The inbox is the open issues of the repo, read with one call to
+// `gh api`, and only those a collaborator wrote: the endpoint answers the PRs
+// too, and the issues of anyone who can open one.
+describe('board.sh, the inbox is the open issues', () => {
+  it('lists an issue by an owner, a member or a collaborator, in the section and in --json', () => {
+    const inbox = [
+      issue(3, 'Filed by the owner', {
+        association: 'OWNER',
+        date: '2026-09-14',
+        labels: ['bug'],
+      }),
+      issue(4, 'Filed by a member', { association: 'MEMBER' }),
+      issue(5, 'Filed by a collaborator', {
+        association: 'COLLABORATOR',
+        date: '2026-09-18',
+      }),
+    ]
+    const { lines, status, dir } = board({ inbox })
+    expect(status).toBe(0)
+    const rows = section(lines, 'Inbox')
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toMatch(/^ {2}2026-09-14 +#3 +Filed by the owner$/)
+    expect(rows[1]).toMatch(/^ {2}2026-09-16 +#4 +Filed by a member$/)
+    expect(rows[2]).toMatch(/^ {2}2026-09-18 +#5 +Filed by a collaborator$/)
+    expect(readFileSync(join(dir, 'gh.log'), 'utf8')).toContain(
+      'api repos/{owner}/{repo}/issues?state=open&per_page=100',
+    )
+    const data = JSON.parse(board({ inbox, json: true }).stdout)
+    expect(data.inbox).toHaveLength(3)
+    expect(data.inbox[0]).toMatchObject({
+      number: 3,
+      title: 'Filed by the owner',
+      date: '2026-09-14',
+      labels: ['bug'],
+    })
+    expect(data.inbox.map((entry: { number: number }) => entry.number)).toEqual(
+      [3, 4, 5],
+    )
+  })
+
+  it('leaves out an entry that carries a pull_request key', () => {
+    const inbox = [
+      issue(6, 'An issue', { association: 'OWNER' }),
+      issue(7, 'A PR the endpoint returns too', {
+        association: 'OWNER',
+        pr: true,
+      }),
+    ]
+    const { lines } = board({ inbox })
+    expect(section(lines, 'Inbox')).toHaveLength(1)
+    expect(lines.join('\n')).not.toContain('A PR the endpoint returns too')
+    const data = JSON.parse(board({ inbox, json: true }).stdout)
+    expect(data.inbox.map((entry: { number: number }) => entry.number)).toEqual(
+      [6],
+    )
+  })
+
+  it('leaves out an issue by an author who is not a collaborator', () => {
+    const inbox = [
+      issue(8, 'From a member', { association: 'MEMBER' }),
+      ...['CONTRIBUTOR', 'FIRST_TIME_CONTRIBUTOR', 'FIRST_TIMER', 'NONE'].map(
+        (association, i) =>
+          issue(20 + i, `From outside, ${association}`, { association }),
+      ),
+    ]
+    const { lines } = board({ inbox })
+    expect(lines).toContain('Inbox  1 issues')
+    expect(section(lines, 'Inbox')).toHaveLength(1)
+    expect(lines.join('\n')).not.toContain('From outside')
+    const data = JSON.parse(board({ inbox, json: true }).stdout)
+    expect(data.inbox.map((entry: { number: number }) => entry.number)).toEqual(
+      [8],
+    )
+  })
+
+  it('says gh not available, null in --json and exit 0, with gh missing', () => {
+    const { lines, status } = board({ noGh: true })
+    expect(status).toBe(0)
+    expect(section(lines, 'Inbox')).toEqual(['  gh not available'])
+    const json = board({ noGh: true, json: true })
+    expect(json.status).toBe(0)
+    expect(JSON.parse(json.stdout).inbox).toBeNull()
+  })
+
+  it('says gh not available, null in --json and exit 0, when the gh api call fails', () => {
+    const inbox = [issue(9, 'Never read', { association: 'OWNER' })]
+    const prs = JSON.stringify([pr(34, 'An open PR', ['tier:1'])])
+    const { lines, status } = board({ inbox, prs, fail: 'api' })
+    expect(status).toBe(0)
+    expect(section(lines, 'Inbox')).toEqual(['  gh not available'])
+    // The two reads are independent: the PRs still answer.
+    expect(section(lines, 'Open PRs')).toHaveLength(1)
+    const json = board({ inbox, prs, fail: 'api', json: true })
+    expect(json.status).toBe(0)
+    const data = JSON.parse(json.stdout)
+    expect(data.inbox).toBeNull()
+    expect(data.prs).toHaveLength(1)
+  })
+
+  it('prints a count of zero with no open issue, and [] in --json', () => {
+    const { lines, status } = board({ inbox: [] })
+    expect(status).toBe(0)
+    expect(lines).toContain('Inbox  0 issues  inbox empty')
+    expect(section(lines, 'Inbox  0 issues')).toEqual([])
+    expect(JSON.parse(board({ inbox: [], json: true }).stdout).inbox).toEqual(
+      [],
+    )
+  })
+
+  it('prints 100+ in the head when the answer has 100 entries', () => {
+    const inbox = Array.from({ length: 100 }, (_, i) =>
+      issue(i + 1, `Issue ${i + 1}`, {
+        date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
+      }),
+    )
+    const { lines, status } = board({ inbox })
+    expect(status).toBe(0)
+    expect(lines).toContain('Inbox  100+ issues')
+    expect(lines.join('\n')).not.toContain('Inbox  100 issues')
+    const fewer = board({ inbox: inbox.slice(0, 99) })
+    expect(fewer.lines).toContain('Inbox  99 issues')
+  })
+
+  it('no longer opens .harness/docs/inbox.md', () => {
+    const { lines, status } = board({
+      inboxFile: ['- 2026-09-16: a dated line of the old file'],
+    })
+    expect(status).toBe(0)
+    expect(lines).toContain('Inbox  0 issues  inbox empty')
+    expect(lines.join('\n')).not.toContain('a dated line of the old file')
+    const data = JSON.parse(
+      board({
+        inboxFile: ['- 2026-09-16: a dated line of the old file'],
+        json: true,
+      }).stdout,
+    )
+    expect(data.inbox).toEqual([])
+  })
+
+  it('flattens tabs and newlines of a title onto its row', () => {
+    const { lines } = board({
+      inbox: [issue(10, 'a title\twith a tab\nand a second line')],
+    })
+    expect(section(lines, 'Inbox')).toHaveLength(1)
+    expect(section(lines, 'Inbox')[0]).toMatch(
+      /#10 +a title with a tab and a second line$/,
+    )
+  })
+
+  it('gives the count of issues as the fact of read the inbox', () => {
+    const { lines } = board({
+      inbox: [issue(11, 'One'), issue(12, 'Two'), issue(13, 'Three')],
+    })
+    expect(lines[lines.length - 1]).toBe(
+      'next action: read the inbox, because no other rule: 3 issues',
+    )
   })
 })
 
@@ -810,7 +1007,7 @@ describe('an empty section is a line that says so', () => {
     const { lines, status } = board({ slices: [], inbox: [], prs: '[]' })
     expect(status).toBe(0)
     expect(lines).toContain('Slices  0 done, 0 open  no open slices')
-    expect(lines).toContain('Inbox  0 lines  inbox empty')
+    expect(lines).toContain('Inbox  0 issues  inbox empty')
     expect(lines).toContain('Open PRs  no open PRs')
   })
 
@@ -839,7 +1036,7 @@ describe('an empty section is a line that says so', () => {
     expect(status).toBe(0)
     for (const head of [
       'Slices  0 done, 0 open  no open slices',
-      'Inbox  0 lines  inbox empty',
+      'Inbox  0 issues  inbox empty',
       'Open PRs  no open PRs',
       'Waiting on a human  nothing waits for a human',
       'Parked  nothing parked',
@@ -885,7 +1082,7 @@ describe('gh missing or logged out is a line, not a failure', () => {
 
 // "One screen" is forty lines. The fixture is the backlog of this repo at the
 // time of the slice, rounded up: twenty slices, fifteen done, seven inbox
-// lines and two open PRs.
+// issues and two open PRs.
 describe('the screen fits in forty lines', () => {
   const slices: Slice[] = Array.from({ length: 20 }, (_, i) => ({
     id: `S${String(i + 1).padStart(2, '0')}`,
@@ -894,17 +1091,19 @@ describe('the screen fits in forty lines', () => {
     blocked_by: i === 19 ? 'S19' : 'none',
     tier: 2,
   }))
-  const inbox = Array.from(
-    { length: 7 },
-    (_, i) =>
-      `- 2026-09-1${i}: an inbox line as long as the real ones, which says a fact, its reason and what should be done, and does not fit one terminal line`,
+  const inbox = Array.from({ length: 7 }, (_, i) =>
+    issue(
+      i + 1,
+      'an inbox issue as long as the real ones, which says a fact, its reason and what should be done, and does not fit one terminal line',
+      { date: `2026-09-1${i}` },
+    ),
   )
   const prs = JSON.stringify([
     pr(34, 'The first open PR', ['tier:2']),
     pr(35, 'The second open PR', ['tier:1']),
   ])
 
-  it('stays under forty on twenty slices and seven inbox lines', () => {
+  it('stays under forty on twenty slices and seven inbox issues', () => {
     const { lines, status } = board({ slices, inbox, prs })
     expect(status).toBe(0)
     expect(lines.length).toBeLessThanOrEqual(40)
@@ -1000,10 +1199,16 @@ describe('the screen fits in forty lines', () => {
   // counts its own lines and gives rows up in a fixed order: the inbox from
   // its newest line back, then the open slices nobody can take, in one row of
   // ids. What a session acts on keeps its rows.
-  const twenty = Array.from(
+  const twentyDates = Array.from(
     { length: 20 },
-    (_, i) =>
-      `- 2026-09-${String(i + 1).padStart(2, '0')}: an inbox line as long as the real ones, which says a fact, its reason and what should be done, and does not fit one terminal line`,
+    (_, i) => `2026-09-${String(i + 1).padStart(2, '0')}`,
+  )
+  const twenty = twentyDates.map((date, i) =>
+    issue(
+      i + 1,
+      'an inbox issue as long as the real ones, which says a fact, its reason and what should be done, and does not fit one terminal line',
+      { date },
+    ),
   )
   const sliceRows = (lines: string[]): string[] =>
     lines.filter((line) => /^\s+S\d+\s/.test(line))
@@ -1064,11 +1269,11 @@ describe('the screen fits in forty lines', () => {
     })),
   ]
 
-  it('cuts the inbox to its oldest lines when twenty of them pass forty', () => {
+  it('cuts the inbox to its oldest issues when twenty of them pass forty', () => {
     const { lines, status } = board({ slices, inbox: twenty, prs })
     expect(status).toBe(0)
     expect(lines).toHaveLength(40)
-    expect(lines).toContain('Inbox  20 lines')
+    expect(lines).toContain('Inbox  20 issues')
     const rows = section(lines, 'Inbox')
     expect(rows).toHaveLength(17)
     expect(dates(rows.slice(0, 16))).toEqual(
@@ -1081,7 +1286,9 @@ describe('the screen fits in forty lines', () => {
     expect(sliceRows(lines)).toHaveLength(5)
   })
 
-  it('keeps the oldest lines by their date, in the order of the file', () => {
+  // The endpoint answers the newest first: the board reads them by date,
+  // oldest first, whatever order the answer has.
+  it('keeps the oldest issues by their date, oldest first', () => {
     const { lines } = board({
       slices,
       inbox: [...twenty].reverse(),
@@ -1089,19 +1296,14 @@ describe('the screen fits in forty lines', () => {
     })
     expect(lines).toHaveLength(40)
     const rows = section(lines, 'Inbox')
-    expect(dates(rows.slice(0, 16))).toEqual(
-      Array.from(
-        { length: 16 },
-        (_, i) => `2026-09-${String(16 - i).padStart(2, '0')}`,
-      ),
-    )
+    expect(dates(rows.slice(0, 16))).toEqual(twentyDates.slice(0, 16))
     expect(rows[16]).toBe('  and 4 more')
   })
 
   it('gives up only the inbox rows it needs', () => {
     const { lines } = board({ slices, inbox: twenty.slice(0, 18), prs })
     expect(lines).toHaveLength(40)
-    expect(lines).toContain('Inbox  18 lines')
+    expect(lines).toContain('Inbox  18 issues')
     expect(section(lines, 'Inbox')).toHaveLength(17)
     expect(section(lines, 'Inbox')[16]).toBe('  and 2 more')
     expect(sliceRows(lines)).toHaveLength(5)
@@ -1130,7 +1332,7 @@ describe('the screen fits in forty lines', () => {
     expect(row(lines, 'S17')).toMatch(/^ {2}S17 +todo +none /)
     expect(row(lines, 'S18')).toMatch(/^ {2}S18 +in progress +none /)
     expect(row(lines, 'S19')).toMatch(/^ {2}S19 +in progress +none /)
-    expect(lines).toContain('Inbox  20 lines')
+    expect(lines).toContain('Inbox  20 issues')
     expect(section(lines, 'Inbox')).toEqual(['  and 20 more'])
     // What a session acts on is whole.
     expect(section(lines, 'Open PRs')).toHaveLength(6)
@@ -1164,7 +1366,7 @@ describe('the screen fits in forty lines', () => {
     expect(lines).toContain('Slices  0 done, 33 open')
     expect(sliceRows(lines)).toHaveLength(30)
     expect(lines).toContain('  waiting  S40, S41, S42')
-    expect(lines).toContain('Inbox  20 lines')
+    expect(lines).toContain('Inbox  20 issues')
     expect(section(lines, 'Inbox')).toEqual(['  and 20 more'])
     expect(section(lines, 'Open PRs')).toHaveLength(2)
   })
@@ -1179,10 +1381,10 @@ describe('the screen fits in forty lines', () => {
       expect(status).toBe(0)
       const data = JSON.parse(stdout)
       expect(data.inbox).toHaveLength(20)
-      expect(data.inbox.map((line: { date: string }) => line.date)).toEqual(
-        twenty.map((line) => line.slice(2, 12)),
+      expect(data.inbox.map((entry: { date: string }) => entry.date)).toEqual(
+        twentyDates,
       )
-      expect(data.inbox[19].text).toMatch(/does not fit one terminal line$/)
+      expect(data.inbox[19].title).toMatch(/does not fit one terminal line$/)
       expect(data.slices).toHaveLength(count)
     }
   })
@@ -1845,7 +2047,10 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
         '2. Tipoff ready.',
       ]),
     },
-    inbox: ['- 2026-09-15: a line', '- 2026-09-16: another line'],
+    inbox: [
+      issue(1, 'an issue', { date: '2026-09-15' }),
+      issue(2, 'another issue', { date: '2026-09-16' }),
+    ],
   })
   const notEligible = (o: Options): Options => ({
     ...o,
@@ -1873,9 +2078,10 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
   it('2. an eligible slice, on a board the screen has to cut', () => {
     const { lines, status } = board({
       slices: [{ id: 'S18', title: 'The eligible slice', status: 'todo' }],
-      inbox: Array.from(
-        { length: 40 },
-        (_, i) => `- 2026-09-${String((i % 28) + 1).padStart(2, '0')}: a line`,
+      inbox: Array.from({ length: 40 }, (_, i) =>
+        issue(i + 1, 'an issue', {
+          date: `2026-09-${String((i % 28) + 1).padStart(2, '0')}`,
+        }),
       ),
     })
     expect(status).toBe(0)
@@ -1982,14 +2188,14 @@ describe('the next action is the first rule that fires, in a fixed order', () =>
       ],
     })
     expect(last(lines)).toBe(
-      'next action: read the inbox, because no other rule: 2 lines',
+      'next action: read the inbox, because no other rule: 2 issues',
     )
   })
 
   it('6. read the inbox, when there is no plan', () => {
     const { lines } = board({ ...specced(everything()), decisions: {} })
     expect(last(lines)).toBe(
-      'next action: read the inbox, because no other rule: 2 lines',
+      'next action: read the inbox, because no other rule: 2 issues',
     )
   })
 
@@ -2039,7 +2245,7 @@ describe('eligible is the definition of /next', () => {
     const { lines } = board({ slices })
     return lines[lines.length - 1]
   }
-  const inbox = 'next action: read the inbox, because no other rule: 0 lines'
+  const inbox = 'next action: read the inbox, because no other rule: 0 issues'
 
   it('takes a todo slice whose blocked_by are all done', () => {
     expect(
@@ -2183,7 +2389,7 @@ describe('a slice with its branch on the remote is in progress', () => {
       branches: ['slice/S02-a-slice'],
     })
     expect(last(lines)).toBe(
-      'next action: read the inbox, because no other rule: 0 lines',
+      'next action: read the inbox, because no other rule: 0 issues',
     )
   })
 
@@ -2261,7 +2467,7 @@ describe('--json is the data model behind the screen', () => {
     const { stdout, status } = board({
       json: true,
       slices: [{ id: 'S01', title: 'A slice', status: 'todo' }],
-      inbox: ['- 2026-09-16: a line'],
+      inbox: [issue(1, 'an issue')],
       prs: JSON.stringify([pr(34, 'A PR', ['tier:1'])]),
     })
     expect(status).toBe(0)
@@ -2563,17 +2769,25 @@ describe('--json is the data model behind the screen', () => {
     expect(JSON.parse(stdout).harness).toEqual({ state: 'self', sha, date })
   })
 
-  it('carries the label names of every PR and the inbox lines', () => {
+  it('carries the label names of every PR and of every inbox issue', () => {
     const { stdout } = board({
       json: true,
-      inbox: ['- 2026-09-16: an inbox line'],
+      inbox: [issue(41, 'an inbox issue', { labels: ['bug', 'docs'] })],
       prs: JSON.stringify([pr(34, 'A PR', ['tier:2', 'human-gate'])]),
     })
     const data = JSON.parse(stdout)
     expect(data.prs).toEqual([
       { number: 34, title: 'A PR', labels: ['tier:2', 'human-gate'] },
     ])
-    expect(data.inbox).toEqual([{ date: '2026-09-16', text: 'an inbox line' }])
+    expect(data.inbox).toEqual([
+      {
+        number: 41,
+        title: 'an inbox issue',
+        date: '2026-09-16',
+        labels: ['bug', 'docs'],
+        url: 'https://github.test/o/r/issues/41',
+      },
+    ])
   })
 })
 

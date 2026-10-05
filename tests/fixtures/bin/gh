@@ -4,7 +4,9 @@
 # the PR head, its base, its labels, its comments, who merged it and its
 # checks, plus the default branch of the repo (a -q filter runs through jq, as
 # gh would). A `pr list` answers the open PRs of a head, STUB_PRS, empty by
-# default.
+# default. A `gh api` call on the issues of the repo answers STUB_ISSUES, the
+# JSON list the endpoint returns, `[]` by default, run through -q or --jq when
+# the call carries one.
 # STUB_BASE and STUB_DEFAULT_BRANCH default to main and not to empty, so that
 # every case written before the base existed keeps meaning what it meant: a PR
 # that lands where it should. Set either to the empty string to play a read
@@ -20,7 +22,7 @@ fi
 q=""; prev=""
 for a in "$@"; do
   case "$prev" in
-    -q) q="$a" ;;
+    -q | --jq) q="$a" ;;
     --body-file) { cat "$a"; echo; echo "----"; } >> "$GH_COMMENTS" ;;
     --body) { printf '%s\n' "$a"; echo "----"; } >> "$GH_COMMENTS" ;;
   esac
@@ -33,6 +35,7 @@ answer() {
   if [ -n "$q" ]; then jq -r "$q" <<<"$1"; else printf '%s' "$1"; fi
 }
 case "$*" in
+  "api "*issues*) answer "${STUB_ISSUES:-[]}" ;;
   *"pr list"*) printf '%s' "${STUB_PRS:-}" ;;
   *headRefOid*) printf '%s\n' "$STUB_HEAD" ;;
   *"--json baseRefName"*)
