@@ -1040,6 +1040,71 @@ describe('.harness/docs/README.md matches the template it was copied from', () =
   })
 })
 
+// S97: everything else stage local installs talks to an agent, and a human
+// who meets a refused commit in a project repo had nothing written for them.
+// The README of .harness/ is that page, kept short so it gets read, and this
+// repo carries the copy, equal to the template, like the README of the docs.
+describe('.harness/README.md matches the template it was copied from', () => {
+  const template = join(templates, 'harness/README.md')
+  const text = existsSync(template) ? readFileSync(template, 'utf8') : ''
+
+  it('is equal to skills/harness-init/templates/harness/README.md', () => {
+    expect(
+      existsSync(join(root, '.harness/README.md')) &&
+        readFileSync(join(root, '.harness/README.md'), 'utf8'),
+      '.harness/README.md is missing or drifted from skills/harness-init/templates/harness/README.md: change both, the template is what /harness-init local installs elsewhere',
+    ).toBe(text)
+  })
+
+  it('has at most 15 lines that are not empty', () => {
+    const lines = text.split('\n').filter((line) => line.trim() !== '')
+    expect(lines.length, 'the template is missing').toBeGreaterThan(0)
+    expect(
+      lines.length,
+      'the README for the newcomer grew past 15 lines: it is the page a human reads first, and a long one is not read',
+    ).toBeLessThanOrEqual(15)
+  })
+
+  it.each([
+    '.harness/AGENTS.md',
+    '.harness/docs/',
+    '.harness/bin/',
+    'pre-commit',
+    'commit-msg',
+    'pre-push',
+    'docs_mode',
+    'typecheck',
+    'test',
+    'format:check',
+    'build',
+  ])('names %s', (name) => {
+    expect(
+      text,
+      `skills/harness-init/templates/harness/README.md does not name ${name}`,
+    ).toContain(name)
+  })
+
+  it('step 6 of stage local writes it from the template', () => {
+    const skill = readFileSync(
+      join(root, 'skills/harness-init/SKILL.md'),
+      'utf8',
+    )
+    const stage = skill.slice(
+      skill.indexOf('\n## 2. Stage `local`'),
+      skill.indexOf('\n## 3. Stage `ci`'),
+    )
+    const step = stage.slice(stage.indexOf('\n6. **'), stage.indexOf('\n7. **'))
+    expect(
+      step,
+      'step 6 of stage local in skills/harness-init/SKILL.md does not write .harness/README.md',
+    ).toContain('.harness/README.md')
+    expect(
+      step,
+      'step 6 of stage local in skills/harness-init/SKILL.md does not name templates/harness/README.md',
+    ).toContain('templates/harness/README.md')
+  })
+})
+
 // S39. The contract leaves the prose: under a fixed heading the
 // .harness/AGENTS.md of this repo and its template carry a `json` fence with the eight keys the programs of the chain read,
 // and scripts/policy-lines.sh extracts it and passes it to jq. The heading,
