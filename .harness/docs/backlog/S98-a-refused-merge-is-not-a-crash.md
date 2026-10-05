@@ -1,7 +1,7 @@
 ---
 id: S98
 title: A merge GitHub refuses is reported as refused, not as a crashed judge
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
