@@ -1,7 +1,7 @@
 ---
 id: S103
 title: A skill or a subagent of /next files what it saw as an issue, with no question
-status: todo
+status: done
 blocked_by: none
 tier: 2
 human: false
