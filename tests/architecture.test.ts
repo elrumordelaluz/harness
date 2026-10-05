@@ -2273,7 +2273,9 @@ describe('every skill carries the same harness guardrail', () => {
     'repo of `pin.origin` of `.harness/stamp.json`, its `https://` URL cut to',
     '`<owner>/<name>`, on the current repo with no `-R` when the field is',
     'missing, and carry on with what is there; no line of',
-    '`.harness/docs/inbox.md`. Never rerun `/harness-init`, never edit a',
+    '`.harness/docs/inbox.md`. On another repo than the current one the body',
+    'says the defect of the harness and nothing else: no code, data, path or',
+    'secret of the project. Never rerun `/harness-init`, never edit a',
     'script, a hook, a workflow or the `AGENTS.md` of that repo: the fix',
     'belongs to the harness repo and comes back with the stage of',
     '`/harness-init` that owns the file. The only stop is a directory this',
@@ -3425,6 +3427,10 @@ describe('/next files issues and closes the one a slice was born from', () => {
       brief,
       `the subagent block of ${file} still asks for a dated line`,
     ).not.toContain('<YYYY-MM-DD>')
+    expect(
+      brief,
+      `the subagent block of ${file} lets a cross-repo issue carry the project: a private repo would leak into the harness repo`,
+    ).toContain('no code, data, path or secret of the project')
   })
 
   it('writes Fixes #<n> for a slice with spec: issue #<n>', () => {

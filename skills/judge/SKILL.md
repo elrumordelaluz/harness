@@ -67,10 +67,11 @@ sees to that, and a head judged here is never judged again by anyone.
   `pin.origin` of `.harness/stamp.json`, its `https://` URL cut to
   `<owner>/<name>`, on the current repo with no `-R` when the field is
   missing, and carry on with what is there; no line of
-  `.harness/docs/inbox.md`. Never rerun `/harness-init`, never edit a script,
-  a hook, a workflow or the `AGENTS.md` of that repo: the fix belongs to the
-  harness repo and comes back with the stage of `/harness-init` that owns the
-  file. The only stop is a directory this skill must write into that is not
+  `.harness/docs/inbox.md`. On another repo than the current one the body says
+  the defect of the harness and nothing else: no code, data, path or secret of
+  the project. Never rerun `/harness-init`, never edit a script, a hook, a
+  workflow or the `AGENTS.md` of that repo: the fix belongs to the harness repo
+  and comes back with the stage of `/harness-init` that owns the file. The only stop is a directory this skill must write into that is not
   there, which means there is no harness. If `gh` does not answer, say so in
   the hand-back and carry on.
 
