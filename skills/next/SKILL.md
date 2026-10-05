@@ -49,13 +49,16 @@ a whole board instead of one slice.
   wave carry on, and the one-line question reaches the human at the end.
 - **The harness of the repo you are working in is not yours to fix.** A
   template behind, a line missing in `AGENTS.md`, a script that misbehaves:
-  write one dated line in `.harness/docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
-  carry on with what is there. Never rerun `/harness-init`, never edit a
-  script, a hook, a workflow or the `AGENTS.md` of that repo: the fix belongs
-  to the harness repo and comes back with the stage of `/harness-init` that
-  owns the file. The only stop is a directory this skill must write into that
-  is not there, which means there is no harness. If `.harness/docs/inbox.md` alone is
-  missing, say so in the hand-back and do not create it.
+  file an issue with `gh issue create -R <owner/name>` on the repo of
+  `pin.origin` of `.harness/stamp.json`, its `https://` URL cut to
+  `<owner>/<name>`, on the current repo with no `-R` when the field is
+  missing, and carry on with what is there; no line of
+  `.harness/docs/inbox.md`. Never rerun `/harness-init`, never edit a script,
+  a hook, a workflow or the `AGENTS.md` of that repo: the fix belongs to the
+  harness repo and comes back with the stage of `/harness-init` that owns the
+  file. The only stop is a directory this skill must write into that is not
+  there, which means there is no harness. If `gh` does not answer, say so in
+  the hand-back and carry on.
 
 ## 1. Refuse early
 
@@ -234,11 +237,14 @@ worktree path>. Work only on that slice.
    in a commit on the default branch: the judge reads the touchpoints of
    the slice, and the PR is where the change is whole.
 6. Do not repair the harness of this repo. A template behind, a line
-   missing, a script that misbehaves: one dated line, `- <YYYY-MM-DD>:
-   <one line>`, in your report, and carry on. Never in .harness/docs/inbox.md on
-   your branch: that file is a human-merge path, a PR that touches it gets
-   human-gate and the policy does not merge it, and the judge reads it as
-   out of scope.
+   missing, a script that misbehaves: file it with gh issue create -R
+   <owner/name>, the repo of pin.origin of .harness/stamp.json cut from
+   its https:// URL, or on this repo with no -R when the field is
+   missing, with the slice id, the PR if there is one and what you saw in
+   the body; put its number in your report, and carry on. Never in .harness/docs/inbox.md on your branch:
+   that file is a human-merge path, a PR that touches it gets human-gate
+   and the policy does not merge it, and the judge reads it as out of
+   scope.
 
 If you cannot finish honestly, because a test would have to be weakened,
 because a decision the slice does not cover is needed, or because a
@@ -247,7 +253,8 @@ section saying what is missing in one line, commit, push, and report
 that instead. Do not guess the decision.
 
 Report back: the branch, the shas, the output of the two scripts, what
-the four commands said, and the one-line question if there is one.
+the four commands said, the numbers of the issues you filed, and the
+one-line question if there is one.
 Nothing about how you reasoned, and no retelling of the code.
 ```
 
@@ -343,8 +350,9 @@ finding. If you believe a finding is wrong, say so in one line with the
 reason and answer it anyway with the commit that makes the code say why,
 a comment or a test. Do not open a second judgement and do not touch the
 verdict by hand. If a fix would make the code say something the approved
-spec does not, do not fix it here: write one dated line in .harness/docs/inbox.md,
-it becomes a slice with spec: inbox (<date>), and say so in your report.
+spec does not, do not fix it here: file it with gh issue create, with the
+slice id, the PR and what you saw in the body, and put its number in your
+report.
 
 <the findings, as .harness/bin/judge.sh findings <role> prints them>
 ```
@@ -383,6 +391,9 @@ file; the "Declarations" boxes ticked as the slice really is, because the CI
 reads them and one ticked box makes the PR tier 2; "How to check by hand"
 copied from the slice's Notes, or `tests only` when it has none; then the
 declared `low` findings and the output of `tier.sh` and `test-weakening.sh`.
+A slice whose frontmatter says `spec: issue #<n>` gets `Fixes #<n>` in the
+body, so the merge closes the issue it was born from; any other `spec:` gets
+nothing of the kind.
 A blocked slice gets the same PR as a draft, with the `needs-human` label and
 its `## Blocked` line in the body.
 
@@ -465,9 +476,8 @@ Under them, only what a human has to act on:
 - the one-line question of every blocked slice, each with its slice id;
 - what the twenty-minute cap left open, if anything;
 - the worktrees `git worktree remove` refused, with their path, if any;
-- the inbox lines the subagents reported, verbatim, with one question:
-  whether to commit them on the default branch. `.harness/docs/inbox.md` goes on main
-  with the human's yes, and the hand-back is where the human is.
+- the numbers of the issues the subagents filed, with no question about
+  them: the next `/board` asks about each one.
 
 No retelling of the code, no summary of the diffs, no list of the files
 touched: all of it is in the PRs, and the whole point of the chain is that the

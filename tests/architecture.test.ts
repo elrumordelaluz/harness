@@ -2269,14 +2269,16 @@ describe('every skill carries the same harness guardrail', () => {
   const guardrail = [
     '- **The harness of the repo you are working in is not yours to fix.**',
     'A template behind, a line missing in `AGENTS.md`, a script that',
-    'misbehaves: write one dated line in `.harness/docs/inbox.md`,',
-    '`- <YYYY-MM-DD>: <one line>`, and carry on with what is there. Never',
-    'rerun `/harness-init`, never edit a script, a hook, a workflow or the',
-    '`AGENTS.md` of that repo: the fix belongs to the harness repo and comes',
-    'back with the stage of `/harness-init` that owns the file. The only stop',
-    'is a directory this skill must write into that is not there, which means',
-    'there is no harness. If `.harness/docs/inbox.md` alone is missing, say so in the',
-    'hand-back and do not create it.',
+    'misbehaves: file an issue with `gh issue create -R <owner/name>` on the',
+    'repo of `pin.origin` of `.harness/stamp.json`, its `https://` URL cut to',
+    '`<owner>/<name>`, on the current repo with no `-R` when the field is',
+    'missing, and carry on with what is there; no line of',
+    '`.harness/docs/inbox.md`. Never rerun `/harness-init`, never edit a',
+    'script, a hook, a workflow or the `AGENTS.md` of that repo: the fix',
+    'belongs to the harness repo and comes back with the stage of',
+    '`/harness-init` that owns the file. The only stop is a directory this',
+    'skill must write into that is not there, which means there is no',
+    'harness. If `gh` does not answer, say so in the hand-back and carry on.',
   ].join(' ')
 
   const squash = (text: string): string => text.replace(/\s+/g, ' ').trim()
@@ -2467,6 +2469,12 @@ describe('.claude/settings.json is the template without the verdict hook', () =>
     ).toEqual([
       '{ cd "$CLAUDE_PROJECT_DIR" && "$CLAUDE_PROJECT_DIR"/.harness/bootstrap.sh; } 2>&1 || true',
     ])
+  })
+
+  // S103: a skill or a subagent of /next files what it saw out of its scope
+  // with `gh issue create`, with no question, so the allowlist lets it.
+  it('the template allows gh issue', () => {
+    expect(theirs.permissions.allow).toContain('Bash(gh issue *)')
   })
 
   it('differs from the template in that hook and in nothing else', () => {
@@ -3389,6 +3397,47 @@ describe('a subagent of /next kills only the processes it started', () => {
         `the subagent block of ${file} does not say "${words}": a subagent whose suite hangs may kill by a pattern that reaches the other worktrees, and the suite of another slice ends at exit 143 with no output`,
       ).toContain(words)
     }
+  })
+})
+
+// S103. What a subagent of /next sees out of its scope is an issue it files,
+// not a dated line the human approves in the hand-back, and the PR of a
+// slice born from an issue closes it.
+describe('/next files issues and closes the one a slice was born from', () => {
+  const file = 'skills/next/SKILL.md'
+  const skill = readFileSync(join(root, file), 'utf8')
+  const flat = skill.replace(/\s+/g, ' ')
+  const start = skill.indexOf(
+    '```\nRead AGENTS.md, .harness/docs/codebase-map.md',
+  )
+  const end = start === -1 ? -1 : skill.indexOf('\n```', start + 3)
+  const brief =
+    start === -1 || end === -1
+      ? ''
+      : skill.slice(start, end).replace(/\s+/g, ' ')
+
+  it('the brief of the subagent files with gh issue create', () => {
+    expect(
+      brief,
+      `the subagent block of ${file} does not name gh issue create`,
+    ).toContain('gh issue create')
+    expect(
+      brief,
+      `the subagent block of ${file} still asks for a dated line`,
+    ).not.toContain('<YYYY-MM-DD>')
+  })
+
+  it('writes Fixes #<n> for a slice with spec: issue #<n>', () => {
+    expect(flat).toMatch(
+      /`spec: issue #<n>`[^.]*`Fixes #<n>`|`Fixes #<n>`[^.]*`spec: issue #<n>`/,
+    )
+  })
+
+  it('asks no question about committing lines on the default branch', () => {
+    expect(
+      flat,
+      `${file} still asks whether to commit the inbox lines on the default branch`,
+    ).not.toContain('whether to commit them on the default branch')
   })
 })
 

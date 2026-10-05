@@ -74,13 +74,16 @@ ADR-0003 rereads it.
   the `backlog/` section of `.harness/docs/README.md` writes them.
 - **The harness of the repo you are working in is not yours to fix.** A
   template behind, a line missing in `AGENTS.md`, a script that misbehaves:
-  write one dated line in `.harness/docs/inbox.md`, `- <YYYY-MM-DD>: <one line>`, and
-  carry on with what is there. Never rerun `/harness-init`, never edit a
-  script, a hook, a workflow or the `AGENTS.md` of that repo: the fix belongs
-  to the harness repo and comes back with the stage of `/harness-init` that
-  owns the file. The only stop is a directory this skill must write into that
-  is not there, which means there is no harness. If `.harness/docs/inbox.md` alone is
-  missing, say so in the hand-back and do not create it.
+  file an issue with `gh issue create -R <owner/name>` on the repo of
+  `pin.origin` of `.harness/stamp.json`, its `https://` URL cut to
+  `<owner>/<name>`, on the current repo with no `-R` when the field is
+  missing, and carry on with what is there; no line of
+  `.harness/docs/inbox.md`. Never rerun `/harness-init`, never edit a script,
+  a hook, a workflow or the `AGENTS.md` of that repo: the fix belongs to the
+  harness repo and comes back with the stage of `/harness-init` that owns the
+  file. The only stop is a directory this skill must write into that is not
+  there, which means there is no harness. If `gh` does not answer, say so in
+  the hand-back and carry on.
 
 ## 1. Pick the spec
 
